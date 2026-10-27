@@ -40,6 +40,8 @@ export default function ChatScreen() {
   const [recording, setRecording] = useState(false);
   const [recordSec, setRecordSec] = useState(0);
   const loadingRef = useRef(false);
+  const activeChat = useRef(id);
+  activeChat.current = id;
   const pendingMessage = useRef<{key:string;id:string}|null>(null);
   const recordTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
@@ -52,6 +54,7 @@ export default function ChatScreen() {
         api.get<{ other: User | null }>(`/chats/${id}`),
         api.get<Message[]>(`/chats/${id}/messages`),
       ]);
+      if (activeChat.current !== id) return;
       setChatInfo(info);
       setMessages((previous) => Array.from(new Map([...previous, ...msgs].map(m => [m.id, m])).values()).sort((a,b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)));
       setError(null);
@@ -64,6 +67,8 @@ export default function ChatScreen() {
   }, [id]);
 
   useEffect(() => {
+    setMessages([]); setChatInfo(null); setLoading(true);
+    pendingMessage.current = null; loadingRef.current = false;
     load();
   }, [load]);
 
@@ -80,7 +85,7 @@ export default function ChatScreen() {
       const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
       return () => clearTimeout(t);
     }
-  }, [messages.length]);
+  }, [messages[messages.length - 1]?.id]);
 
   useEffect(() => () => {
     if (recordTimer.current) clearInterval(recordTimer.current);
@@ -93,7 +98,7 @@ export default function ChatScreen() {
     setSending(true);
     try {
       const m = await api.post<Message>(`/chats/${id}/messages`, payload);
-      setMessages((prev) => [...prev.filter((item) => item.id !== m.id), m]);
+      if (activeChat.current === id) setMessages((prev) => [...prev.filter((item) => item.id !== m.id), m]);
       pendingMessage.current = null;
       return true;
     } catch {

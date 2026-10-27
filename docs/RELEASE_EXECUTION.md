@@ -26,7 +26,7 @@ Implemented:
 
 Local backend: 17 isolated tests pass using mongomock-motor, with synthetic users.
 Local browser infrastructure: 2 Node tests pass (service-worker privacy and refresh-cookie proxy).
-CI also runs the backend suite against a real MongoDB 7 service. That result must be reviewed separately.
+GitHub CI also passed all 17 backend checks against a real MongoDB 7 service. TypeScript and the two Node browser-infrastructure tests passed on commit 8121fea.
 TypeScript, production export, provider integration and physical-device checks must be recorded before release.
 Historical test reports in this repository are not evidence for this branch.
 
@@ -34,7 +34,7 @@ Historical test reports in this repository are not evidence for this branch.
 
 An existing Vercel project named `kuku` is available in the connected account.
 Observed production alias: https://kuku-lac.vercel.app
-Its Vercel sign-in protection currently covers non-custom domains, so it is not yet a normal public app URL.
+The Vercel project root/build/output settings have been corrected to frontend / npm run build:web / dist. Its existing sign-in protection still covers non-custom domains. A real preview build correctly refuses to continue until EXPO_PUBLIC_BACKEND_URL is supplied.
 Do not confuse an existing READY deployment with validation of this branch.
 Verified Resend sending domains are available, including `lionovart.com`; no email has been sent by this execution.
 Render, Atlas, R2 and Expo credentials/projects have not been verified or provisioned.
