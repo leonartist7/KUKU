@@ -1,3 +1,4 @@
+import { CALLS_ENABLED } from "../../src/config";
 import React, { useRef, useState } from "react";
 import { Tabs } from "expo-router";
 import {
@@ -77,12 +78,6 @@ function CustomTabBar({ state, navigation }: any) {
       onPress: () => router.push("/new-message"),
     },
     {
-      key: "voice-memo",
-      label: "Voice memo",
-      icon: "mic-outline",
-      onPress: () => router.push("/new-message?mode=voice"),
-    },
-    {
       key: "share-file",
       label: "Send file",
       icon: "document-attach-outline",
@@ -153,7 +148,7 @@ function CustomTabBar({ state, navigation }: any) {
           </Pressable>
         </View>
 
-        {RIGHT.map(renderTab)}
+        {RIGHT.filter(t => t.name !== "calls" || CALLS_ENABLED).map(renderTab)}
       </View>
 
       <RadialMenu

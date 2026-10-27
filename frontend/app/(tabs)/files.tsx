@@ -7,6 +7,8 @@ import {
   Pressable,
   ActivityIndicator,
   ScrollView,
+  Linking,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
@@ -216,7 +218,10 @@ function FileRow({ f: fileItem, showSender = false }: { f: FileMsg; showSender?:
   const title =
     fileItem.file_name || (fileItem.type === "voice" ? "Voice message" : fileItem.type === "image" ? "Image" : "File");
   return (
-    <View style={styles.fileRow}>
+    <Pressable disabled={!fileItem.attachment_id} accessibilityLabel={"Download " + title} onPress={async () => {
+      try { const result = await api.get<{url:string}>("/attachments/" + fileItem.attachment_id + "/download"); await Linking.openURL(result.url); }
+      catch { Alert.alert("Download failed", "Please try again."); }
+    }} style={styles.fileRow}>
       <View style={styles.fileIcon}>
         <Ionicons name={icon as any} size={20} color={c.primaryDark} />
       </View>
@@ -230,7 +235,7 @@ function FileRow({ f: fileItem, showSender = false }: { f: FileMsg; showSender?:
         </Text>
       </View>
       <Text style={styles.fileDate}>{dateLabel(fileItem.created_at)}</Text>
-    </View>
+    </Pressable>
   );
 }
 

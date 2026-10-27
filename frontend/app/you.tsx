@@ -32,16 +32,17 @@ export default function YouScreen() {
       onPress: () => router.push("/appearance"),
       testID: "settings-appearance",
     },
-    { icon: "notifications-outline", label: "Notifications", sub: "Quiet hours on", testID: "settings-notifications" },
-    { icon: "lock-closed-outline", label: "Privacy", sub: "End-to-end is coming", testID: "settings-privacy" },
+    { icon: "person-add-outline", label: "Invite someone", sub: "Share KUKU privately", onPress: () => router.push("/invite"), testID: "settings-invite" },
+    { icon: "notifications-outline", label: "Notifications", sub: "Push notifications are not enabled yet", testID: "settings-notifications" },
+    { icon: "lock-closed-outline", label: "Privacy", sub: "Private accounts; not end-to-end encrypted", testID: "settings-privacy" },
     { icon: "sparkles-outline", label: "Spaces (soon)", sub: "Shared rooms in Phase 2", testID: "settings-spaces" },
     { icon: "help-circle-outline", label: "Help & feedback", sub: "We read everything", testID: "settings-help" },
   ];
 
   function confirmSignOut() {
     const doSignOut = async () => {
-      await signOut();
-      router.replace("/login");
+      try { await signOut(); router.replace("/login"); }
+      catch { Alert.alert("Could not sign out", "Check your connection and try again."); }
     };
     if (Platform.OS === "web") {
       doSignOut();

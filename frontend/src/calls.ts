@@ -1,6 +1,7 @@
+import { API_ORIGIN } from "./config";
 // Calls — API helpers, WebSocket signaling client, types
-import { Platform } from "react-native";
-import { api, getToken, User } from "./api";
+
+import { api, User } from "./api";
 
 export type CallStatus = "ringing" | "active" | "completed" | "missed";
 
@@ -35,19 +36,11 @@ export const callsApi = {
   token: (id: string) => api.post<LiveKitJoin>(`/calls/${id}/token`),
 };
 
-const isDev = typeof (globalThis as any).__DEV__ !== "undefined" && (globalThis as any).__DEV__;
-const DEFAULT_BACKEND = isDev
-  ? Platform.OS === "android"
-    ? "http://10.0.2.2:8000"
-    : "http://127.0.0.1:8000"
-  : "https://connect-mvp.preview.emergentagent.com";
-const BASE = (process.env.EXPO_PUBLIC_BACKEND_URL || DEFAULT_BACKEND).replace(/\/$/, "");
 
 export async function openCallSocket(onMessage: (msg: any) => void): Promise<WebSocket | null> {
-  const token = await getToken();
-  if (!token) return null;
-  const wsBase = BASE.replace(/^http/, "ws");
-  const ws = new WebSocket(`${wsBase}/api/ws/calls?token=${encodeURIComponent(token)}`);
+  const { ticket } = await api.post<{ticket: string}>("/auth/ws-ticket", { scope: "calls" });
+  const wsBase = API_ORIGIN.replace(/^http/, "ws");
+  const ws = new WebSocket(`${wsBase}/api/ws/calls?ticket=${encodeURIComponent(ticket)}`);
   ws.onmessage = (e) => {
     try {
       onMessage(JSON.parse(e.data));

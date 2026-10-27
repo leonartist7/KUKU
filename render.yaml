@@ -1,12 +1,42 @@
 services:
   - type: web
-    name: connect-backend
-    env: python
+    name: kuku-backend
+    runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT --workers 1 --no-access-log
+    healthCheckPath: /health/ready
+    autoDeployTrigger: off
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: 3.11.14
+      - key: APP_ENV
+        value: production
       - key: JWT_SECRET
         generateValue: true
+      - key: MONGO_URL
+        sync: false
+      - key: DB_NAME
+        value: kuku_production
+      - key: CORS_ORIGINS
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false
+      - key: REGISTRATION_MODE
+        value: invite
+      - key: SEED_DEMO_DATA
+        value: "false"
+      - key: ENABLE_CALLS
+        value: "false"
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false

@@ -1,5 +1,5 @@
 import React from "react";
-import { Stack } from "expo-router";
+import { Stack, Redirect, useSegments } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
@@ -13,7 +13,7 @@ import {
   DMSans_500Medium,
   DMSans_600SemiBold,
 } from "@expo-google-fonts/dm-sans";
-import { AuthProvider } from "../src/AuthContext";
+import { AuthProvider, useAuth } from "../src/AuthContext";
 import { ThemeProvider, useTheme } from "../src/ThemeContext";
 import { CallProvider } from "../src/CallContext";
 import { colors } from "../src/theme";
@@ -48,6 +48,11 @@ export default function RootLayout() {
 
 function ThemedStack() {
   const { c } = useTheme();
+  const { user } = useAuth();
+  const segments = useSegments();
+  if (user === undefined) return <View style={styles.loading}><ActivityIndicator color={c.primary} /></View>;
+  const publicRoute = segments[0] === "login" || segments[0] === "recover";
+  if (!user && !publicRoute) return <Redirect href="/login" />;
   return (
     <CallProvider>
       <StatusBar style={c.isDark ? "light" : "dark"} />

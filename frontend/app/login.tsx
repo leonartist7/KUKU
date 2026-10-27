@@ -22,9 +22,10 @@ export default function Login() {
   const { c, f } = useTheme();
   const styles = makeStyles(c, f);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
-  const [email, setEmail] = useState("ava@connect.app");
-  const [password, setPassword] = useState("connect123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [invite, setInvite] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,7 +37,7 @@ export default function Login() {
         await signIn(email.trim(), password);
       } else {
         if (!name.trim()) throw new Error("Please enter your name");
-        await signUp(email.trim(), password, name.trim());
+        await signUp(email.trim(), password, name.trim(), invite.trim());
       }
       router.replace("/(tabs)");
     } catch (e: any) {
@@ -58,7 +59,7 @@ export default function Login() {
         >
           <View style={styles.brandWrap}>
             <View style={styles.brandDot} />
-            <Text style={styles.brand}>Connect</Text>
+            <Text style={styles.brand}>KUKU</Text>
           </View>
 
           <Text style={styles.headline}>
@@ -67,7 +68,7 @@ export default function Login() {
           <Text style={styles.sub}>
             {mode === "signin"
               ? "A quieter place for the conversations you care about."
-              : "Create your account in a moment."}
+              : "Create your account with an invitation."}
           </Text>
 
           <View style={styles.form}>
@@ -82,6 +83,11 @@ export default function Login() {
                 testID="name-input"
               />
             )}
+            {mode === "signup" ? <TextInput
+              value={invite} onChangeText={setInvite} placeholder="Invitation code"
+              autoCapitalize="none" autoCorrect={false} style={styles.input}
+              placeholderTextColor={c.textTertiary} accessibilityLabel="Invitation code" testID="invite-input"
+            /> : null}
             <TextInput
               value={email}
               onChangeText={setEmail}
@@ -95,7 +101,7 @@ export default function Login() {
             <TextInput
               value={password}
               onChangeText={setPassword}
-              placeholder="Password"
+              placeholder={mode === "signup" ? "Password (12+ characters)" : "Password"}
               placeholderTextColor={c.textTertiary}
               secureTextEntry
               style={styles.input}
@@ -127,6 +133,7 @@ export default function Login() {
               )}
             </Pressable>
 
+            {mode === "signin" ? <Pressable onPress={() => router.push("/recover")} style={styles.switch}><Text style={styles.switchText}>Forgot password?</Text></Pressable> : null}
             <Pressable
               onPress={() => {
                 setError(null);
@@ -143,11 +150,7 @@ export default function Login() {
             </Pressable>
           </View>
 
-          <View style={styles.demoHint}>
-            <Text style={styles.demoTitle}>Try a demo account</Text>
-            <Text style={styles.demoText}>ava@connect.app · connect123</Text>
-            <Text style={styles.demoText}>leo@connect.app · connect123</Text>
-          </View>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

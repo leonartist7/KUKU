@@ -1,9 +1,10 @@
+import { API_ORIGIN } from "./config";
 // Spaces — API helpers, WebSocket client, types
-import { Platform } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { api, getToken, User } from "./api";
 
-const TOKEN_KEY = "connect_token";
+
+import { api, User } from "./api";
+
+
 
 export type AudioTrack = {
   id: string;
@@ -107,24 +108,16 @@ export type SpaceSession = {
   created_at: string;
 };
 
-const isDev = typeof (globalThis as any).__DEV__ !== "undefined" && (globalThis as any).__DEV__;
-const DEFAULT_BACKEND = isDev
-  ? Platform.OS === "android"
-    ? "http://10.0.2.2:8000"
-    : "http://127.0.0.1:8000"
-  : "https://connect-mvp.preview.emergentagent.com";
-const BASE = (process.env.EXPO_PUBLIC_BACKEND_URL || DEFAULT_BACKEND).replace(/\/$/, "");
 
 export async function openSpaceSocket(
   spaceId: string,
   onMessage: (msg: any) => void,
   onClose?: () => void,
 ): Promise<WebSocket | null> {
-  const token = await getToken();
-  if (!token) return null;
+  const { ticket } = await api.post<{ticket: string}>("/auth/ws-ticket", { scope: "space:" + spaceId });
   // Convert https → wss, http → ws
-  const wsBase = BASE.replace(/^http/, "ws");
-  const url = `${wsBase}/api/ws/spaces/${spaceId}?token=${encodeURIComponent(token)}`;
+  const wsBase = API_ORIGIN.replace(/^http/, "ws");
+  const url = `${wsBase}/api/ws/spaces/${spaceId}?ticket=${encodeURIComponent(ticket)}`;
   const ws = new WebSocket(url);
   ws.onmessage = (e) => {
     try {
@@ -136,5 +129,4 @@ export async function openSpaceSocket(
   return ws;
 }
 
-// Token helper kept here for any direct usage
-export { TOKEN_KEY };
+

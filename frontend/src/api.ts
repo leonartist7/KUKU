@@ -1,90 +1,113 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import * as SecureStore from "expo-secure-store";
+import { API_ORIGIN } from "./config";
 
-const isDev = typeof (globalThis as any).__DEV__ !== "undefined" && (globalThis as any).__DEV__;
-const DEFAULT_BACKEND = isDev
-  ? Platform.OS === "android"
-    ? "http://10.0.2.2:8000"
-    : "http://127.0.0.1:8000"
-  : "https://connect-mvp.preview.emergentagent.com";
-const BASE = (process.env.EXPO_PUBLIC_BACKEND_URL || DEFAULT_BACKEND).replace(/\/$/, "");
-const TOKEN_KEY = "connect_token";
-
+const REFRESH_KEY = "kuku_refresh";
+export const API_BASE = Platform.OS === "web" && !__DEV__ ? "/api" : API_ORIGIN + "/api";
+let accessToken: string | null = null;
+let refreshFlight: Promise<string | null> | null = null;
+const expiredListeners = new Set<() => void>();
+export function onSessionExpired(listener: () => void) {
+  expiredListeners.add(listener);
+  return () => { expiredListeners.delete(listener); };
+}
+export class ApiError extends Error {
+  constructor(message: string, public status: number) { super(message); }
+}
+export async function setToken(value: string | null) {
+  accessToken = value;
+  if (!value && Platform.OS !== "web") await SecureStore.deleteItemAsync(REFRESH_KEY);
+}
+export async function acceptSession(data: { token: string; refresh_token?: string }) {
+  accessToken = data.token;
+  if (Platform.OS !== "web" && data.refresh_token) {
+    await SecureStore.setItemAsync(REFRESH_KEY, data.refresh_token);
+  }
+}
+function headers() {
+  return { "Content-Type": "application/json", "X-Kuku-Platform": Platform.OS === "web" ? "web" : "native" };
+}
+async function parse(response: Response) {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = data.detail;
+    throw new ApiError(typeof detail === "string" ? detail : Array.isArray(detail) ? detail.map((v: {msg?: string}) => v.msg).join(" ") : "Request failed", response.status);
+  }
+  return data;
+}
+export async function refreshSession(): Promise<string | null> {
+  if (refreshFlight) return refreshFlight;
+  refreshFlight = (async () => {
+    const refresh_token = Platform.OS === "web" ? undefined : await SecureStore.getItemAsync(REFRESH_KEY);
+    if (Platform.OS !== "web" && !refresh_token) return null;
+    const renew = async () => parse(await fetch(API_BASE + "/auth/refresh", {
+      method: "POST", credentials: "include", headers: headers(), body: JSON.stringify({ refresh_token }),
+    }));
+    const data = Platform.OS === "web" && typeof navigator !== "undefined" && navigator.locks
+      ? await navigator.locks.request("kuku-session-refresh", renew) : await renew();
+    await acceptSession(data);
+    return data.token;
+  })();
+  try { return await refreshFlight; }
+  catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      await setToken(null);
+      expiredListeners.forEach((listener) => listener());
+      return null;
+    }
+    throw error;
+  } finally { refreshFlight = null; }
+}
 export async function getToken(): Promise<string | null> {
-  return AsyncStorage.getItem(TOKEN_KEY);
+  return accessToken || refreshSession();
 }
-
-export async function setToken(token: string | null) {
-  if (token) await AsyncStorage.setItem(TOKEN_KEY, token);
-  else await AsyncStorage.removeItem(TOKEN_KEY);
-}
-
-async function request<T = any>(
-  path: string,
-  options: RequestInit = {},
-): Promise<T> {
-  const token = await getToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as Record<string, string>),
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`${BASE}/api${path}`, { ...options, headers });
-  const text = await res.text();
-  let data: any = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = text;
+async function request<T>(path: string, options: RequestInit = {}, retried = false): Promise<T> {
+  const anonymous = ["/auth/login", "/auth/register", "/auth/forgot-password", "/auth/reset-password"].includes(path);
+  const token = anonymous ? null : await getToken();
+  const response = await fetch(API_BASE + path, {
+    ...options, credentials: "include",
+    headers: { ...headers(), ...(token ? { Authorization: "Bearer " + token } : {}), ...options.headers },
+  });
+  if (response.status === 401 && !anonymous && !retried) {
+    const renewed = await refreshSession();
+    if (renewed) return request<T>(path, options, true);
+    expiredListeners.forEach((listener) => listener());
   }
-  if (!res.ok) {
-    const detail = data?.detail ?? data ?? "Request failed";
-    const message =
-      typeof detail === "string"
-        ? detail
-        : Array.isArray(detail)
-          ? detail.map((e: any) => e?.msg || JSON.stringify(e)).join(" ")
-          : JSON.stringify(detail);
-    throw new Error(message);
-  }
-  return data as T;
+  return parse(response);
 }
-
 export const api = {
-  get: <T = any>(p: string) => request<T>(p),
-  post: <T = any>(p: string, body?: any) =>
-    request<T>(p, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
+  get: <T = any>(path: string) => request<T>(path),
+  post: <T = any>(path: string, body?: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(body ?? {}) }),
+  delete: <T = any>(path: string) => request<T>(path, { method: "DELETE" }),
 };
-
-export type User = {
-  id: string;
-  email: string;
-  name: string;
-  avatar?: string | null;
-  bio?: string;
-  created_at?: string;
-};
-
+export type User = { id: string; email?: string; name: string; avatar?: string | null; bio?: string; created_at?: string };
 export type Message = {
-  id: string;
-  chat_id: string;
-  sender_id: string;
-  sender_name: string;
+  id: string; chat_id: string; sender_id: string; sender_name: string;
   type: "text" | "voice" | "image" | "file" | "space_invite";
-  text?: string | null;
-  media?: string | null;
-  file_name?: string | null;
-  file_size?: number | null;
-  duration_ms?: number | null;
-  space_id?: string | null;
-  space_name?: string | null;
-  created_at: string;
+  text?: string | null; media?: string | null; file_name?: string | null; file_size?: number | null;
+  duration_ms?: number | null; space_id?: string | null; space_name?: string | null;
+  created_at: string; client_message_id?: string; attachment_id?: string;
 };
+export type Chat = { id: string; type: string; other: User | null; last_message: Message | null; updated_at: string };
 
-export type Chat = {
-  id: string;
-  type: string;
-  other: User | null;
-  last_message: Message | null;
-  updated_at: string;
-};
+export async function uploadAttachment(chatId: string, uri: string, name: string) {
+  const url = API_ORIGIN + "/api/chats/" + encodeURIComponent(chatId) + "/attachments?name=" + encodeURIComponent(name);
+  const token = await getToken();
+  if (Platform.OS !== "web") {
+    const files = await import("expo-file-system/legacy");
+    const info = await files.getInfoAsync(uri);
+    if (!info.exists || info.isDirectory || !info.size || info.size > 25 * 1024 * 1024) throw new Error("Choose a file between 1 byte and 25 MB");
+    const response = await files.uploadAsync(url, uri, {
+      httpMethod: "POST", uploadType: files.FileSystemUploadType.BINARY_CONTENT,
+      headers: { Authorization: "Bearer " + token, "Content-Type": "application/octet-stream" },
+    });
+    const data = JSON.parse(response.body);
+    if (response.status >= 400) throw new ApiError(data.detail || "Upload failed", response.status);
+    return data as {id: string; file_name: string; file_size: number};
+  }
+  const blob = await (await fetch(uri)).blob();
+  if (!blob.size || blob.size > 25 * 1024 * 1024) throw new Error("Choose a file between 1 byte and 25 MB");
+  return parse(await fetch(url, {
+    method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/octet-stream" }, body: blob,
+  })) as Promise<{id: string; file_name: string; file_size: number}>;
+}

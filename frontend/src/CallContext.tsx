@@ -1,3 +1,4 @@
+import { CALLS_ENABLED } from "./config";
 import React, {
   createContext,
   useContext,
@@ -70,7 +71,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     const connect = async () => {
-      if (!user) return;
+      if (!user || !CALLS_ENABLED) return;
       const sock = await openCallSocket((m) => handle(m));
       if (cancelled) {
         sock?.close();

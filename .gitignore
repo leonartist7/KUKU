@@ -87,3 +87,6 @@ frontend/.metro-cache/
 credentials.json
 *.key
 .credentials
+
+!.env.example
+.pytest_cache/
