@@ -5,6 +5,8 @@ import { API_ORIGIN } from "./config";
 const REFRESH_KEY = "kuku_refresh";
 export const API_BASE = Platform.OS === "web" && !__DEV__ ? "/api" : API_ORIGIN + "/api";
 let accessToken: string | null = null;
+let sessionUserId: string | null = null;
+let sessionEpoch = 0;
 let refreshFlight: Promise<string | null> | null = null;
 const expiredListeners = new Set<() => void>();
 export function onSessionExpired(listener: () => void) {
@@ -16,10 +18,13 @@ export class ApiError extends Error {
 }
 export async function setToken(value: string | null) {
   accessToken = value;
+  if (!value) { sessionUserId = null; sessionEpoch++; }
   if (!value && Platform.OS !== "web") await SecureStore.deleteItemAsync(REFRESH_KEY);
 }
-export async function acceptSession(data: { token: string; refresh_token?: string }) {
+export async function acceptSession(data: { token: string; refresh_token?: string; user: {id:string} }) {
+  sessionEpoch++;
   accessToken = data.token;
+  sessionUserId = data.user.id;
   if (Platform.OS !== "web" && data.refresh_token) {
     await SecureStore.setItemAsync(REFRESH_KEY, data.refresh_token);
   }
@@ -37,6 +42,7 @@ async function parse(response: Response) {
 }
 export async function refreshSession(): Promise<string | null> {
   if (refreshFlight) return refreshFlight;
+  const epoch = sessionEpoch;
   refreshFlight = (async () => {
     const refresh_token = Platform.OS === "web" ? undefined : await SecureStore.getItemAsync(REFRESH_KEY);
     if (Platform.OS !== "web" && !refresh_token) return null;
@@ -45,12 +51,14 @@ export async function refreshSession(): Promise<string | null> {
     }));
     const data = Platform.OS === "web" && typeof navigator !== "undefined" && navigator.locks
       ? await navigator.locks.request("kuku-session-refresh", renew) : await renew();
+    if (sessionEpoch !== epoch) return accessToken;
     await acceptSession(data);
     return data.token;
   })();
   try { return await refreshFlight; }
   catch (error) {
     if (error instanceof ApiError && error.status === 401) {
+      if (sessionEpoch !== epoch) return accessToken;
       await setToken(null);
       expiredListeners.forEach((listener) => listener());
       return null;
@@ -61,26 +69,28 @@ export async function refreshSession(): Promise<string | null> {
 export async function getToken(): Promise<string | null> {
   return accessToken || refreshSession();
 }
-async function request<T>(path: string, options: RequestInit = {}, retried = false): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}, retried = false, expectedUser?: string): Promise<T> {
   const anonymous = ["/auth/login", "/auth/register", "/auth/forgot-password", "/auth/reset-password"].includes(path);
   const token = anonymous ? null : await getToken();
+  if (expectedUser && sessionUserId !== expectedUser) throw new ApiError("Account changed", 401);
   const response = await fetch(API_BASE + path, {
     ...options, credentials: "include",
     headers: { ...headers(), ...(token ? { Authorization: "Bearer " + token } : {}), ...options.headers },
   });
   if (response.status === 401 && !anonymous && !retried) {
     const renewed = await refreshSession();
-    if (renewed) return request<T>(path, options, true);
+    if (renewed) return request<T>(path, options, true, expectedUser);
     expiredListeners.forEach((listener) => listener());
   }
   return parse(response);
 }
 export const api = {
+  postAs: <T = any>(uid:string,path:string,body:unknown) => request<T>(path,{method:"POST",body:JSON.stringify(body)},false,uid),
   get: <T = any>(path: string) => request<T>(path),
   post: <T = any>(path: string, body?: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(body ?? {}) }),
   delete: <T = any>(path: string) => request<T>(path, { method: "DELETE" }),
 };
-export type User = { id: string; email?: string; name: string; avatar?: string | null; bio?: string; created_at?: string };
+export type User = { email_verified?: boolean; id: string; email?: string; name: string; avatar?: string | null; bio?: string; created_at?: string };
 export type Message = {
   id: string; chat_id: string; sender_id: string; sender_name: string;
   type: "text" | "voice" | "image" | "file" | "space_invite";

@@ -1,3 +1,4 @@
+import { clearOutbox } from "./outbox";
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { View, Text, Pressable } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -7,6 +8,7 @@ type AuthState = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string, invite_token?: string) => Promise<void>;
   signOut: () => Promise<void>;
+  refresh: () => Promise<void>;
 };
 const AuthContext = createContext<AuthState>({} as AuthState);
 const PROFILE_KEY = "kuku_profile";
@@ -50,14 +52,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     // Do not claim a server logout succeeded while offline.
     await api.post("/auth/logout");
+    if (user) await clearOutbox(user.id);
     await setToken(null); await remember(null);
-  }, [remember]);
+  }, [remember, user]);
   if (error && user === undefined) return (
     <View style={{ flex: 1, justifyContent: "center", padding: 32, backgroundColor: "#FBF9F6" }}>
       <Text accessibilityRole="alert">{error}</Text>
       <Pressable accessibilityRole="button" onPress={() => void refresh()} style={{ paddingVertical: 20 }}><Text>Try again</Text></Pressable>
     </View>
   );
-  return <AuthContext.Provider value={{ user, signIn, signUp, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, signIn, signUp, signOut, refresh }}>{children}</AuthContext.Provider>;
 }
 export const useAuth = () => useContext(AuthContext);

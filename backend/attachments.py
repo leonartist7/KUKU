@@ -10,6 +10,7 @@ from starlette.concurrency import run_in_threadpool
 from auth_service import now
 
 MAX_BYTES = 25 * 1024 * 1024
+USER_QUOTA_BYTES = 500 * 1024 * 1024
 
 class ObjectStore:
     def client(self):
@@ -40,7 +41,7 @@ def attachment_router(db_getter, auth):
             raise HTTPException(404, "Chat not found")
 
     @router.post("/chats/{chat_id}/attachments")
-    async def upload(chat_id: str, request: Request, name: str, user=Depends(auth.current)):
+    async def upload(chat_id: str, request: Request, name: str, user=Depends(auth.verified)):
         await member(chat_id, user)
         await auth.limit("upload:" + user["id"], 30, 3600)
         name = name.replace("\\", "/").split("/")[-1].strip()
@@ -57,18 +58,28 @@ def attachment_router(db_getter, auth):
             if not size:
                 raise HTTPException(400, "The file is empty")
             file.seek(0)
-            await run_in_threadpool(store.put, key, file)
+            reserved = await db_getter().users.update_one({"id": user["id"],
+                "$or": [{"storage_bytes": {"$exists": False}}, {"storage_bytes": {"$lte": USER_QUOTA_BYTES - size}}]},
+                {"$inc": {"storage_bytes": size}})
+            if not reserved.matched_count:
+                raise HTTPException(413, "Your file storage limit has been reached")
+            try:
+                await run_in_threadpool(store.put, key, file)
+            except Exception:
+                await db_getter().users.update_one({"id": user["id"]}, {"$inc": {"storage_bytes": -size}})
+                raise
         doc = {"id": str(uuid.uuid4()), "key": key, "chat_id": chat_id,
             "owner_id": user["id"], "name": name, "size": size, "created_at": now()}
         try:
             await db_getter().attachments.insert_one(doc)
         except Exception:
             await run_in_threadpool(store.delete, key)
+            await db_getter().users.update_one({"id": user["id"]}, {"$inc": {"storage_bytes": -size}})
             raise
         return {"id": doc["id"], "file_name": name, "file_size": size}
 
     @router.get("/attachments/{attachment_id}/download")
-    async def download(attachment_id: str, user=Depends(auth.current)):
+    async def download(attachment_id: str, user=Depends(auth.verified)):
         doc = await db_getter().attachments.find_one({"id": attachment_id})
         if not doc:
             raise HTTPException(404, "File not found")
@@ -77,4 +88,15 @@ def attachment_router(db_getter, auth):
         if doc["owner_id"] != user["id"] and not await db_getter().messages.find_one({"attachment_id": attachment_id, "chat_id": doc["chat_id"]}):
             raise HTTPException(404, "File not found")
         return {"url": await run_in_threadpool(store.download, doc), "expires_in": 60}
+    @router.delete("/attachments/{attachment_id}")
+    async def delete(attachment_id: str, user=Depends(auth.verified)):
+        doc = await db_getter().attachments.find_one({"id": attachment_id, "owner_id": user["id"]})
+        if not doc:
+            raise HTTPException(404, "File not found")
+        await run_in_threadpool(store.delete, doc["key"])
+        removed = await db_getter().attachments.delete_one({"id": attachment_id, "owner_id": user["id"]})
+        if removed.deleted_count:
+            await db_getter().users.update_one({"id": user["id"]}, {"$inc": {"storage_bytes": -doc["size"]}})
+        await db_getter().messages.update_many({"attachment_id": attachment_id}, {"$unset": {"attachment_id": ""}, "$set": {"attachment_deleted": True}})
+        return {"ok": True}
     return router

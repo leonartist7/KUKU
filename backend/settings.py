@@ -28,3 +28,7 @@ if PRODUCTION:
         raise RuntimeError("Production requires explicit HTTPS CORS_ORIGINS")
     if not WEB_ORIGIN.startswith("https://"):
         raise RuntimeError("Production requires an HTTPS WEB_ORIGIN")
+
+PUSH_ENABLED = flag("PUSH_ENABLED")
+if PUSH_ENABLED and not os.getenv("EXPO_ACCESS_TOKEN"):
+    raise RuntimeError("Enable Expo enhanced push security and set EXPO_ACCESS_TOKEN before enabling push")

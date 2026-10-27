@@ -9,7 +9,7 @@ import uuid
 import logging
 import bcrypt
 import jwt
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
@@ -19,6 +19,7 @@ from auth_service import AuthService, hash_password, verify_password, profile
 import settings
 from attachments import attachment_router
 from account_recovery import recovery_router
+from push_service import device_router, run_worker
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -39,7 +40,7 @@ LIVEKIT_API_SECRET = os.environ.get("LIVEKIT_API_SECRET", "")
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 auth = AuthService(db)
-get_current_user = auth.current
+get_current_user = auth.verified
 
 
 @asynccontextmanager
@@ -52,15 +53,25 @@ async def lifespan(app: FastAPI):
     await db.messages.create_index([("chat_id", 1), ("created_at", 1), ("id", 1)])
     await db.messages.create_index([("chat_id", 1), ("sender_id", 1), ("client_message_id", 1)],
         unique=True, partialFilterExpression={"client_message_id": {"$type": "string"}})
+    await db.messages.create_index([("push_state", 1), ("push_due", 1)])
+    await db.push_receipts.create_index("expires_at", expireAfterSeconds=0)
     if settings.SEED_DEMO_DATA:
         await seed()
-    yield
-    client.close()
+    worker = asyncio.create_task(run_worker(db)) if settings.PUSH_ENABLED else None
+    try:
+        yield
+    finally:
+        if worker:
+            worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker
+        client.close()
 
 
 app = FastAPI(title="KUKU API", lifespan=lifespan)
 api = APIRouter(prefix="/api")
 api.include_router(auth.router)
+api.include_router(device_router(lambda: db, auth))
 api.include_router(recovery_router(lambda: db, auth))
 api.include_router(attachment_router(lambda: db, auth))
 
@@ -74,6 +85,9 @@ async def private_responses(request: Request, call_next):
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+def public_message(message):
+    return {k: v for k, v in message.items() if k != "_id" and not k.startswith("push_")} if message else None
 
 def serialize_user(user: dict) -> dict:
     return profile(user)
@@ -133,7 +147,7 @@ async def list_chats(current=Depends(get_current_user)):
                 "id": c["id"],
                 "type": c.get("type", "dm"),
                 "other": serialize_user(other) if other else None,
-                "last_message": last_msg,
+                "last_message": public_message(last_msg),
                 "updated_at": c.get("updated_at", c.get("created_at")),
             }
         )
@@ -200,7 +214,7 @@ async def list_messages(chat_id: str, before: Optional[str] = None, after: Optio
             {"created_at": anchor["created_at"], "id": {op: anchor["id"]}}]
     direction = 1 if after else -1
     msgs = await db.messages.find(query, {"_id": 0}).sort([("created_at", direction), ("id", direction)]).limit(limit).to_list(limit)
-    return msgs if after else list(reversed(msgs))
+    return [public_message(m) for m in (msgs if after else list(reversed(msgs)))]
 
 
 @api.post("/chats/{chat_id}/messages")
@@ -230,7 +244,7 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
         if previous:
             if previous.get("text") != payload.text or previous["type"] != payload.type or previous.get("attachment_id") != payload.attachment_id or previous.get("space_id") != payload.space_id:
                 raise HTTPException(409, "Message ID already used")
-            return previous
+            return public_message(previous)
     # Legacy media limit while old messages remain readable.
     if payload.media and len(payload.media) > 14 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Media is too large (max ~10MB)")
@@ -251,16 +265,18 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
         "space_name": payload.space_name,
         "created_at": now_iso(),
     }
+    if settings.PUSH_ENABLED:
+        from auth_service import now
+        msg.update({"push_state": "pending", "push_due": now(), "push_attempts": 0})
     try:
         await db.messages.insert_one(msg)
     except DuplicateKeyError:
         previous = await db.messages.find_one({"chat_id": chat_id, "sender_id": current["id"], "client_message_id": payload.client_message_id}, {"_id": 0})
         if not previous or previous.get("text") != payload.text or previous["type"] != payload.type or previous.get("attachment_id") != payload.attachment_id or previous.get("space_id") != payload.space_id:
             raise HTTPException(409, "Message ID already used")
-        return previous
+        return public_message(previous)
     await db.chats.update_one({"id": chat_id}, {"$set": {"updated_at": msg["created_at"]}})
-    msg.pop("_id", None)
-    return msg
+    return public_message(msg)
 
 
 # ---------- Files Hub ----------
@@ -282,7 +298,7 @@ async def list_files(current=Depends(get_current_user)):
     out = []
     for m in msgs:
         s = senders.get(m["sender_id"])
-        out.append({**m, "sender": serialize_user(s) if s else None})
+        out.append({**public_message(m), "sender": serialize_user(s) if s else None})
     return out
 
 

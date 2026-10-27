@@ -1,3 +1,5 @@
+import NotificationListener from "../src/NotificationListener";
+import OutboxRunner from "../src/OutboxRunner";
 import React from "react";
 import { Stack, Redirect, useSegments } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -39,6 +41,8 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
         <AuthProvider>
+          <OutboxRunner />
+          <NotificationListener />
           <ThemedStack />
         </AuthProvider>
       </ThemeProvider>
@@ -52,7 +56,9 @@ function ThemedStack() {
   const segments = useSegments();
   if (user === undefined) return <View style={styles.loading}><ActivityIndicator color={c.primary} /></View>;
   const publicRoute = segments[0] === "login" || segments[0] === "recover";
+  if (user?.email_verified && segments[0] === "login") return <Redirect href="/(tabs)" />;
   if (!user && !publicRoute) return <Redirect href="/login" />;
+  if (user && !user.email_verified && segments[0] !== "verify") return <Redirect href="/verify" />;
   return (
     <CallProvider>
       <StatusBar style={c.isDark ? "light" : "dark"} />

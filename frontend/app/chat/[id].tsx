@@ -1,3 +1,4 @@
+import { getOutbox, queueMessage, retryMessage, removePending, subscribeOutbox, PendingMessage } from "../../src/outbox";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
@@ -33,6 +34,15 @@ export default function ChatScreen() {
   const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
   const [chatInfo, setChatInfo] = useState<{ other: User | null } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [pending, setPending] = useState<PendingMessage[]>([]);
+  const messagesRef = useRef<Message[]>([]);
+  messagesRef.current = messages;
+  useEffect(() => {
+    let active = true;
+    const sync = async () => { if (user) { const all = await getOutbox(user.id); if(active)setPending(all.filter(m=>m.chat_id===id)); } };
+    void sync().catch(()=>setError("Could not read queued messages")); const stop=subscribeOutbox(()=>void sync().catch(()=>setError("Could not read queued messages")));
+    return()=>{active=false;stop();};
+  },[user?.id,id]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -42,7 +52,7 @@ export default function ChatScreen() {
   const loadingRef = useRef(false);
   const activeChat = useRef(id);
   activeChat.current = id;
-  const pendingMessage = useRef<{key:string;id:string}|null>(null);
+
   const recordTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
 
@@ -52,7 +62,7 @@ export default function ChatScreen() {
     try {
       const [info, msgs] = await Promise.all([
         api.get<{ other: User | null }>(`/chats/${id}`),
-        api.get<Message[]>(`/chats/${id}/messages`),
+        api.get<Message[]>("/chats/"+id+"/messages?limit=100"+(messagesRef.current.length ? "&after="+messagesRef.current[messagesRef.current.length-1].id : "")),
       ]);
       if (activeChat.current !== id) return;
       setChatInfo(info);
@@ -68,7 +78,7 @@ export default function ChatScreen() {
 
   useEffect(() => {
     setMessages([]); setChatInfo(null); setLoading(true);
-    pendingMessage.current = null; loadingRef.current = false;
+    messagesRef.current = []; loadingRef.current = false;
     load();
   }, [load]);
 
@@ -91,24 +101,13 @@ export default function ChatScreen() {
     if (recordTimer.current) clearInterval(recordTimer.current);
   }, []);
 
-  async function send(payload: any): Promise<boolean> {
-    const key = JSON.stringify(payload);
-    if (pendingMessage.current?.key !== key) pendingMessage.current = {key,id:Date.now().toString(36)+"-"+Math.random().toString(36).slice(2)};
-    payload = {...payload,client_message_id:pendingMessage.current.id};
+  async function send(payload: Record<string,unknown>): Promise<boolean> {
+    if (!user) return false;
     setSending(true);
-    try {
-      const m = await api.post<Message>(`/chats/${id}/messages`, payload);
-      if (activeChat.current === id) setMessages((prev) => [...prev.filter((item) => item.id !== m.id), m]);
-      pendingMessage.current = null;
-      return true;
-    } catch {
-      setError("Couldn't send — check your connection");
-      return false;
-    } finally {
-      setSending(false);
-    }
+    try { await queueMessage(user.id,payload); return true; }
+    catch(e) { setError(e instanceof Error ? e.message : "Could not save this message for sending");return false; }
+    finally {setSending(false);}
   }
-
   async function sendText() {
     const t = text.trim();
     if (!t) return;
@@ -243,6 +242,12 @@ export default function ChatScreen() {
                 setMessages(prev => Array.from(new Map([...older, ...prev].map(m => [m.id, m])).values()));
               } catch { setError("Could not load older messages"); }
             }}><Text style={{ color: c.primary, padding: 12 }}>Load older messages</Text></Pressable> : null}
+            ListFooterComponent={<View>{pending.filter(p => !messages.some(m=>m.client_message_id===p.id)).map(p => <View key={p.id} style={{padding:12,alignSelf:"flex-end"}}>
+              <Text style={{color:c.text}}>{String(p.payload.text || "File waiting to send")}</Text>
+              <Text style={{color:c.textSecondary}}>{p.state==="failed"?p.error:"Waiting to send…"}</Text>
+              {p.state==="failed" ? <Pressable onPress={()=>user && retryMessage(user.id,p.id)}><Text style={{color:c.primary}}>Retry</Text></Pressable>:null}
+              <Pressable onPress={()=>user && removePending(user.id,p.id)}><Text style={{color:c.textSecondary}}>Remove from queue</Text></Pressable>
+            </View>)}</View>}
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Text style={styles.emptyText}>Say something gentle.</Text>
@@ -336,10 +341,10 @@ function MessageRow({ msg, mine }: { msg: Message; mine: boolean }) {
             resizeMode="cover"
           />
         ) : msg.type === "image" ? (
-          <FilePreviewCard attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="image" />
+          <FilePreviewCard canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="image" />
         ) : null}
         {msg.type === "file" && (
-          <FilePreviewCard attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="file" />
+          <FilePreviewCard canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="file" />
         )}
         {msg.type === "space_invite" && (
           <Pressable

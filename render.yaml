@@ -40,3 +40,5 @@ services:
         sync: false
       - key: EMAIL_FROM
         sync: false
+      - key: PUSH_ENABLED
+        value: "false"

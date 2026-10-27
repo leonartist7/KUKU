@@ -41,7 +41,10 @@ async def client(monkeypatch):
 async def account(client, name):
     r = await client.post("/api/auth/register", json={"email": name + "@example.com", "name": name, "password": "a-long-test-passphrase"})
     assert r.status_code == 200, r.text
-    return r.json()
+    result = r.json()
+    await server.db.users.update_one({"id": result["user"]["id"]}, {"$set": {"email_verified": True}})
+    result["user"]["email_verified"] = True
+    return result
 
 def headers(user):
     return {"Authorization": "Bearer " + user["token"]}
@@ -247,3 +250,89 @@ async def test_recovery_single_use_revokes_sessions(client, monkeypatch):
     for session in (a,other):
         assert (await client.get("/api/auth/me",headers=headers(session))).status_code == 401
     assert (await client.post("/api/auth/login",json={"email":"alice@example.com","password":payload["password"]})).status_code == 200
+
+@pytest.mark.asyncio
+async def test_unverified_account_is_gated_until_email_proof(client, monkeypatch):
+    import account_recovery
+    codes=[]
+    async def capture(email,code,kind): codes.append(code)
+    monkeypatch.setenv("RESEND_API_KEY","test-key")
+    monkeypatch.setenv("EMAIL_FROM","test@example.com")
+    monkeypatch.setattr(account_recovery,"send_code",capture)
+    user=(await client.post("/api/auth/register",json={"email":"new@example.com","name":"New","password":"a-long-test-passphrase"})).json()
+    assert (await client.get("/api/users",headers=headers(user))).status_code == 403
+    assert (await client.post("/api/invites",headers=headers(user),json={"email":"friend@example.com"})).status_code == 403
+    assert (await client.post("/api/auth/verification",headers=headers(user))).status_code == 200
+    body={"email":"new@example.com","code":codes[0]}
+    assert (await client.post("/api/auth/verify",headers=headers(user),json=body)).status_code == 200
+    assert (await client.get("/api/users",headers=headers(user))).status_code == 200
+    assert (await client.post("/api/auth/verify",headers=headers(user),json=body)).status_code == 400
+
+@pytest.mark.asyncio
+async def test_push_jobs_persist_with_message_and_retry_safely(client, monkeypatch):
+    import push_service
+    monkeypatch.setattr(server.settings,"PUSH_ENABLED",True)
+    class FakeGateway:
+        def __init__(self): self.fail=True;self.sent=[]
+        async def send(self,payload):
+            self.sent.extend(payload)
+            if self.fail: raise RuntimeError("temporary provider failure")
+            return [{"status":"ok","id":"receipt-1"} for p in payload]
+        async def receipts(self,ids):
+            return {identifier:{"status":"error","details":{"error":"DeviceNotRegistered"}} for identifier in ids}
+    gateway=FakeGateway();monkeypatch.setattr(push_service,"gateway",gateway)
+    a,b,c,cid=await pair(client)
+    token="ExponentPushToken[test_device]"
+    assert (await client.post("/api/devices",headers=headers(b),json={"token":token})).status_code == 200
+    payload={"chat_id":cid,"type":"text","text":"private message body","client_message_id":"push-message"}
+    sent=await client.post("/api/chats/"+cid+"/messages",headers=headers(a),json=payload)
+    assert sent.status_code == 200
+    assert not any(k.startswith("push_") for k in sent.json())
+    assert await push_service.deliver_one(server.db)
+    stored=await server.db.messages.find_one({"id":sent.json()["id"]})
+    assert stored["push_state"] == "retry"
+    assert gateway.sent[0]["body"] == "You have a new message."
+    assert "private message body" not in str(gateway.sent)
+    gateway.fail=False
+    await server.db.messages.update_one({"id":stored["id"]},{"$set":{"push_due":now()-timedelta(seconds=1)}})
+    assert await push_service.deliver_one(server.db)
+    assert (await server.db.messages.find_one({"id":stored["id"]}))["push_state"] == "sent"
+    duplicate=await client.post("/api/chats/"+cid+"/messages",headers=headers(a),json=payload)
+    assert duplicate.json()["id"] == stored["id"]
+    assert not any(k.startswith("push_") for k in duplicate.json())
+    await server.db.push_receipts.update_many({},{"$set":{"due":now()-timedelta(seconds=1)}})
+    await push_service.check_receipts(server.db)
+    assert await server.db.devices.count_documents({}) == 0
+
+@pytest.mark.asyncio
+async def test_logout_removes_push_recipient_before_delivery(client,monkeypatch):
+    import push_service
+    monkeypatch.setattr(server.settings,"PUSH_ENABLED",True)
+    a,b,c,cid=await pair(client)
+    await client.post("/api/devices",headers=headers(b),json={"token":"ExpoPushToken[device_b]"})
+    await client.post("/api/chats/"+cid+"/messages",headers=headers(a),json={"chat_id":cid,"type":"text","text":"test"})
+    await client.post("/api/auth/logout",headers=headers(b))
+    class NeverSend:
+        async def send(self,payload): raise AssertionError("Must not send to a logged-out session")
+    monkeypatch.setattr(push_service,"gateway",NeverSend())
+    assert await push_service.deliver_one(server.db)
+    assert (await server.db.messages.find_one({"chat_id":cid}))["push_state"] == "sent"
+
+@pytest.mark.asyncio
+async def test_file_quota_and_owner_deletion(client,monkeypatch):
+    import attachments
+    class Store:
+        def put(self,key,file): pass
+        def delete(self,key): pass
+    monkeypatch.setattr(attachments,"store",Store())
+    monkeypatch.setattr(attachments,"USER_QUOTA_BYTES",10)
+    a,b,c,cid=await pair(client)
+    url="/api/chats/"+cid+"/attachments?name=test.txt"
+    first=await client.post(url,headers=headers(a),content=b"12345678")
+    assert first.status_code==200
+    assert (await client.post(url,headers=headers(a),content=b"1234")).status_code==413
+    file_id=first.json()["id"]
+    assert (await client.delete("/api/attachments/"+file_id,headers=headers(b))).status_code==404
+    assert (await client.delete("/api/attachments/"+file_id,headers=headers(a))).status_code==200
+    assert (await server.db.users.find_one({"id":a["user"]["id"]}))["storage_bytes"]==0
+    assert (await client.post(url,headers=headers(a),content=b"1234")).status_code==200

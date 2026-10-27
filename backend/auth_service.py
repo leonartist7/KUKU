@@ -85,7 +85,7 @@ class AuthService:
             await self.revoke(user["_session_id"])
             response.delete_cookie("kuku_refresh", path="/api/auth")
             return {"ok": True}
-        async def invite(payload: InviteIn, user=Depends(self.current)):
+        async def invite(payload: InviteIn, user=Depends(self.verified)):
             await self.limit("invite:" + user["id"], 10, 3600)
             token = secrets.token_urlsafe(32)
             await self.db.invites.insert_one({
@@ -94,7 +94,7 @@ class AuthService:
                 "redeemed_by": None,
             })
             return {"invite_token": token, "expires_in": 604800}
-        async def ticket(payload: TicketIn, user=Depends(self.current)):
+        async def ticket(payload: TicketIn, user=Depends(self.verified)):
             await self.limit("ticket:" + user["id"], 60, 60)
             if payload.scope.startswith("space:"):
                 space_id = payload.scope[6:]
@@ -173,6 +173,12 @@ class AuthService:
             return await self.session_user(payload["sid"], payload["sub"])
         except (jwt.InvalidTokenError, KeyError, ValueError):
             raise HTTPException(401, "Session expired. Sign in again.")
+
+    async def verified(self, request: Request):
+        user = await self.current(request)
+        if not user.get("email_verified"):
+            raise HTTPException(403, "Verify your email before using KUKU")
+        return user
 
     async def session_user(self, sid, uid):
         session = await self.db.sessions.find_one({"_id": sid, "user_id": uid, "revoked": False, "expires_at": {"$gt": now()}})
