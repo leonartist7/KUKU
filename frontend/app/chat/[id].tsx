@@ -341,10 +341,10 @@ function MessageRow({ msg, mine }: { msg: Message; mine: boolean }) {
             resizeMode="cover"
           />
         ) : msg.type === "image" ? (
-          <FilePreviewCard canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="image" />
+          <FilePreviewCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="image" />
         ) : null}
         {msg.type === "file" && (
-          <FilePreviewCard canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="file" />
+          <FilePreviewCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="file" />
         )}
         {msg.type === "space_invite" && (
           <Pressable

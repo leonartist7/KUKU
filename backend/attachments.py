@@ -97,6 +97,6 @@ def attachment_router(db_getter, auth):
         removed = await db_getter().attachments.delete_one({"id": attachment_id, "owner_id": user["id"]})
         if removed.deleted_count:
             await db_getter().users.update_one({"id": user["id"]}, {"$inc": {"storage_bytes": -doc["size"]}})
-        await db_getter().messages.update_many({"attachment_id": attachment_id}, {"$unset": {"attachment_id": ""}, "$set": {"attachment_deleted": True}})
+        await db_getter().messages.update_many({"attachment_id": attachment_id}, {"$set": {"attachment_deleted": True}})
         return {"ok": True}
     return router

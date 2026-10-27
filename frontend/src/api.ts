@@ -96,7 +96,7 @@ export type Message = {
   type: "text" | "voice" | "image" | "file" | "space_invite";
   text?: string | null; media?: string | null; file_name?: string | null; file_size?: number | null;
   duration_ms?: number | null; space_id?: string | null; space_name?: string | null;
-  created_at: string; client_message_id?: string; attachment_id?: string;
+  created_at: string; client_message_id?: string; attachment_id?: string; attachment_deleted?: boolean;
 };
 export type Chat = { id: string; type: string; other: User | null; last_message: Message | null; updated_at: string };
 

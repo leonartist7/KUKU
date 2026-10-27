@@ -332,7 +332,13 @@ async def test_file_quota_and_owner_deletion(client,monkeypatch):
     assert first.status_code==200
     assert (await client.post(url,headers=headers(a),content=b"1234")).status_code==413
     file_id=first.json()["id"]
+    payload={"chat_id":cid,"type":"file","attachment_id":file_id,"client_message_id":"delete-retry"}
+    original=await client.post("/api/chats/"+cid+"/messages",headers=headers(a),json=payload)
+    assert original.status_code==200
     assert (await client.delete("/api/attachments/"+file_id,headers=headers(b))).status_code==404
     assert (await client.delete("/api/attachments/"+file_id,headers=headers(a))).status_code==200
+    retry=await client.post("/api/chats/"+cid+"/messages",headers=headers(a),json=payload)
+    assert retry.status_code==200 and retry.json()["id"]==original.json()["id"]
+    assert retry.json()["attachment_deleted"] is True
     assert (await server.db.users.find_one({"id":a["user"]["id"]}))["storage_bytes"]==0
     assert (await client.post(url,headers=headers(a),content=b"1234")).status_code==200

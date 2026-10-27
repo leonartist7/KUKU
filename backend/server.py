@@ -224,6 +224,12 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
         raise HTTPException(status_code=404, detail="Chat not found")
     if payload.chat_id != chat_id:
         raise HTTPException(400, "Conversation does not match")
+    if payload.client_message_id:
+        previous = await db.messages.find_one({"chat_id": chat_id, "sender_id": current["id"], "client_message_id": payload.client_message_id}, {"_id": 0})
+        if previous:
+            if previous.get("text") != payload.text or previous["type"] != payload.type or previous.get("attachment_id") != payload.attachment_id or previous.get("space_id") != payload.space_id:
+                raise HTTPException(409, "Message ID already used")
+            return public_message(previous)
     if payload.type == "text" and not (payload.text or "").strip():
         raise HTTPException(400, "Empty message")
     if payload.type == "voice":
@@ -239,12 +245,6 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
         space = await db.spaces.find_one({"id": payload.space_id})
         if not space or not set(chat["members"]).issubset(space["members"]):
             raise HTTPException(403, "Space membership is required for all recipients")
-    if payload.client_message_id:
-        previous = await db.messages.find_one({"chat_id": chat_id, "sender_id": current["id"], "client_message_id": payload.client_message_id}, {"_id": 0})
-        if previous:
-            if previous.get("text") != payload.text or previous["type"] != payload.type or previous.get("attachment_id") != payload.attachment_id or previous.get("space_id") != payload.space_id:
-                raise HTTPException(409, "Message ID already used")
-            return public_message(previous)
     # Legacy media limit while old messages remain readable.
     if payload.media and len(payload.media) > 14 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Media is too large (max ~10MB)")
