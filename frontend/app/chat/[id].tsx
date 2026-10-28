@@ -169,6 +169,7 @@ export default function ChatScreen() {
             <Text style={styles.headerSub}>Private conversation</Text>
           </View>
         </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Contact privacy and reporting" onPress={()=>chatInfo?.other && router.push(("/privacy?contact="+chatInfo.other.id) as never)} style={styles.iconBtn}><Ionicons name="ellipsis-horizontal" size={22} color={c.text}/></Pressable>
         {CALLS_ENABLED && <Pressable
           onPress={() => chatInfo?.other && router.push(`/call/${chatInfo.other.id}`)}
           style={styles.iconBtn}

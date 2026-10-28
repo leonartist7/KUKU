@@ -17,6 +17,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, WebSock
 from pymongo.errors import DuplicateKeyError
 from auth_service import AuthService, hash_password, verify_password, profile
 import settings
+from safety import safety_router, allow_direct
 from attachments import attachment_router
 from account_recovery import recovery_router
 from push_service import device_router, run_worker
@@ -47,6 +48,8 @@ get_current_user = auth.verified
 async def lifespan(app: FastAPI):
     await db.command("ping")
     await auth.indexes()
+    await db.blocks.create_index("owner_id")
+    await db.reports.create_index([("status", 1), ("created_at", 1)])
     await db.account_codes.create_index("expires_at", expireAfterSeconds=0)
     await db.attachments.create_index("id", unique=True)
     await db.chats.create_index("key", unique=True)
@@ -71,6 +74,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="KUKU API", lifespan=lifespan)
 api = APIRouter(prefix="/api")
 api.include_router(auth.router)
+api.include_router(safety_router(lambda: db, auth))
 api.include_router(device_router(lambda: db, auth))
 api.include_router(recovery_router(lambda: db, auth))
 api.include_router(attachment_router(lambda: db, auth))
@@ -222,6 +226,9 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
     chat = await db.chats.find_one({"id": chat_id, "members": current["id"]})
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
+    for other_id in chat["members"]:
+        if other_id != current["id"]:
+            await allow_direct(db, current["id"], other_id)
     if payload.chat_id != chat_id:
         raise HTTPException(400, "Conversation does not match")
     if payload.client_message_id:

@@ -342,3 +342,49 @@ async def test_file_quota_and_owner_deletion(client,monkeypatch):
     assert retry.json()["attachment_deleted"] is True
     assert (await server.db.users.find_one({"id":a["user"]["id"]}))["storage_bytes"]==0
     assert (await client.post(url,headers=headers(a),content=b"1234")).status_code==200
+
+@pytest.mark.asyncio
+async def test_blocking_stops_both_directions_and_unblock_is_owner_only(client):
+    a,b,c,cid=await pair(client)
+    target=b['user']['id']
+    assert (await client.post('/api/blocks/'+target,headers=headers(a))).status_code==200
+    assert (await client.post('/api/blocks/'+target,headers=headers(a))).status_code==200
+    for sender in (a,b):
+        assert (await client.post('/api/chats/'+cid+'/messages',headers=headers(sender),json={'chat_id':cid,'type':'text','text':'blocked'})).status_code==403
+        assert (await client.post('/api/chats/'+cid+'/attachments?name=test.txt',headers=headers(sender),content=b'bytes')).status_code==403
+    assert (await client.get('/api/users',headers=headers(a))).json()==[]
+    assert len((await client.get('/api/blocks',headers=headers(a))).json())==1
+    assert (await client.get('/api/blocks',headers=headers(b))).json()==[]
+    await client.delete('/api/blocks/'+target,headers=headers(c))
+    assert await server.db.blocks.count_documents({})==1
+    # Reciprocal blocks remain independent.
+    await client.post('/api/blocks/'+a['user']['id'],headers=headers(b))
+    await client.delete('/api/blocks/'+target,headers=headers(a))
+    assert (await client.post('/api/chats/'+cid+'/messages',headers=headers(a),json={'chat_id':cid,'type':'text','text':'still blocked'})).status_code==403
+    await client.delete('/api/blocks/'+a['user']['id'],headers=headers(b))
+    assert (await client.post('/api/chats/'+cid+'/messages',headers=headers(a),json={'chat_id':cid,'type':'text','text':'allowed'})).status_code==200
+
+@pytest.mark.asyncio
+async def test_reports_require_actual_conversation_and_message_access(client):
+    a,b,c,cid=await pair(client)
+    msg=(await client.post('/api/chats/'+cid+'/messages',headers=headers(b),json={'chat_id':cid,'type':'text','text':'test'})).json()
+    body={'target_id':b['user']['id'],'message_id':msg['id'],'reason':'harassment','note':'Test report'}
+    assert (await client.post('/api/reports',headers=headers(c),json=body)).status_code==404
+    assert (await client.post('/api/reports',headers=headers(a),json={**body,'message_id':'unknown'})).status_code==404
+    response=await client.post('/api/reports',headers=headers(a),json=body)
+    assert response.status_code==200 and response.json()['status']=='pending'
+    assert (await client.get('/api/reports',headers=headers(b))).status_code==405
+
+@pytest.mark.asyncio
+async def test_block_cancels_queued_push_before_provider_submission(client,monkeypatch):
+    import push_service
+    monkeypatch.setattr(server.settings,'PUSH_ENABLED',True)
+    a,b,c,cid=await pair(client)
+    await client.post('/api/devices',headers=headers(b),json={'token':'ExpoPushToken[blocked_device]'})
+    await client.post('/api/chats/'+cid+'/messages',headers=headers(a),json={'chat_id':cid,'type':'text','text':'queued'})
+    await client.post('/api/blocks/'+a['user']['id'],headers=headers(b))
+    class Provider:
+        async def send(self,payload): raise AssertionError('Blocked recipients must not be notified')
+    monkeypatch.setattr(push_service,'gateway',Provider())
+    await push_service.deliver_one(server.db)
+    assert (await server.db.messages.find_one({'chat_id':cid}))['push_state']=='sent'

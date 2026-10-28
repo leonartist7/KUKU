@@ -274,7 +274,8 @@ class AuthService:
             ids.add(me["invited_by"])
         for chat in await self.db.chats.find({"members": user_id}).to_list(500):
             ids.update(m for m in chat["members"] if m != user_id)
-        return ids
+        from safety import blocked
+        return {uid for uid in ids if not await blocked(self.db, user_id, uid)}
 
     async def require_contact(self, current_id, other_id):
         if other_id not in await self.contacts(current_id):

@@ -8,6 +8,7 @@ from botocore.config import Config
 from fastapi import APIRouter, Depends, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 from auth_service import now
+from safety import allow_direct
 
 MAX_BYTES = 25 * 1024 * 1024
 USER_QUOTA_BYTES = 500 * 1024 * 1024
@@ -43,6 +44,10 @@ def attachment_router(db_getter, auth):
     @router.post("/chats/{chat_id}/attachments")
     async def upload(chat_id: str, request: Request, name: str, user=Depends(auth.verified)):
         await member(chat_id, user)
+        chat = await db_getter().chats.find_one({"id": chat_id})
+        for other_id in chat["members"]:
+            if other_id != user["id"]:
+                await allow_direct(db_getter(), user["id"], other_id)
         await auth.limit("upload:" + user["id"], 30, 3600)
         name = name.replace("\\", "/").split("/")[-1].strip()
         if not name or len(name) > 180 or any(ord(c) < 32 for c in name):

@@ -34,9 +34,8 @@ export default function YouScreen() {
     },
     { icon: "person-add-outline", label: "Invite someone", sub: "Share KUKU privately", onPress: () => router.push("/invite"), testID: "settings-invite" },
     { icon: "notifications-outline", label: "Notifications", sub: "Message alerts on this device", onPress: () => router.push("/notifications"), testID: "settings-notifications" },
-    { icon: "lock-closed-outline", label: "Privacy", sub: "Private accounts; not end-to-end encrypted", testID: "settings-privacy" },
+    { icon: "lock-closed-outline", label: "Privacy", sub: "Blocked contacts and privacy", onPress: () => router.push("/privacy"), testID: "settings-privacy" },
     { icon: "sparkles-outline", label: "Spaces (soon)", sub: "Shared rooms in Phase 2", testID: "settings-spaces" },
-    { icon: "help-circle-outline", label: "Help & feedback", sub: "We read everything", testID: "settings-help" },
   ];
 
   function confirmSignOut() {
@@ -103,7 +102,7 @@ export default function YouScreen() {
           <Text style={styles.signOutText}>Sign out</Text>
         </Pressable>
 
-        <Text style={styles.version}>Connect · v0.2 · made quietly</Text>
+        <Text style={styles.version}>KUKU · v1.0 beta</Text>
       </ScrollView>
     </SafeAreaView>
   );

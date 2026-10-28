@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from pymongo import ReturnDocument
 from auth_service import now
 import settings
+from safety import blocked
 
 log = logging.getLogger("kuku.push")
 class DeviceIn(BaseModel):
@@ -60,7 +61,7 @@ async def deliver_one(db):
         for device in await db.devices.find({"user_id": {"$in": recipients}}).limit(100).to_list(100):
             session = await db.sessions.find_one({"_id": device["session_id"], "revoked": False, "expires_at": {"$gt": now()}})
             user = await db.users.find_one({"id": device["user_id"], "disabled": {"$ne": True}})
-            if session and user:
+            if session and user and not await blocked(db, message["sender_id"], device["user_id"]):
                 devices.append(device)
         if devices:
             notifications = [{"to": d["_id"], "title": "KUKU", "body": "You have a new message.",

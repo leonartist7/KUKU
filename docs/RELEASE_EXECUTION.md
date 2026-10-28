@@ -20,6 +20,7 @@ Implemented:
 - A durable per-account outbox persists unsent messages across restarts, preserves retry IDs and clears on logout. Foreground polling resumes from the last message cursor.
 - Opt-in native push notifications, durable jobs persisted atomically with messages, bounded retries, receipt checks and invalid-token cleanup. Credentials and physical-device proof are still required.
 - 500 MB storage quota per account and owner-only shared-file deletion.
+- Account-owned contact blocking and private reports, including queued-push suppression. Blocking stops direct contact in either direction; shared Spaces and existing history stay accessible.
 - No authenticated API responses in service-worker caches.
 - APK/internal distribution and Play Store bundle build profiles.
 - Render/Vercel configuration, environment examples and CI regression checks.
@@ -29,7 +30,7 @@ Implemented:
 
 Local backend: the regression suite covers synthetic accounts, verification, sessions, messages, attachments, quota/deletion and push delivery. See the latest PR checks for the current test count.
 Local frontend infrastructure: 5 Node tests cover service-worker privacy, refresh-cookie proxy, persistent retries and outbox account isolation.
-GitHub CI also passed all 17 backend checks against a real MongoDB 7 service. TypeScript and the two Node browser-infrastructure tests passed on commit 8121fea.
+The prior release commit f57c8ff passed 21 backend tests against MongoDB 7 plus five frontend tests and the production build in GitHub CI. On 2026-10-28 the local Linux suite passes 24 backend tests, five frontend tests, TypeScript and the production web export with contact safety added.
 TypeScript and the production web export passed for the first foundation commit d002260. The latest PR checks validate the subsequent verification, outbox and notification additions. Provider integration and physical-device checks remain required.
 Historical test reports in this repository are not evidence for this branch.
 
@@ -57,10 +58,10 @@ Render, Atlas, R2 and Expo credentials/projects have not been verified or provis
 
 ## Remaining engineering gates
 
-- Complete frontend typecheck and production export. The resolved npm lockfile is committed; local installation was blocked by disk capacity, so CI must confirm a clean install and build.
+- Latest local TypeScript, frontend tests and production web export pass; check PR CI before merging.
 - Exercise the saved outbox and reconnect catch-up on actual phones, including lost acknowledgements and app restarts. Chat currently polls every four seconds while focused; unread badges and a message realtime socket remain future improvements.
 - Configure Expo/FCM credentials and prove notification delivery on physical devices, including background/terminated-app taps and logged-out recipients. Notification jobs/receipts are implemented but cannot prove device delivery without those credentials.
-- Before a broader public rollout: account deletion/export, contact blocking/reporting and abandoned-upload cleanup. Invite-only family testing still needs the provider and device gates above.
+- Before a broader public rollout: account deletion/export and abandoned-upload cleanup. Contact blocking/reporting is implemented. Invite-only family testing still needs the provider and device gates above.
 - Rate limits shared through a database or cache before adding more than one backend worker.
 - Dependency security review and a migration rehearsal on a backup. Unique indexes can fail on duplicate legacy data; repair deliberately, never silently discard data.
 - Verify no legacy demo users or embedded sensitive files exist in the production database. This branch doesn't destructively clean existing data.
@@ -96,3 +97,11 @@ Set an actual EAS project ID through EAS linking or EXPO_PUBLIC_EAS_PROJECT_ID. 
 Push delivery is at least once; generic alerts use the message ID for notification collapse/replacement. A provider receipt is not proof that a phone displayed the notification. Retry exhaustion leaves a failed job for operational review. One worker is required until cross-process socket/rate-limit coordination is implemented.
 
 Unsent message payloads are intentionally saved locally, separately for each account, and cleared on explicit signout. File bytes upload first; the queued message holds the private attachment ID. An interrupted upload must be retried by the user. Already accepted push notifications cannot be recalled on logout, so notification previews never contain message text or filenames.
+
+## Hosting connection handoff (2026-10-28)
+
+Render and MongoDB Atlas integrations were found but were not installed/connected at the time of this check. Install and connect both in ChatGPT to continue provisioning through their authenticated tools. The existing Vercel connection remains available. R2 bucket credentials and Expo/FCM signing/push configuration must still be supplied through the relevant service environment settings, never in source code or chat. No new hosting resource, production release or signed APK was created in this continuation.
+
+## Reports and blocking
+
+Open the conversation menu to block or report its contact. You > Privacy lists only your own blocked contacts and supports unblocking. Either participant can maintain an independent block; removing one block does not remove the other. Reports are stored in the private reports collection for the operator, with status pending; no automated moderation or response-time promise is made. There is no public reports endpoint. A report can reference only a message from an actual conversation visible to its reporter. Alerts already handed to a push provider cannot be recalled.
