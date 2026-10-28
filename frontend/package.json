@@ -12,7 +12,7 @@
     "start:web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "build:web": "node scripts/check-release.cjs && expo export --platform web",
+    "build:web": "node scripts/check-release.cjs && expo export --platform web && node scripts/finalize-web.cjs",
     "eas-build-post-install": "node scripts/check-release.cjs",
     "test:release": "node --test tests/release.cjs"
   },

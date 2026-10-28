@@ -105,3 +105,7 @@ Render and MongoDB Atlas integrations were found but were not installed/connecte
 ## Reports and blocking
 
 Open the conversation menu to block or report its contact. You > Privacy lists only your own blocked contacts and supports unblocking. Either participant can maintain an independent block; removing one block does not remove the other. Reports are stored in the private reports collection for the operator, with status pending; no automated moderation or response-time promise is made. There is no public reports endpoint. A report can reference only a message from an actual conversation visible to its reporter. Alerts already handed to a push provider cannot be recalled.
+
+## Web install export
+
+The single-page Expo export bypasses app/+html.tsx. The web build now explicitly adds the manifest, Apple home-screen metadata and an external service-worker registration script to dist/index.html. It validates that the KUKU manifest, PNG icons and scripts actually exist in the exported artifact. Browser installation and offline behavior still require testing on the real HTTPS deployment.
