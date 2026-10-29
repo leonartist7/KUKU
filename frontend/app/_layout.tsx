@@ -1,7 +1,7 @@
 import NotificationListener from "../src/NotificationListener";
 import OutboxRunner from "../src/OutboxRunner";
 import React from "react";
-import { Stack, Redirect, useSegments } from "expo-router";
+import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
@@ -19,7 +19,6 @@ import { AuthProvider, useAuth } from "../src/AuthContext";
 import { ThemeProvider, useTheme } from "../src/ThemeContext";
 import { CallProvider } from "../src/CallContext";
 import { colors } from "../src/theme";
-import { accountDestination } from "../src/onboarding";
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -54,48 +53,36 @@ export default function RootLayout() {
 function ThemedStack() {
   const { c } = useTheme();
   const { user } = useAuth();
-  const segments = useSegments();
   if (user === undefined) return <View style={styles.loading}><ActivityIndicator color={c.primary} /></View>;
-  const publicRoute = segments[0] === "login" || segments[0] === "recover";
-  if (!user && !publicRoute) return <Redirect href="/login" />;
-  if (user && !user.email_verified && segments[0] !== "verify") return <Redirect href="/verify" />;
-  if (user?.email_verified && user.onboarding_complete === false && segments[0] !== "onboarding") return <Redirect href="/onboarding" />;
-  if (user?.email_verified && (segments[0] === "login" || segments[0] === "verify")) return <Redirect href={accountDestination(user)} />;
+  const verified = !!user?.email_verified;
   return (
     <CallProvider>
       <StatusBar style={c.isDark ? "light" : "dark"} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: c.bg },
-          animation: "fade",
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="verify" />
-        <Stack.Screen name="recover" />
-        <Stack.Screen name="onboarding" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="chat/[id]" options={{ animation: "slide_from_right" }} />
-        <Stack.Screen
-          name="call/[id]"
-          options={{ presentation: "fullScreenModal", animation: "fade" }}
-        />
-        <Stack.Screen
-          name="new-message"
-          options={{ presentation: "transparentModal", animation: "slide_from_bottom" }}
-        />
-        <Stack.Screen name="you" options={{ animation: "slide_from_right" }} />
-        <Stack.Screen name="appearance" options={{ animation: "slide_from_right" }} />
-        <Stack.Screen
-          name="space/[id]"
-          options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }}
-        />
-        <Stack.Screen
-          name="space/create"
-          options={{ presentation: "modal", animation: "slide_from_bottom" }}
-        />
+      <Stack screenOptions={{headerShown: false, contentStyle: {backgroundColor: c.bg}, animation: "fade"}}>
+        <Stack.Protected guard={!user}>
+          <Stack.Screen name="login" />
+          <Stack.Screen name="recover" />
+        </Stack.Protected>
+        <Stack.Protected guard={!!user && !verified}>
+          <Stack.Screen name="verify" />
+        </Stack.Protected>
+        <Stack.Protected guard={verified}>
+          <Stack.Screen name="onboarding" />
+          <Stack.Protected guard={user?.onboarding_complete !== false}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="chat/[id]" options={{animation: "slide_from_right"}} />
+            <Stack.Screen name="call/[id]" options={{presentation: "fullScreenModal", animation: "fade"}} />
+            <Stack.Screen name="new-message" options={{presentation: "transparentModal", animation: "slide_from_bottom"}} />
+            <Stack.Screen name="you" options={{animation: "slide_from_right"}} />
+            <Stack.Screen name="appearance" options={{animation: "slide_from_right"}} />
+            <Stack.Screen name="invite" />
+            <Stack.Screen name="notifications" />
+            <Stack.Screen name="privacy" />
+            <Stack.Screen name="space/[id]" options={{presentation: "fullScreenModal", animation: "slide_from_bottom"}} />
+            <Stack.Screen name="space/create" options={{presentation: "modal", animation: "slide_from_bottom"}} />
+          </Stack.Protected>
+        </Stack.Protected>
       </Stack>
     </CallProvider>
   );
