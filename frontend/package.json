@@ -12,8 +12,8 @@
     "start:web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "build:web": "node scripts/check-release.cjs && expo export --platform web && node scripts/finalize-web.cjs",
-    "eas-build-post-install": "node scripts/check-release.cjs",
+    "build:web": "node scripts/generate-brand.cjs && node scripts/check-release.cjs && expo export --platform web && node scripts/finalize-web.cjs",
+    "eas-build-post-install": "node scripts/generate-brand.cjs && node scripts/check-release.cjs",
     "test:release": "node --test tests/release.cjs"
   },
   "dependencies": {

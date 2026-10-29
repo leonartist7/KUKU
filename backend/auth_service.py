@@ -28,6 +28,7 @@ def profile(user, private=False):
     if private:
         result["email"] = user["email"]
         result["email_verified"] = bool(user.get("email_verified"))
+        result["onboarding_complete"] = user.get("onboarding_complete", True)
     return result
 
 def hash_password(password):
@@ -60,6 +61,19 @@ class LoginIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=256)
 
+class ProfileIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    name: str = Field(min_length=1, max_length=80)
+    bio: str = Field(default="", max_length=160)
+
+    @field_validator("name", "bio")
+    @classmethod
+    def clean_text(cls, value, info):
+        value = value.strip()
+        if info.field_name == "name" and not value:
+            raise ValueError("Please enter your name")
+        return value
+
 class RefreshIn(BaseModel):
     refresh_token: str | None = Field(default=None, max_length=256)
 
@@ -81,6 +95,15 @@ class AuthService:
         # Depend dynamically on this service, keeping test DB injection simple.
         async def me(user=Depends(self.current)):
             return profile(user, True)
+        async def save_profile(payload: ProfileIn, request: Request, user=Depends(self.verified)):
+            self.check_origin(request)
+            await self.limit("profile:" + user["id"], 30, 3600)
+            saved = await self.db.users.find_one_and_update(
+                {"id": user["id"]},
+                {"$set": {"name": payload.name, "bio": payload.bio, "onboarding_complete": True}},
+                return_document=ReturnDocument.AFTER,
+            )
+            return profile(saved, True)
         async def logout(request: Request, response: Response, user=Depends(self.current)):
             await self.revoke(user["_session_id"])
             response.delete_cookie("kuku_refresh", path="/api/auth")
@@ -107,6 +130,7 @@ class AuthService:
             })
             return {"ticket": token}
         self.router.add_api_route("/auth/me", me)
+        self.router.add_api_route("/auth/profile", save_profile, methods=["POST"])
         self.router.add_api_route("/auth/logout", logout, methods=["POST"])
         self.router.add_api_route("/invites", invite, methods=["POST"])
         self.router.add_api_route("/auth/ws-ticket", ticket, methods=["POST"])
@@ -216,7 +240,8 @@ class AuthService:
             if not invitation:
                 raise HTTPException(403, "A valid invitation for this email is required")
         user = {"id": uid, "email": email, "name": payload.name, "password_hash": password_hash,
-            "avatar": None, "bio": "", "created_at": now().isoformat(), "email_verified": False}
+            "avatar": None, "bio": "", "created_at": now().isoformat(), "email_verified": False,
+            "onboarding_complete": False}
         if invitation:
             user["invited_by"] = invitation.get("creator_id")
         try:

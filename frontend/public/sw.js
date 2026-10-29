@@ -1,5 +1,5 @@
 // Only public shell assets are cached. Never cache authenticated APIs or signed file URLs.
-const CACHE = "kuku-static-v3";
+const CACHE = "kuku-static-v4";
 const PRECACHE = ["/", "/manifest.json", "/pwa-192.png", "/pwa-512.png", "/register-sw.js"];
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));

@@ -80,3 +80,18 @@ test("late refresh cannot restore a signed-out session or dispatch another accou
   await assert.rejects(exports.api.postAs("alice","/chats/private/messages",{}),/Account changed/);
   assert.equal(calls,1);
 });
+
+
+test("account routing resumes verification and profile setup without repeating completed onboarding", () => {
+  const ts=require("typescript");
+  const source=ts.transpileModule(fs.readFileSync("src/onboarding.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
+  const exports={};vm.runInNewContext(source,{exports});
+  const destination=exports.accountDestination;
+  assert.equal(destination(null),"/login");
+  assert.equal(destination({email_verified:false,onboarding_complete:false}),"/verify");
+  assert.equal(destination({email_verified:true,onboarding_complete:false}),"/onboarding");
+  assert.equal(destination({email_verified:true,onboarding_complete:true}),"/(tabs)");
+  assert.equal(destination({email_verified:true}),"/(tabs)");
+  assert.equal(exports.validEmail("hello@example.com"),true);
+  assert.equal(exports.validEmail("hello@"),false);
+});

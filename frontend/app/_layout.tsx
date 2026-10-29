@@ -19,6 +19,7 @@ import { AuthProvider, useAuth } from "../src/AuthContext";
 import { ThemeProvider, useTheme } from "../src/ThemeContext";
 import { CallProvider } from "../src/CallContext";
 import { colors } from "../src/theme";
+import { accountDestination } from "../src/onboarding";
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -56,9 +57,10 @@ function ThemedStack() {
   const segments = useSegments();
   if (user === undefined) return <View style={styles.loading}><ActivityIndicator color={c.primary} /></View>;
   const publicRoute = segments[0] === "login" || segments[0] === "recover";
-  if (user?.email_verified && segments[0] === "login") return <Redirect href="/(tabs)" />;
   if (!user && !publicRoute) return <Redirect href="/login" />;
   if (user && !user.email_verified && segments[0] !== "verify") return <Redirect href="/verify" />;
+  if (user?.email_verified && user.onboarding_complete === false && segments[0] !== "onboarding") return <Redirect href="/onboarding" />;
+  if (user?.email_verified && (segments[0] === "login" || segments[0] === "verify")) return <Redirect href={accountDestination(user)} />;
   return (
     <CallProvider>
       <StatusBar style={c.isDark ? "light" : "dark"} />
@@ -71,6 +73,9 @@ function ThemedStack() {
       >
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
+        <Stack.Screen name="verify" />
+        <Stack.Screen name="recover" />
+        <Stack.Screen name="onboarding" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="chat/[id]" options={{ animation: "slide_from_right" }} />
         <Stack.Screen

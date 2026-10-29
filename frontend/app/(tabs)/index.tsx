@@ -79,7 +79,7 @@ export default function HomeScreen() {
         </Pressable>
         <View style={styles.titleBlock}>
           <Text style={styles.kicker}>Today</Text>
-          <Text style={styles.title}>Connect</Text>
+          <Text style={styles.title}>KUKU</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -105,8 +105,9 @@ export default function HomeScreen() {
           }
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>No conversations yet</Text>
-              <Text style={styles.emptyText}>Tap the + below to start one.</Text>
+              <Text style={styles.emptyTitle}>Good things start with a hello.</Text>
+              <Text style={styles.emptyText}>Invite someone close, or start a conversation with a contact who's already here.</Text>
+              <Pressable accessibilityRole="button" onPress={() => router.push("/invite")} style={{padding: 15, marginTop: 16, backgroundColor: c.surface, borderRadius: 14}}><Text style={{fontFamily: f.bodyMedium, color: c.primaryDark}}>Invite someone</Text></Pressable>
             </View>
           }
           renderItem={({ item }) => (

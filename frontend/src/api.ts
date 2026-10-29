@@ -90,7 +90,7 @@ export const api = {
   post: <T = any>(path: string, body?: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(body ?? {}) }),
   delete: <T = any>(path: string) => request<T>(path, { method: "DELETE" }),
 };
-export type User = { email_verified?: boolean; id: string; email?: string; name: string; avatar?: string | null; bio?: string; created_at?: string };
+export type User = { email_verified?: boolean; onboarding_complete?: boolean; id: string; email?: string; name: string; avatar?: string | null; bio?: string; created_at?: string };
 export type Message = {
   id: string; chat_id: string; sender_id: string; sender_name: string;
   type: "text" | "voice" | "image" | "file" | "space_invite";

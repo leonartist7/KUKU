@@ -1,5 +1,5 @@
 import { clearOutbox } from "./outbox";
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { View, Text, Pressable } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api, getToken, setToken, acceptSession, ApiError, onSessionExpired, User } from "./api";
@@ -9,12 +9,15 @@ type AuthState = {
   signUp: (email: string, password: string, name: string, invite_token?: string) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
+  updateProfile: (name: string, bio: string) => Promise<void>;
 };
 const AuthContext = createContext<AuthState>({} as AuthState);
 const PROFILE_KEY = "kuku_profile";
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null | undefined>();
   const [error, setError] = useState<string | null>(null);
+  const currentUser = useRef(user);
+  currentUser.current = user;
   const remember = useCallback(async (next: User | null) => {
     if (next) await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(next));
     else await AsyncStorage.removeItem(PROFILE_KEY);
@@ -55,12 +58,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user) await clearOutbox(user.id);
     await setToken(null); await remember(null);
   }, [remember, user]);
+  const updateProfile = useCallback(async (name: string, bio: string) => {
+    const id = currentUser.current?.id;
+    if (!id) throw new Error("Please sign in again.");
+    const next = await api.postAs<User>(id, "/auth/profile", {name, bio});
+    if (currentUser.current?.id !== id) throw new Error("Your account changed. Please try again.");
+    await remember(next);
+  }, [remember]);
   if (error && user === undefined) return (
     <View style={{ flex: 1, justifyContent: "center", padding: 32, backgroundColor: "#FBF9F6" }}>
       <Text accessibilityRole="alert">{error}</Text>
       <Pressable accessibilityRole="button" onPress={() => void refresh()} style={{ paddingVertical: 20 }}><Text>Try again</Text></Pressable>
     </View>
   );
-  return <AuthContext.Provider value={{ user, signIn, signUp, signOut, refresh }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, signIn, signUp, signOut, refresh, updateProfile }}>{children}</AuthContext.Provider>;
 }
 export const useAuth = () => useContext(AuthContext);

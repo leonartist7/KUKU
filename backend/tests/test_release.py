@@ -388,3 +388,38 @@ async def test_block_cancels_queued_push_before_provider_submission(client,monke
     monkeypatch.setattr(push_service,'gateway',Provider())
     await push_service.deliver_one(server.db)
     assert (await server.db.messages.find_one({'chat_id':cid}))['push_state']=='sent'
+
+
+@pytest.mark.asyncio
+async def test_onboarding_profile_requires_verification_and_is_private(client):
+    body = {"email": "new@example.com", "name": "New", "password": "a-long-test-passphrase"}
+    a = (await client.post("/api/auth/register", json=body)).json()
+    assert a["user"]["onboarding_complete"] is False
+    assert (await client.post("/api/auth/profile", headers=headers(a),
+        json={"name": "Changed", "bio": ""})).status_code == 403
+    assert (await client.post("/api/auth/profile", json={"name": "Changed"})).status_code == 401
+    await server.db.users.update_one({"id": a["user"]["id"]}, {"$set": {"email_verified": True}})
+    b = await account(client, "other")
+    r = await client.post("/api/auth/profile", headers=headers(a), json={"name": "  New Name  ", "bio": "  Hello, world.  "})
+    assert r.status_code == 200
+    assert r.json()["name"] == "New Name"
+    assert r.json()["bio"] == "Hello, world."
+    assert r.json()["onboarding_complete"] is True
+    assert (await client.get("/api/auth/me", headers=headers(a))).json()["onboarding_complete"] is True
+    untouched = await server.db.users.find_one({"id": b["user"]["id"]})
+    assert untouched["name"] == "other"
+    from auth_service import profile
+    public = profile(await server.db.users.find_one({"id": a["user"]["id"]}))
+    assert "onboarding_complete" not in public and "email" not in public
+
+@pytest.mark.asyncio
+async def test_profile_validation_and_repeated_completion(client):
+    a = await account(client, "alice")
+    for payload in [{"name": " "}, {"name": "a" * 81}, {"name": "Alice", "bio": "a" * 161},
+                    {"name": "Alice", "email_verified": True}, {"name": "Alice", "id": "someone-else"}]:
+        assert (await client.post("/api/auth/profile", headers=headers(a), json=payload)).status_code == 422
+    for _ in range(2):
+        r = await client.post("/api/auth/profile", headers=headers(a), json={"name": "Alice", "bio": ""})
+        assert r.status_code == 200 and r.json()["onboarding_complete"] is True
+    await server.db.users.update_one({"id": a["user"]["id"]}, {"$unset": {"onboarding_complete": ""}})
+    assert (await client.get("/api/auth/me", headers=headers(a))).json()["onboarding_complete"] is True

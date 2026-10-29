@@ -25,6 +25,7 @@ export default function YouScreen() {
   const currentTheme = themeMeta.find((t) => t.name === themeName)?.label ?? "Warm";
 
   const items: { icon: keyof typeof Ionicons.glyphMap; label: string; sub: string; onPress?: () => void; testID: string }[] = [
+    { icon: "person-outline", label: "Edit profile", sub: "Your name and a little about you", onPress: () => router.push("/onboarding?edit=1"), testID: "settings-profile" },
     {
       icon: "color-palette-outline",
       label: "Appearance",
