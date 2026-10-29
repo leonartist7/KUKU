@@ -48,7 +48,7 @@ const server=http.createServer((req,res)=>{
     await page.getByTestId("name-input").fill("Alex");
     await page.getByTestId("password-input").fill("a long synthetic passphrase");
     await page.getByRole("button",{name:"Show password",exact:true}).click();
-    assert.equal(await page.getByTestId("password-input").getAttribute("type"),"text");
+    assert.equal(await page.getByTestId("password-input").evaluate(input=>input.type),"text");
     await page.screenshot({path:path.join(shots,"create-account-390.png"),fullPage:true});
     await page.getByTestId("auth-submit").click();
     await page.getByTestId("send-verification").waitFor();
