@@ -100,9 +100,11 @@ export type Message = {
 };
 export type Chat = { id: string; type: string; other: User | null; last_message: Message | null; updated_at: string };
 
-export async function uploadAttachment(chatId: string, uri: string, name: string) {
+export async function uploadAttachment(chatId: string, uri: string, name: string, expectedUser?: string) {
+  if (expectedUser && sessionUserId !== expectedUser) throw new ApiError("Account changed", 401);
   const url = API_ORIGIN + "/api/chats/" + encodeURIComponent(chatId) + "/attachments?name=" + encodeURIComponent(name);
   const token = await getToken();
+  if (expectedUser && sessionUserId !== expectedUser) throw new ApiError("Account changed", 401);
   if (Platform.OS !== "web") {
     const files = await import("expo-file-system/legacy");
     const info = await files.getInfoAsync(uri);
@@ -113,11 +115,15 @@ export async function uploadAttachment(chatId: string, uri: string, name: string
     });
     const data = JSON.parse(response.body);
     if (response.status >= 400) throw new ApiError(data.detail || "Upload failed", response.status);
+    if (expectedUser && sessionUserId !== expectedUser) throw new ApiError("Account changed", 401);
     return data as {id: string; file_name: string; file_size: number};
   }
   const blob = await (await fetch(uri)).blob();
   if (!blob.size || blob.size > 25 * 1024 * 1024) throw new Error("Choose a file between 1 byte and 25 MB");
-  return parse(await fetch(url, {
+  if (expectedUser && sessionUserId !== expectedUser) throw new ApiError("Account changed", 401);
+  const data = await parse(await fetch(url, {
     method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/octet-stream" }, body: blob,
-  })) as Promise<{id: string; file_name: string; file_size: number}>;
+  }));
+  if (expectedUser && sessionUserId !== expectedUser) throw new ApiError("Account changed", 401);
+  return data as {id: string; file_name: string; file_size: number};
 }

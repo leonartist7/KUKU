@@ -95,3 +95,30 @@ test("account routing resumes verification and profile setup without repeating c
   assert.equal(exports.validEmail("hello@example.com"),true);
   assert.equal(exports.validEmail("hello@"),false);
 });
+
+function pureModule(file) {
+  const ts=require("typescript"),exports={};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports,URLSearchParams});
+  return exports;
+}
+test("scheduled appearance switches at exact local boundaries, including same-day schedules",()=>{
+  const {scheduledDark,resolveDark,validTime}=pureModule("src/appearance.ts");
+  const time=(h,m)=>({getHours:()=>h,getMinutes:()=>m});
+  for(const [h,m,dark] of [[18,59,false],[19,0,true],[23,59,true],[0,0,true],[6,59,true],[7,0,false]]) assert.equal(scheduledDark(time(h,m)),dark,`${h}:${m}`);
+  assert.equal(scheduledDark(time(12,0),"09:00","17:00"),true);
+  assert.equal(scheduledDark(time(18,0),"09:00","17:00"),false);
+  assert.equal(resolveDark("light",time(23,0),true,"19:00","07:00"),false);
+  assert.equal(resolveDark("dark",time(12,0),false,"19:00","07:00"),true);
+  assert.equal(resolveDark("system",time(12,0),true,"19:00","07:00"),true);
+  assert.equal(resolveDark("system",time(23,0),false,"19:00","07:00"),false);
+  for(const input of ["7:00","24:00","19:60","",null,undefined]) assert.equal(validTime(input),false);
+  assert.equal(validTime("00:00"),true);
+});
+test("invitation fragments accept only complete codes and never treat a query as a secret",()=>{
+  const {invitationFromUrl}=pureModule("src/invitations.ts");
+  const token="abcDEF012_-".repeat(4);
+  assert.equal(invitationFromUrl("https://kuku.example/login#invite="+token),token);
+  assert.equal(invitationFromUrl("https://kuku.example/login?invite="+token),"");
+  assert.equal(invitationFromUrl("https://kuku.example/login#invite=short"),"");
+  assert.equal(invitationFromUrl(null),"");
+});

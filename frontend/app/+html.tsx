@@ -12,6 +12,8 @@ export default function Root({ children }: PropsWithChildren) {
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no"
         />
+        <link rel="icon" href="/favicon.ico?v=kuku5" sizes="any" />
+        <meta name="referrer" content="no-referrer" />
         <meta name="theme-color" content="#A98C70" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/pwa-192.png" />

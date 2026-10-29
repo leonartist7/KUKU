@@ -79,10 +79,12 @@ function CustomTabBar({ state, navigation }: any) {
     },
     {
       key: "share-file",
-      label: "Send file",
+      label: "Upload a file",
       icon: "document-attach-outline",
       onPress: () => router.push("/new-message?mode=file"),
     },
+    {key: "share-photo", label: "Share a photo", icon: "image-outline", onPress: () => router.push("/new-message?mode=photo")},
+    {key: "invite", label: "Invite someone", icon: "person-add-outline", onPress: () => router.push("/invite")},
     {
       key: "shared-space",
       label: "Shared space",
@@ -131,7 +133,8 @@ function CustomTabBar({ state, navigation }: any) {
         {/* Center + FAB */}
         <View style={styles.centerWrap}>
           <Pressable
-            onPress={() => router.push("/new-message")}
+            accessibilityRole="button" accessibilityLabel="Open quick actions"
+            onPress={() => setMenuOpen(true)}
             onLongPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
               setMenuOpen(true);

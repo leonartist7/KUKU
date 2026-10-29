@@ -114,7 +114,7 @@ export default function CallsScreen() {
               ]}
               testID={`call-row-${item.id}`}
             >
-              <Avatar name={item.other?.name} seed={item.other?.id} size={48} />
+              <Avatar name={item.other?.name} seed={item.other?.id} photo={item.other?.avatar} size={48} />
               <View style={styles.rowMain}>
                 <Text style={styles.rowName} numberOfLines={1}>
                   {item.other?.name || "Unknown"}

@@ -66,7 +66,7 @@ export default function YouScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.profileCard}>
-          <Avatar name={user?.name} seed={user?.id} size={72} />
+          <Avatar name={user?.name} seed={user?.id} photo={user?.avatar} size={72} />
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{user?.name}</Text>
             <Text style={styles.email}>{user?.email}</Text>

@@ -271,7 +271,7 @@ export default function CallScreen() {
                 <Animated.View style={[styles.ring, ring1Style]} />
               </>
             )}
-            <Avatar name={other?.name} seed={other?.id} size={140} />
+            <Avatar name={other?.name} seed={other?.id} photo={other?.avatar} size={140} />
           </View>
         )}
         {other?.bio && phase !== "ended" ? <Text style={styles.bio}>{other.bio}</Text> : null}

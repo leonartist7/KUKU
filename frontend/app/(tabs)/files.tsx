@@ -11,7 +11,7 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api, Message, User } from "../../src/api";
 import { radius, spacing } from "../../src/theme";
@@ -44,6 +44,7 @@ function dateLabel(iso?: string) {
 
 export default function FilesScreen() {
   const { c, f } = useTheme();
+  const router = useRouter();
   const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
   const [section, setSection] = useState<Section>("Recent");
   const [files, setFiles] = useState<FileMsg[]>([]);
@@ -97,6 +98,10 @@ export default function FilesScreen() {
         <Text style={styles.title}>Files</Text>
       </View>
 
+      <View style={{flexDirection: "row", paddingHorizontal: 24, gap: 10, marginBottom: 14}}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Upload a file" onPress={() => router.push("/new-message?mode=file")} style={{flex: 1, minHeight: 48, borderRadius: 14, padding: 12, backgroundColor: c.surface, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center"}}><Ionicons name="cloud-upload-outline" size={20} color={c.primaryDark}/><Text style={{color: c.text, fontFamily: f.bodyMedium}}>Upload file</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Share a photo" onPress={() => router.push("/new-message?mode=photo")} style={{flex: 1, minHeight: 48, borderRadius: 14, padding: 12, backgroundColor: c.surface, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center"}}><Ionicons name="image-outline" size={20} color={c.primaryDark}/><Text style={{color: c.text, fontFamily: f.bodyMedium}}>Share photo</Text></Pressable>
+      </View>
       <View style={styles.segmentRow}>
         {SECTIONS.map((s) => (
           <Pressable

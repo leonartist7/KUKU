@@ -55,7 +55,7 @@ export default function SpacesScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <Pressable onPress={() => router.push("/you")} style={styles.profileBtn} testID="profile-button">
-          <Avatar name={user?.name} seed={user?.id} size={40} />
+          <Avatar name={user?.name} seed={user?.id} photo={user?.avatar} size={40} />
         </Pressable>
         <View style={styles.titleBlock}>
           <Text style={styles.kicker}>Together</Text>
@@ -191,7 +191,7 @@ function ActiveCard({ space, onOpen }: { space: Space; onOpen: () => void }) {
       <View style={styles.avatarStack}>
         {activeUsers.slice(0, 4).map((u, i) => (
           <View key={u.id} style={[styles.stackedAvatar, { marginLeft: i === 0 ? 0 : -10 }]}>
-            <Avatar name={u.name} seed={u.id} size={28} />
+            <Avatar name={u.name} seed={u.id} photo={u.avatar} size={28} />
           </View>
         ))}
         {activeUsers.length > 4 ? (
@@ -219,7 +219,7 @@ function RoomRow({ space, onOpen }: { space: Space; onOpen: () => void }) {
       <View style={styles.roomAvatarStack}>
         {space.member_users.slice(0, 3).map((u, i) => (
           <View key={u.id} style={[styles.stackedAvatar, { marginLeft: i === 0 ? 0 : -10 }]}>
-            <Avatar name={u.name} seed={u.id} size={36} />
+            <Avatar name={u.name} seed={u.id} photo={u.avatar} size={36} />
           </View>
         ))}
       </View>

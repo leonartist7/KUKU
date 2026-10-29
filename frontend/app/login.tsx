@@ -1,5 +1,7 @@
-import React, {useState} from "react";
-import {Text, View} from "react-native";
+import * as Linking from "expo-linking";
+import {invitationFromUrl} from "../src/invitations";
+import React, {useEffect, useState} from "react";
+import {Text, View, Platform} from "react-native";
 import {useRouter} from "expo-router";
 import {useAuth} from "../src/AuthContext";
 import {useTheme} from "../src/ThemeContext";
@@ -12,6 +14,19 @@ export default function Login() {
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [name, setName] = useState(""); const [invite, setInvite] = useState("");
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const url = Linking.useURL();
+  useEffect(() => {
+    const consume = () => {
+      const code = invitationFromUrl(Platform.OS === "web" ? window.location.href : url);
+      if (!code) return;
+      setInvite(code); setMode("invitation");
+      if (Platform.OS === "web") window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+    };
+    consume();
+    // Expo Linking's web URL event does not fire for same-document fragments.
+    if (Platform.OS === "web") window.addEventListener("hashchange", consume);
+    return () => {if (Platform.OS === "web") window.removeEventListener("hashchange", consume);};
+  }, [url]);
   const move = (next: typeof mode) => {setError(""); setMode(next);};
   async function submit() {
     if (busy) return;
@@ -34,13 +49,13 @@ export default function Login() {
   }
   return <WelcomeShell step={mode === "signin" ? undefined : 1} compact={mode === "account"}
     title={mode === "signin" ? "Your people,\na little closer." : mode === "invitation" ? "Someone saved\na place for you." : "Let's make it yours."}
-    subtitle={mode === "signin" ? "A quieter place for everyday conversations. Come on in." : mode === "invitation" ? "Use the email your invitation was made for. We'll get you settled in, one step at a time." : "Just a name and a password for now. You can add a little more about yourself after verification."}
+    subtitle={mode === "signin" ? "A quieter place for everyday conversations. Come on in." : mode === "invitation" ? "Your invitation is ready. Use your own email; if the invitation was made for a particular address, use that one." : "Just a name and a password for now. You can add a little more about yourself after verification."}
     back={mode === "account" ? () => move("invitation") : undefined} backLabel="Your invitation">
     {mode === "account" ? <>
       <View style={{backgroundColor: c.primaryBgSubtle, padding: 13, borderRadius: 13}}><Text style={{fontFamily: f.bodyMedium, color: c.text, fontSize: 13}}>{email.trim()}</Text><Text style={{fontFamily: f.body, color: c.textSecondary, fontSize: 12, marginTop: 4}}>Your invitation is checked when you create your account.</Text></View>
       <Field label="What should we call you?" value={name} onChangeText={setName} placeholder="Your first name" autoComplete="name" maxLength={80} testID="name-input" editable={!busy}/>
     </> : <Field label="Email address" value={email} onChangeText={setEmail} placeholder="you@example.com" autoCapitalize="none" autoCorrect={false} autoComplete="email" keyboardType="email-address" textContentType="emailAddress" editable={!busy} testID="email-input"/>}
-    {mode === "invitation" ? <Field label="Your invitation code" value={invite} onChangeText={setInvite} placeholder="Paste the code shared with you" autoCapitalize="none" autoCorrect={false} maxLength={256} hint="KUKU is invitation-only. Ask the person who invited you if you need a code." testID="invite-input"/> : <Field label={mode === "account" ? "Create a password" : "Password"} value={password} onChangeText={setPassword} password autoCapitalize="none" autoCorrect={false} autoComplete={mode === "account" ? "new-password" : "current-password"} textContentType={mode === "account" ? "newPassword" : "password"} placeholder={mode === "account" ? "At least 12 characters" : "Your password"} maxLength={256} hint={mode === "account" ? "A few memorable words work well. Spaces are welcome." : undefined} onSubmitEditing={() => void submit()} editable={!busy} testID="password-input"/>}
+    {mode === "invitation" ? <Field label="Your invitation code" value={invite} onChangeText={setInvite} placeholder="Paste the code shared with you" autoCapitalize="none" autoCorrect={false} maxLength={256} hint="Opened an invitation link? Your code is filled in. Otherwise paste the code shared with you." testID="invite-input"/> : <Field label={mode === "account" ? "Create a password" : "Password"} value={password} onChangeText={setPassword} password autoCapitalize="none" autoCorrect={false} autoComplete={mode === "account" ? "new-password" : "current-password"} textContentType={mode === "account" ? "newPassword" : "password"} placeholder={mode === "account" ? "At least 12 characters" : "Your password"} maxLength={256} hint={mode === "account" ? "A few memorable words work well. Spaces are welcome." : undefined} onSubmitEditing={() => void submit()} editable={!busy} testID="password-input"/>}
     {mode === "signin" ? <TextAction label="Forgot your password?" onPress={() => router.push("/recover")} disabled={busy}/> : null}
     <Notice message={error}/>
     {mode === "account" && error.toLowerCase().includes("invitation") ? <TextAction label="Check my invitation and email" onPress={() => move("invitation")}/> : null}

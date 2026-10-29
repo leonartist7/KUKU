@@ -11,6 +11,9 @@ for(const icon of manifest.icons){
 for(const name of ['sw.js','register-sw.js'])fs.accessSync(path.join(dir,name));
 const index=path.join(dir,'index.html');let html=fs.readFileSync(index,'utf8');
 if(!html.includes('rel="manifest"'))html=html.replace('</head>','<link rel="manifest" href="/manifest.json">\n<link rel="apple-touch-icon" href="/pwa-192.png">\n<meta name="apple-mobile-web-app-title" content="KUKU">\n<meta name="apple-mobile-web-app-capable" content="yes">\n</head>');
+html=html.replace(/<link\b[^>]*rel=["'](?:shortcut )?icon["'][^>]*>/gi, '');
+html=html.replace('</head>', '<link rel="icon" href="/favicon.ico?v=kuku5" sizes="any">\n<link rel="icon" type="image/png" href="/pwa-192.png?v=kuku5" sizes="192x192">\n<meta name="referrer" content="no-referrer">\n</head>');
+fs.accessSync(path.join(dir,'favicon.ico'));
 if(!html.includes('src="/register-sw.js"'))html=html.replace('</body>','<script src="/register-sw.js" defer></script>\n</body>');
 fs.writeFileSync(index,html);
 console.log('Verified KUKU install manifest, icons and service-worker registration.');

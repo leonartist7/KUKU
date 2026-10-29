@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
+import React, {useState} from "react";
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -7,9 +7,15 @@ import * as Haptics from "expo-haptics";
 import { useTheme } from "../src/ThemeContext";
 import { Palette, palettes, ThemeName, themeMeta, radius, spacing, fontPairs, FontPair } from "../src/theme";
 
+import Decor from "../src/Decor";
+import {AppearanceMode, DecorName, validTime} from "../src/appearance";
+
 export default function AppearanceScreen() {
   const router = useRouter();
-  const { c, f, themeName, setTheme, fontKey, setFontKey } = useTheme();
+  const {c, f, themeName, setAppearance, mode, dayTheme, nightTheme, dayAt, nightAt, decor, fontKey, setFontKey} = useTheme();
+  const [slot, setSlot] = useState<"day" | "night">("day");
+  const [dayInput, setDayInput] = useState(dayAt); const [nightInput, setNightInput] = useState(nightAt);
+  const [timeError, setTimeError] = useState("");
   const styles = makeStyles(c, f);
 
   return (
@@ -26,8 +32,17 @@ export default function AppearanceScreen() {
         <Text style={styles.heroTitle}>Make it feel like yours.</Text>
         <Text style={styles.heroBody}>Every surface, chosen for warmth.</Text>
 
+        <Text style={styles.sectionTitle}>Light & dark</Text>
+        <Text style={{color: c.textSecondary, fontFamily: f.body, marginBottom: 14}}>Changes follow this device’s local time. Active now: {themeMeta.find(t => t.name === themeName)?.label}.</Text>
+        <View style={{flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16}}>{([["schedule", "Automatic"], ["light", "Always light"], ["dark", "Always dark"], ["system", "Use device"]] as [AppearanceMode, string][]).map(([key, label]) => <Pressable key={key} accessibilityRole="radio" accessibilityLabel={label} accessibilityState={{checked: mode === key}} onPress={() => setAppearance({mode: key})} style={{minHeight: 44, padding: 12, borderRadius: 14, backgroundColor: mode === key ? c.surfaceElevated : c.surface, borderWidth: 1, borderColor: mode === key ? c.primaryDark : c.border}}><Text style={{color: c.text, fontFamily: f.bodyMedium}}>{label}</Text></Pressable>)}</View>
+        {mode === "schedule" ? <View style={{gap: 10, marginBottom: 24}}>
+          <Text style={{color: c.textSecondary}}>Use 24-hour times, for example 19:00 for 7 p.m.</Text>
+          <View style={{flexDirection: "row", gap: 12}}>{[["Light starts", dayInput, setDayInput], ["Dark starts", nightInput, setNightInput]].map(([label, value, change]) => <View key={label as string} style={{flex: 1, gap: 6}}><Text style={{color: c.text, fontFamily: f.bodyMedium}}>{label as string}</Text><TextInput accessibilityLabel={label as string} value={value as string} onChangeText={change as (v: string) => void} maxLength={5} placeholder="HH:MM" placeholderTextColor={c.textSecondary} style={{minHeight: 48, padding: 12, backgroundColor: c.surface, color: c.text, borderRadius: 12}}/></View>)}</View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Save schedule" onPress={() => {if (!validTime(dayInput) || !validTime(nightInput) || dayInput === nightInput) {setTimeError("Choose two different times in HH:MM format."); return;} setAppearance({dayAt: dayInput, nightAt: nightInput}); setTimeError("Schedule saved.");}} style={{padding: 14, backgroundColor: c.surface, borderRadius: 12}}><Text style={{color: c.text}}>Save schedule</Text></Pressable>
+          {timeError ? <Text accessibilityRole="alert" style={{color: c.text}}>{timeError}</Text> : null}
+        </View> : null}
         {/* Live preview card */}
-        <View style={styles.previewCard}>
+        <View style={[styles.previewCard, {overflow: "hidden"}]}><Decor/>
           <Text style={styles.previewKicker}>Live preview</Text>
           <View style={styles.previewBubbleRow}>
             <View style={[styles.previewBubble, { backgroundColor: c.surface, alignSelf: "flex-start" }]}>
@@ -46,17 +61,19 @@ export default function AppearanceScreen() {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Palette</Text>
+        <Text style={styles.sectionTitle}>Your day & night palettes</Text>
+        <View style={{flexDirection: "row", gap: 10, marginBottom: 12}}>{(["day", "night"] as const).map(key => <Pressable key={key} accessibilityRole="radio" accessibilityLabel={key === "day" ? "Day palettes" : "Night palettes"} accessibilityState={{checked: slot === key}} onPress={() => setSlot(key)} style={{padding: 14, borderRadius: 12, backgroundColor: slot === key ? c.surfaceElevated : c.surface}}><Text style={{color: c.text}}>{key === "day" ? "Day palette" : "Night palette"}</Text></Pressable>)}</View>
         <View style={styles.themeGrid}>
-          {themeMeta.map((t) => {
+          {themeMeta.filter(t => palettes[t.name].isDark === (slot === "night")).map((t) => {
             const p = palettes[t.name];
-            const selected = t.name === themeName;
+            const selected = t.name === (slot === "day" ? dayTheme : nightTheme);
             return (
               <Pressable
                 key={t.name}
+                accessibilityRole="radio" accessibilityLabel={t.label + " palette"} accessibilityState={{checked: selected}}
                 onPress={() => {
                   Haptics.selectionAsync().catch(() => {});
-                  setTheme(t.name as ThemeName);
+                  setAppearance(slot === "day" ? {dayTheme: t.name} : {nightTheme: t.name});
                 }}
                 style={({ pressed }) => [
                   styles.themeCard,
@@ -85,6 +102,9 @@ export default function AppearanceScreen() {
           })}
         </View>
 
+        <Text style={styles.sectionTitle}>Little decorations</Text>
+        <Text style={{color: c.textSecondary, marginBottom: 12}}>A subtle background for your chats and welcome screens.</Text>
+        <View style={{flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 24}}>{([["plain", "Quiet"], ["dots", "Confetti dots"], ["leaves", "Little garden"], ["orbits", "Orbits"]] as [DecorName, string][]).map(([key, label]) => <Pressable key={key} accessibilityRole="radio" accessibilityLabel={label + " decoration"} accessibilityState={{checked: decor === key}} onPress={() => setAppearance({decor: key})} style={{minHeight: 48, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: decor === key ? c.primaryDark : c.border, backgroundColor: c.surface}}><Text style={{color: c.text}}>{label}</Text></Pressable>)}</View>
         <Text style={styles.sectionTitle}>Typography</Text>
         <View style={styles.fontList}>
           {(Object.keys(fontPairs) as FontPair[]).map((key) => {
@@ -119,7 +139,7 @@ export default function AppearanceScreen() {
         </View>
 
         <Text style={styles.footnote}>
-          Your theme and font are saved to this device and applied everywhere.
+          Your schedule, palettes, decorations and font are saved on this device.
         </Text>
       </ScrollView>
     </SafeAreaView>

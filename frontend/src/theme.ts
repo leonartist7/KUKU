@@ -1,7 +1,7 @@
 // Connect — Theme presets (warm, low blue-light)
 // Exports presets + a simple type. The `useTheme()` hook lives in ThemeContext.
 
-export type ThemeName = "warm" | "dune" | "honey" | "rose" | "sage" | "evening" | "charcoal" | "cocoa" | "moon";
+export type ThemeName = "warm" | "dune" | "honey" | "rose" | "sage" | "evening" | "charcoal" | "cocoa" | "moon" | "ocean" | "lavender" | "peach" | "forest" | "plum" | "midnight";
 
 export type Palette = {
   bg: string;
@@ -223,6 +223,12 @@ export const palettes: Record<ThemeName, Palette> = {
   charcoal,
   cocoa,
   moon,
+  ocean: {...sage, bg: "#F1F8F8", surface: "#E1EFF0", surfaceElevated: "#CCE2E5", primary: "#397A82", primaryDark: "#285B65", primaryLight: "#93C5CC", primaryBgSubtle: "#DFEFF0", text: "#253E43", textSecondary: "#536F75", border: "#CDDFE2"},
+  lavender: {...rose, bg: "#F8F5FC", surface: "#EEE7F5", surfaceElevated: "#E1D5ED", primary: "#89709E", primaryDark: "#67517D", primaryLight: "#C5B1D8", primaryBgSubtle: "#EEE7F5", text: "#40334E", textSecondary: "#766383", border: "#E1D5ED"},
+  peach: {...warm, bg: "#FFF6EE", surface: "#F9E8DA", surfaceElevated: "#F1D5C2", primary: "#B96E4E", primaryDark: "#8F5037", primaryLight: "#E5B79C", primaryBgSubtle: "#F9E8DA", text: "#523C30", textSecondary: "#896550", border: "#EBD6C7"},
+  forest: {...evening, bg: "#182822", surface: "#24382F", surfaceElevated: "#324A3D", primary: "#A5C7A5", primaryDark: "#90B894", primaryLight: "#CADDC6", primaryBgSubtle: "#324A3D", text: "#E9F0E5", textSecondary: "#B1C4B3", textInverse: "#182822", border: "#3A5144"},
+  plum: {...evening, bg: "#2B2030", surface: "#3C2C43", surfaceElevated: "#513C59", primary: "#D2ADD9", primaryDark: "#BD94C6", primaryLight: "#E9CFED", primaryBgSubtle: "#513C59", text: "#F4E9F3", textSecondary: "#C5AEC9", textInverse: "#2B2030", border: "#513C59"},
+  midnight: {...moon, bg: "#151E32", surface: "#202D46", surfaceElevated: "#2F405E", primary: "#B4C8EE", primaryDark: "#93AEDB", primaryLight: "#D4E0F5", primaryBgSubtle: "#2F405E", text: "#ECF0F9", textSecondary: "#AFBED5", textInverse: "#151E32", border: "#354868"},
 };
 
 export const themeMeta: { name: ThemeName; label: string; tagline: string }[] = [
@@ -235,6 +241,12 @@ export const themeMeta: { name: ThemeName; label: string; tagline: string }[] = 
   { name: "charcoal", label: "Charcoal", tagline: "Ink and parchment" },
   { name: "cocoa", label: "Cocoa", tagline: "Deep, warm chocolate" },
   { name: "moon", label: "Moon", tagline: "Slate-blue night" },
+  { name: "ocean", label: "Ocean", tagline: "Sea glass and sea air" },
+  { name: "lavender", label: "Lavender", tagline: "Soft lilac mornings" },
+  { name: "peach", label: "Peach", tagline: "A little sunshine" },
+  { name: "forest", label: "Forest", tagline: "A quiet night in the trees" },
+  { name: "plum", label: "Plum", tagline: "Velvet and starlight" },
+  { name: "midnight", label: "Midnight", tagline: "Deep blue after hours" },
 ];
 
 // Back-compat default export (warm) for any file that imports { colors }.

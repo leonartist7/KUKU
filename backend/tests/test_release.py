@@ -1,6 +1,9 @@
 """Release regression suite. Uses synthetic users and no external services."""
 import os
 import uuid
+import base64
+import io
+import asyncio
 os.environ["APP_ENV"] = "test"
 os.environ["JWT_SECRET"] = "isolated-test-key-never-use-in-production"
 os.environ["REGISTRATION_MODE"] = "open"
@@ -13,6 +16,80 @@ from mongomock_motor import AsyncMongoMockClient
 import server
 from auth_service import digest, now
 from datetime import timedelta
+
+@pytest.mark.asyncio
+async def test_link_invitation_accepts_any_email_once_and_connects_members(client, monkeypatch):
+    owner = await account(client, "owner")
+    made = await client.post("/api/invites", headers=headers(owner), json={})
+    assert made.status_code == 200
+    invite = made.json()
+    assert invite["invite_url"].endswith("/login#invite=" + invite["invite_token"])
+    assert invite["invite_token"] not in invite["invite_url"].split("#")[0]
+    saved = await server.db.invites.find_one({"_id": digest(invite["invite_token"])})
+    assert saved["email"] is None and saved["redeemed_by"] is None
+    monkeypatch.setattr(server.settings, "REGISTRATION_MODE", "invite")
+    body = {"name": "Sister", "email": "sister@example.com", "password": "a-long-test-passphrase", "invite_token": invite["invite_token"]}
+    accepted = await client.post("/api/auth/register", json=body)
+    assert accepted.status_code == 200
+    person = accepted.json()
+    assert person["user"]["email_verified"] is False
+    await server.db.users.update_one({"id": person["user"]["id"]}, {"$set": {"email_verified": True}})
+    contacts = (await client.get("/api/users", headers=headers(person))).json()
+    assert owner["user"]["id"] in [u["id"] for u in contacts]
+    assert (await client.post("/api/auth/register", json={**body, "email": "other@example.com"})).status_code == 403
+
+@pytest.mark.asyncio
+async def test_expired_email_free_link_and_unverified_creator_rejected(client, monkeypatch):
+    a = await account(client, "alice")
+    await server.db.users.update_one({"id": a["user"]["id"]}, {"$set": {"email_verified": False}})
+    assert (await client.post("/api/invites", headers=headers(a), json={})).status_code == 403
+    await server.db.invites.insert_one({"_id": digest("expired-link"), "email": None, "expires_at": now()-timedelta(seconds=1), "redeemed_by": None})
+    monkeypatch.setattr(server.settings, "REGISTRATION_MODE", "invite")
+    assert (await client.post("/api/auth/register", json={"name": "B", "email": "b@example.com", "password": "a-long-test-passphrase", "invite_token": "expired-link"})).status_code == 403
+
+@pytest.mark.asyncio
+async def test_link_invitation_only_one_concurrent_redemption(client, monkeypatch):
+    a = await account(client, "alice")
+    token = (await client.post("/api/invites", headers=headers(a), json={})).json()["invite_token"]
+    monkeypatch.setattr(server.settings, "REGISTRATION_MODE", "invite")
+    async def signup(email):
+        return await client.post("/api/auth/register", json={"name": "New", "email": email, "password": "a-long-test-passphrase", "invite_token": token})
+    results = await asyncio.gather(signup("first@example.com"), signup("second@example.com"))
+    assert sorted(r.status_code for r in results) == [200, 403]
+
+@pytest.mark.asyncio
+async def test_profile_photo_is_resized_metadata_free_and_removable(client):
+    from PIL import Image
+    a, b, c, _ = await pair(client)
+    raw = io.BytesIO()
+    exif = Image.Exif(); exif[270] = "private original metadata"
+    Image.new("RGB", (800, 400), "green").save(raw, "JPEG", exif=exif)
+    photo = await client.post("/api/auth/photo", headers=headers(a), json={"image_base64": base64.b64encode(raw.getvalue()).decode()})
+    assert photo.status_code == 200
+    avatar = photo.json()["avatar"]
+    image = Image.open(io.BytesIO(base64.b64decode(avatar.split(",")[1])))
+    assert image.size == (256, 256) and image.format == "JPEG" and not image.getexif()
+    assert len(avatar) < 100_000 and photo.json()["onboarding_complete"] is False
+    assert (await client.get("/api/auth/me", headers=headers(b))).json()["avatar"] is None
+    contacts = (await client.get("/api/users", headers=headers(b))).json()
+    assert next(u for u in contacts if u["id"] == a["user"]["id"])["avatar"] == avatar
+    assert (await client.get("/api/users", headers=headers(c))).json() == []
+    removed = await client.post("/api/auth/photo", headers=headers(a), json={"image_base64": None})
+    assert removed.status_code == 200 and removed.json()["avatar"] is None
+
+@pytest.mark.asyncio
+async def test_profile_photo_rejects_invalid_oversize_unverified_and_identity_changes(client):
+    from PIL import Image
+    a = await account(client, "alice")
+    for encoded in ["not-base64!", base64.b64encode(b"<svg>not a photo</svg>").decode()]:
+        assert (await client.post("/api/auth/photo", headers=headers(a), json={"image_base64": encoded})).status_code == 400
+    assert (await client.post("/api/auth/photo", headers=headers(a), json={"image_base64": "a" * 2796205})).status_code == 422
+    assert (await client.post("/api/auth/photo", headers=headers(a), json={"image_base64": None, "id": "someone-else"})).status_code == 422
+    huge = io.BytesIO(); Image.new("RGB", (4100, 4100)).save(huge, "PNG")
+    assert (await client.post("/api/auth/photo", headers=headers(a), json={"image_base64": base64.b64encode(huge.getvalue()).decode()})).status_code == 400
+    await server.db.users.update_one({"id": a["user"]["id"]}, {"$set": {"email_verified": False}})
+    assert (await client.post("/api/auth/photo", headers=headers(a), json={"image_base64": None})).status_code == 403
+    assert (await client.post("/api/auth/photo", json={"image_base64": None})).status_code == 401
 
 @pytest_asyncio.fixture
 async def client(monkeypatch):

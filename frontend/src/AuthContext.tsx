@@ -9,6 +9,7 @@ type AuthState = {
   signUp: (email: string, password: string, name: string, invite_token?: string) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
+  updatePhoto: (image_base64: string | null) => Promise<void>;
   updateProfile: (name: string, bio: string) => Promise<void>;
 };
 const AuthContext = createContext<AuthState>({} as AuthState);
@@ -65,12 +66,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (currentUser.current?.id !== id) throw new Error("Your account changed. Please try again.");
     await remember(next);
   }, [remember]);
+  const updatePhoto = useCallback(async (image_base64: string | null) => {
+    const id = currentUser.current?.id;
+    if (!id) throw new Error("Please sign in again.");
+    const next = await api.postAs<User>(id, "/auth/photo", {image_base64});
+    if (currentUser.current?.id !== id) throw new Error("Your account changed. Please try again.");
+    await remember(next);
+  }, [remember]);
   if (error && user === undefined) return (
     <View style={{ flex: 1, justifyContent: "center", padding: 32, backgroundColor: "#FBF9F6" }}>
       <Text accessibilityRole="alert">{error}</Text>
       <Pressable accessibilityRole="button" onPress={() => void refresh()} style={{ paddingVertical: 20 }}><Text>Try again</Text></Pressable>
     </View>
   );
-  return <AuthContext.Provider value={{ user, signIn, signUp, signOut, refresh, updateProfile }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, signIn, signUp, signOut, refresh, updateProfile, updatePhoto }}>{children}</AuthContext.Provider>;
 }
 export const useAuth = () => useContext(AuthContext);

@@ -15,6 +15,7 @@ from pymongo.errors import DuplicateKeyError
 from starlette.concurrency import run_in_threadpool
 
 import settings
+from profile_photos import MAX_BASE64, normalize_photo
 
 def now():
     return datetime.now(timezone.utc)
@@ -77,8 +78,13 @@ class ProfileIn(BaseModel):
 class RefreshIn(BaseModel):
     refresh_token: str | None = Field(default=None, max_length=256)
 
+class PhotoIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    image_base64: str | None = Field(default=None, max_length=MAX_BASE64)
+
 class InviteIn(BaseModel):
-    email: EmailStr
+    model_config = {"extra": "forbid"}
+    email: EmailStr | None = None
 
 class TicketIn(BaseModel):
     scope: str = Field(pattern=r"^(calls|messages|space:[a-zA-Z0-9-]+)$")
@@ -104,19 +110,27 @@ class AuthService:
                 return_document=ReturnDocument.AFTER,
             )
             return profile(saved, True)
+        async def save_photo(payload: PhotoIn, request: Request, user=Depends(self.verified)):
+            self.check_origin(request)
+            await self.limit("photo:" + user["id"], 20, 3600)
+            avatar = await run_in_threadpool(normalize_photo, payload.image_base64)
+            saved = await self.db.users.find_one_and_update({"id": user["id"]},
+                {"$set": {"avatar": avatar}}, return_document=ReturnDocument.AFTER)
+            return profile(saved, True)
         async def logout(request: Request, response: Response, user=Depends(self.current)):
             await self.revoke(user["_session_id"])
             response.delete_cookie("kuku_refresh", path="/api/auth")
             return {"ok": True}
-        async def invite(payload: InviteIn, user=Depends(self.verified)):
+        async def invite(payload: InviteIn, request: Request, user=Depends(self.verified)):
+            self.check_origin(request)
             await self.limit("invite:" + user["id"], 10, 3600)
             token = secrets.token_urlsafe(32)
             await self.db.invites.insert_one({
-                "_id": digest(token), "email": str(payload.email).lower(),
+                "_id": digest(token), "email": str(payload.email).lower() if payload.email else None,
                 "creator_id": user["id"], "expires_at": now() + timedelta(days=7),
                 "redeemed_by": None,
             })
-            return {"invite_token": token, "expires_in": 604800}
+            return {"invite_token": token, "invite_url": settings.WEB_ORIGIN.rstrip("/") + "/login#invite=" + token, "expires_in": 604800}
         async def ticket(payload: TicketIn, user=Depends(self.verified)):
             await self.limit("ticket:" + user["id"], 60, 60)
             if payload.scope.startswith("space:"):
@@ -131,6 +145,7 @@ class AuthService:
             return {"ticket": token}
         self.router.add_api_route("/auth/me", me)
         self.router.add_api_route("/auth/profile", save_profile, methods=["POST"])
+        self.router.add_api_route("/auth/photo", save_photo, methods=["POST"])
         self.router.add_api_route("/auth/logout", logout, methods=["POST"])
         self.router.add_api_route("/invites", invite, methods=["POST"])
         self.router.add_api_route("/auth/ws-ticket", ticket, methods=["POST"])
@@ -234,11 +249,11 @@ class AuthService:
         invitation = None
         if settings.REGISTRATION_MODE == "invite":
             invitation = await self.db.invites.find_one_and_update({
-                "_id": digest(payload.invite_token or ""), "email": email,
+                "_id": digest(payload.invite_token or ""), "$or": [{"email": email}, {"email": None}],
                 "expires_at": {"$gt": now()}, "redeemed_by": None,
             }, {"$set": {"redeemed_by": uid}}, return_document=ReturnDocument.AFTER)
             if not invitation:
-                raise HTTPException(403, "A valid invitation for this email is required")
+                raise HTTPException(403, "This invitation is expired, already used, or belongs to another email")
         user = {"id": uid, "email": email, "name": payload.name, "password_hash": password_hash,
             "avatar": None, "bio": "", "created_at": now().isoformat(), "email_verified": False,
             "onboarding_complete": False}

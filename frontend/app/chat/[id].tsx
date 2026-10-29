@@ -1,3 +1,4 @@
+import Decor from "../../src/Decor";
 import { getOutbox, queueMessage, retryMessage, removePending, subscribeOutbox, PendingMessage } from "../../src/outbox";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -115,11 +116,11 @@ export default function ChatScreen() {
     if (ok) setText("");
   }
 
-  async function shareFile(uri: string, name: string) {
+  async function shareFile(uri: string, name: string, type: "file" | "image" = "file") {
     setSending(true);
     try {
       const file = await uploadAttachment(id, uri, name);
-      await send({ chat_id: id, type: "file", attachment_id: file.id });
+      await send({ chat_id: id, type, attachment_id: file.id });
     } catch (e) { setError(e instanceof Error ? e.message : "Upload failed. Try again."); }
     finally { setSending(false); }
   }
@@ -127,7 +128,7 @@ export default function ChatScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
     if (!result.canceled && result.assets[0]) {
       const a = result.assets[0];
-      await shareFile(a.uri, a.fileName || "image.jpg");
+      await shareFile(a.uri, a.fileName || "image.jpg", "image");
     }
   }
   async function attachFile() {
@@ -161,7 +162,7 @@ export default function ChatScreen() {
           <Ionicons name="chevron-back" size={22} color={c.text} />
         </Pressable>
         <View style={styles.headerCenter}>
-          <Avatar name={chatInfo?.other?.name} seed={chatInfo?.other?.id} size={36} />
+          <Avatar name={chatInfo?.other?.name} seed={chatInfo?.other?.id} photo={chatInfo?.other?.avatar} size={36} />
           <View>
             <Text style={styles.headerName} numberOfLines={1}>
               {chatInfo?.other?.name || "Chat"}
@@ -229,7 +230,7 @@ export default function ChatScreen() {
             <ActivityIndicator color={c.primary} />
           </View>
         ) : (
-          <FlatList
+          <View style={{flex: 1}}><Decor/><FlatList
             ref={listRef}
             data={messages}
             keyExtractor={(m) => m.id}
@@ -254,7 +255,7 @@ export default function ChatScreen() {
                 <Text style={styles.emptyText}>Say something gentle.</Text>
               </View>
             }
-          />
+          /></View>
         )}
 
         {recording ? (
