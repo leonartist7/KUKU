@@ -34,6 +34,7 @@ const server=http.createServer((req,res)=>{
     await page.goto(origin+"/login");await page.getByTestId("auth-switch").waitFor();
     assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),width,"No horizontal overflow at "+width);
     await page.screenshot({path:path.join(shots,"login-"+width+".png"),fullPage:true});
+    if(width===390||width===1440)console.log("KUKU_VISUAL_LOGIN_"+width+":"+(await page.screenshot({type:"jpeg",quality:48})).toString("base64"));
     return {page,context,state:()=>({user,sends,profiles})};
   }
   try {
@@ -67,6 +68,7 @@ const server=http.createServer((req,res)=>{
     await page.getByTestId("profile-bio").fill("Coffee, sketches, and little everyday stories.");
     await page.getByRole("radio",{name:"Sage appearance"}).click();
     await page.screenshot({path:path.join(shots,"profile-390.png"),fullPage:true});
+    console.log("KUKU_VISUAL_PROFILE:"+(await page.screenshot({type:"jpeg",quality:48})).toString("base64"));
     await page.getByTestId("profile-submit").click();
     await page.getByRole("button",{name:"Invite someone I care about",exact:true}).waitFor();
     assert.equal(state().profiles,1);
