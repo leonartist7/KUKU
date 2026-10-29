@@ -31,7 +31,7 @@ const server=http.createServer((req,res)=>{
       if(endpoint==="/api/auth/logout"){user=null;return respond(200,{ok:true});}
       return respond(200,[]);
     });
-    await page.goto(origin+"/login");await page.getByTestId("auth-switch").waitFor();
+    await page.goto(origin+(width===320?"/":"/login"));await page.getByTestId("auth-switch").waitFor();
     assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),width,"No horizontal overflow at "+width);
     await page.screenshot({path:path.join(shots,"login-"+width+".png"),fullPage:true});
     if(width===390||width===1440)console.log("KUKU_VISUAL_LOGIN_"+width+":"+(await page.screenshot({type:"jpeg",quality:48})).toString("base64"));
@@ -70,7 +70,8 @@ const server=http.createServer((req,res)=>{
     await page.screenshot({path:path.join(shots,"profile-390.png"),fullPage:true});
     console.log("KUKU_VISUAL_PROFILE:"+(await page.screenshot({type:"jpeg",quality:48})).toString("base64"));
     await page.getByTestId("profile-submit").click();
-    await page.getByRole("button",{name:"Invite someone I care about",exact:true}).waitFor();
+    try {await page.getByRole("button",{name:"Invite someone I care about",exact:true}).waitFor();}
+    catch(e){console.log("Onboarding failure context:",JSON.stringify({url:page.url(),state:state(),body:(await page.locator("body").innerText()).slice(-2500)}));throw e;}
     assert.equal(state().profiles,1);
     assert.equal(state().user.onboarding_complete,true);
     await page.screenshot({path:path.join(shots,"welcome-390.png"),fullPage:true});

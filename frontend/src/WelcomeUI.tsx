@@ -65,7 +65,7 @@ export function Field({label, hint, password = false, ...props}: TextInputProps 
 
 export function Action({label, onPress, busy = false, disabled = false, secondary = false, icon = "arrow-forward", testID}: {label: string; onPress: () => void; busy?: boolean; disabled?: boolean; secondary?: boolean; icon?: keyof typeof Ionicons.glyphMap; testID?: string}) {
   const {c, f} = useTheme();
-  return <Pressable testID={testID} onPress={onPress} disabled={disabled || busy} accessibilityRole="button" accessibilityState={{disabled: disabled || busy, busy}}
+  return <Pressable testID={testID} onPress={onPress} disabled={disabled || busy} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled: disabled || busy, busy}}
     style={({pressed}) => ({minHeight: 54, borderRadius: 16, paddingHorizontal: 18, flexDirection: "row", gap: 12, justifyContent: "center", alignItems: "center", backgroundColor: secondary ? c.surface : c.text, opacity: disabled || busy ? 0.55 : pressed ? 0.82 : 1, transform: [{scale: pressed ? 0.99 : 1}]})}>
     {busy ? <ActivityIndicator color={secondary ? c.text : c.bg}/> : <><Text style={{fontFamily: f.bodyMedium, fontSize: 15, color: secondary ? c.text : c.bg}}>{label}</Text><Ionicons name={icon} size={18} color={secondary ? c.text : c.bg}/></>}
   </Pressable>;
@@ -73,7 +73,7 @@ export function Action({label, onPress, busy = false, disabled = false, secondar
 
 export function TextAction({label, onPress, disabled = false, testID}: {label: string; onPress: () => void; disabled?: boolean; testID?: string}) {
   const {c, f} = useTheme();
-  return <Pressable testID={testID} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityState={{disabled}} style={{minHeight: 44, justifyContent: "center", alignItems: "center", opacity: disabled ? 0.5 : 1}}><Text style={{fontFamily: f.bodyMedium, color: c.primaryDark, fontSize: 13, textAlign: "center"}}>{label}</Text></Pressable>;
+  return <Pressable testID={testID} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled}} style={{minHeight: 44, justifyContent: "center", alignItems: "center", opacity: disabled ? 0.5 : 1}}><Text style={{fontFamily: f.bodyMedium, color: c.primaryDark, fontSize: 13, textAlign: "center"}}>{label}</Text></Pressable>;
 }
 export function Notice({message, success = false}: {message: string; success?: boolean}) {
   const {c, f} = useTheme(); if (!message) return null;
