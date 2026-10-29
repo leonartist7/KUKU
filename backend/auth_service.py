@@ -156,6 +156,7 @@ class AuthService:
         await self.db.sessions.create_index("user_id")
         await self.db.invites.create_index("expires_at", expireAfterSeconds=0)
         await self.db.ws_tickets.create_index("expires_at", expireAfterSeconds=0)
+        await self.db.file_tickets.create_index("expires_at", expireAfterSeconds=0)
 
     async def limit(self, key, maximum=10, window=60):
         # Single-worker deployment. Bound memory and fail closed at capacity.

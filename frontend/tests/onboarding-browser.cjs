@@ -18,7 +18,7 @@ const server=http.createServer((req,res)=>{
   const origin="http://127.0.0.1:4173",errors=[];
   async function scenario(width,height){
     const context=await browser.newContext({viewport:{width,height},reducedMotion:"reduce",timezoneId:"UTC",permissions:["clipboard-read","clipboard-write"]});
-    const page=await context.newPage();let user=null,sends=0,profiles=0,uploadedBytes=null,shared=null,inviteEmail="unset",photoSaves=0,uploadAttempts=0;
+    const page=await context.newPage();let user=null,sends=0,profiles=0,uploadedBytes=null,shared=null,inviteEmail="unset",photoSaves=0,uploadAttempts=0,statusChecks=0;
     page.on("pageerror",e=>errors.push(String(e)));
     await page.clock.setFixedTime(new Date("2026-10-29T12:00:00Z"));
     await page.route("**/api/**",async route=>{
@@ -32,9 +32,12 @@ const server=http.createServer((req,res)=>{
       if(endpoint==="/api/auth/profile"){profiles++;user={...user,name:body.name,bio:body.bio,onboarding_complete:true};return respond(200,user);}
       if(endpoint==="/api/auth/photo"){photoSaves++;assert.ok(body.image_base64===null||body.image_base64.length>20);user={...user,avatar:body.image_base64===null?null:"data:image/jpeg;base64,"+TEST_PHOTO};return respond(200,user);}
       if(endpoint==="/api/invites"){inviteEmail=body.email;return respond(200,{invite_url:origin+"/login#invite="+"synthetic-link-invitation-0123456789",invite_token:"synthetic-link-invitation-0123456789"});}
+      if(endpoint==="/api/files/status")return respond(200,{available:++statusChecks>1,used_bytes:0,remaining_bytes:500*1024*1024,max_file_bytes:25*1024*1024});
       if(endpoint==="/api/users")return respond(200,[{id:"sister",name:"Sam",email_verified:true}]);
       if(endpoint==="/api/chats"&&req.method()==="POST")return respond(200,{id:"synthetic-chat"});
-      if(endpoint==="/api/chats/synthetic-chat/attachments"){if(req.method()==="OPTIONS")return respond(200,{});uploadedBytes=req.postDataBuffer();uploadAttempts++;if(uploadAttempts===1)return respond(503,{detail:"File storage is not configured"});return respond(200,{id:"synthetic-attachment",file_name:"family.txt",file_size:uploadedBytes.length});}
+      if(endpoint==="/api/chats/synthetic-chat/attachments"){if(req.method()==="OPTIONS")return respond(200,{});uploadedBytes=req.postDataBuffer();uploadAttempts++;if(uploadAttempts===1)return respond(503,{detail:"Your file couldn’t be saved. Please try again."});return respond(200,{id:"synthetic-attachment",file_name:"family.txt",file_size:uploadedBytes.length});}
+      if(endpoint==="/api/attachments/synthetic-attachment/download")return respond(200,{url:"https://downloads.example.test/family.txt"});
+      if(endpoint==="/api/chats/synthetic-chat/messages"&&req.method()==="GET")return respond(200,shared?[{...shared,id:"synthetic-message",file_name:"family.txt",file_size:18,sender_id:"qa-user",created_at:new Date().toISOString()}]:[]);
       if(endpoint==="/api/chats/synthetic-chat/messages"&&req.method()==="POST"){shared=body;return respond(200,{...body,id:"synthetic-message",sender_id:"qa-user",created_at:new Date().toISOString()});}
       if(endpoint==="/api/chats/synthetic-chat")return respond(200,{id:"synthetic-chat",other:{id:"sister",name:"Sam"}});
       if(endpoint==="/api/auth/logout"){user=null;return respond(200,{ok:true});}
@@ -132,20 +135,34 @@ const server=http.createServer((req,res)=>{
     assert.ok(link.endsWith("#invite=synthetic-link-invitation-0123456789"));
     await page.screenshot({path:path.join(shots,"invitation-390.png"),fullPage:true});
     await page.goto(origin+"/files");
+    await page.getByText("File sharing is getting ready",{exact:true}).waitFor();
+    await page.getByRole("button",{name:"Check file sharing again",exact:true}).click();
+    await page.getByText("A little space to share",{exact:true}).waitFor();
+    await page.screenshot({path:path.join(shots,"files-ready-390.png"),fullPage:true});
     await page.getByRole("button",{name:"Upload a file",exact:true}).click();
     await page.getByTestId("contact-sister").click();
     const filePicker=page.waitForEvent("filechooser");
     await page.getByRole("button",{name:"Choose a file",exact:true}).click();
     await (await filePicker).setFiles({name:"family.txt",mimeType:"text/plain",buffer:Buffer.from("A real family file.")});
     await page.getByTestId("quick-send").click();
-    await page.getByRole("alert").filter({hasText:"File storage is not configured"}).waitFor();
+    await page.getByRole("alert").filter({hasText:"Your file couldn’t be saved. Please try again."}).waitFor();
     await page.getByText("family.txt",{exact:false}).waitFor();
+    await page.screenshot({path:path.join(shots,"file-retry-390.png"),fullPage:true});
     await page.getByTestId("quick-send").click();
     await page.waitForURL("**/chat/synthetic-chat");
     await page.waitForTimeout(250);
     assert.equal(state().uploadedBytes.toString(),"A real family file.");
     assert.equal(state().shared.attachment_id,"synthetic-attachment");
     assert.equal(state().shared.file_name,undefined,"No filename-only pretend upload");
+    await page.reload();
+    await page.route("https://downloads.example.test/**",route=>route.fulfill({status:200,contentType:"application/octet-stream",headers:{"content-disposition":"attachment; filename=family.txt","cache-control":"no-store"},body:"A real family file."}));
+    const downloading=page.waitForEvent("download");
+    await page.getByRole("button",{name:"Download family.txt",exact:true}).click();
+    const downloaded=await downloading;
+    assert.equal(downloaded.suggestedFilename(),"family.txt");
+    const chunks=[];for await(const chunk of await downloaded.createReadStream())chunks.push(chunk);
+    assert.equal(Buffer.concat(chunks).toString(),"A real family file.");
+    assert.ok(page.url().includes("/chat/synthetic-chat"),"Downloading must retain the conversation");
     await page.goto(origin+"/");
     await page.setViewportSize({width:320,height:844});
     await page.getByRole("button",{name:"Open quick actions",exact:true}).click();

@@ -1,3 +1,4 @@
+import {openPrivateDownload} from "./downloads";
 import { api } from "./api";
 import { View, Text, StyleSheet, Pressable, Linking, Alert, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -117,7 +118,7 @@ export function FilePreviewCard({
     : "";
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={"Download " + (fileName || "file")} disabled={!attachmentId || deleted || unavailable} onLongPress={confirmDelete} onPress={async () => {
-      try { const {url} = await api.get<{url:string}>("/attachments/" + attachmentId + "/download"); await Linking.openURL(url); }
+      try { const {url} = await api.get<{url:string}>("/attachments/" + attachmentId + "/download"); await openPrivateDownload(url); }
       catch { Alert.alert("Download failed", "Please try again."); }
     }} style={styles.fileWrap}>
       <View style={styles.fileIcon}>

@@ -1,3 +1,4 @@
+import FileSharingStatus from "../src/FileSharingStatus";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
@@ -155,7 +156,7 @@ export default function QuickMessage() {
         {/* Dismiss area */}
         <Pressable style={styles.dismissArea} onPress={() => router.back()} />
 
-        <View style={styles.card}>
+        <ScrollView keyboardShouldPersistTaps="handled" style={{maxHeight: "92%", backgroundColor: c.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28}} contentContainerStyle={styles.card}>
           <View style={styles.cardHandle} />
 
           <View style={styles.cardHeader}>
@@ -165,6 +166,7 @@ export default function QuickMessage() {
             </Pressable>
           </View>
 
+          {fileMode ? <FileSharingStatus/> : null}
           <Notice message={sendError}/>
           {fileMode ? <Text style={{fontFamily: f.body, color: c.textSecondary, marginVertical: 12}}>Choose someone, then pick a {photoMode ? "photo" : "file"} up to 25 MB. Uploaded files are shared in that conversation and appear in Files.</Text> : null}
           <Text style={styles.sectionLabel}>To</Text>
@@ -291,7 +293,7 @@ export default function QuickMessage() {
                     <Ionicons name="document-text-outline" size={16} color={c.primary} />
                     <Text style={styles.chipText} numberOfLines={1}>
                       {file.name}
-                      {file.size ? `  ·  ${(file.size / 1024).toFixed(1)} KB` : ""}
+                      {file.size ? " · " + (file.size < 1024 ? file.size + " B" : file.size < 1048576 ? (file.size / 1024).toFixed(1) + " KB" : (file.size / 1048576).toFixed(1) + " MB") : ""}
                     </Text>
                   </View>
                   <Pressable disabled={sending} accessibilityLabel="Remove selected file" onPress={() => setFile(null)} style={styles.cancelBtn} testID="file-remove">
@@ -366,7 +368,7 @@ export default function QuickMessage() {
               Or open the full chat  ›
             </Text>
           </Pressable>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

@@ -500,3 +500,159 @@ async def test_profile_validation_and_repeated_completion(client):
         assert r.status_code == 200 and r.json()["onboarding_complete"] is True
     await server.db.users.update_one({"id": a["user"]["id"]}, {"$unset": {"onboarding_complete": ""}})
     assert (await client.get("/api/auth/me", headers=headers(a))).json()["onboarding_complete"] is True
+
+@pytest_asyncio.fixture
+async def private_files(client, monkeypatch):
+    import attachments
+    from contextlib import asynccontextmanager
+    class Storage:
+        def __init__(self): self.data = {}
+        def ready(self): return True
+        def require_config(self): pass
+        def put(self, key, file): self.data[key] = file.read()
+        def delete(self, key): self.data.pop(key, None)
+        @asynccontextmanager
+        async def stream(self, key):
+            async def chunks():
+                yield self.data[key]
+            yield chunks()
+    storage = Storage()
+    monkeypatch.setattr(attachments, "blob_store", storage)
+    monkeypatch.setenv("FILE_STORAGE_PROVIDER", "vercel")
+    monkeypatch.setenv("PUBLIC_API_ORIGIN", "https://files-api.example.test")
+    return storage
+
+async def shared_private_file(client):
+    a, b, c, cid = await pair(client)
+    raw = b"A family file, with actual bytes.\x00\xff"
+    response = await client.post("/api/chats/" + cid + "/attachments?name=family.txt", headers=headers(a), content=raw)
+    assert response.status_code == 200, response.text
+    file_id = response.json()["id"]
+    body = {"chat_id": cid, "type": "file", "attachment_id": file_id, "client_message_id": "private-blob-file"}
+    return a, b, c, cid, file_id, raw, body
+
+def ticket_path(data):
+    from urllib.parse import urlsplit
+    url = urlsplit(data["url"])
+    assert url.scheme == "https" and url.netloc == "files-api.example.test"
+    return url.path + "?" + url.query
+
+@pytest.mark.asyncio
+async def test_private_blob_two_accounts_actual_bytes_and_no_public_urls(client, private_files):
+    a, b, c, cid, file_id, raw, body = await shared_private_file(client)
+    endpoint = "/api/attachments/" + file_id + "/download"
+    assert (await client.get(endpoint)).status_code == 401
+    assert (await client.get(endpoint, headers=headers(c))).status_code == 404
+    assert (await client.get(endpoint, headers=headers(b))).status_code == 404
+    assert (await client.post("/api/chats/" + cid + "/messages", headers=headers(a), json=body)).status_code == 200
+    issued = (await client.get(endpoint, headers=headers(b))).json()
+    assert issued["expires_in"] == 60
+    assert "vercel_blob_rw_" not in issued["url"]
+    path = ticket_path(issued)
+    actual = await client.get(path)
+    assert actual.status_code == 200 and actual.content == raw
+    assert actual.headers["cache-control"] == "no-store"
+    assert actual.headers["x-content-type-options"] == "nosniff"
+    assert actual.headers["content-type"] == "application/octet-stream"
+    assert "attachment;" in actual.headers["content-disposition"]
+    assert (await client.get(path)).status_code == 401
+    stored = await server.db.attachments.find_one({"id": file_id})
+    assert stored["storage_provider"] == "vercel" and private_files.data[stored["key"]] == raw
+
+@pytest.mark.asyncio
+async def test_private_blob_ticket_expiry_logout_and_file_deletion(client, private_files):
+    a, b, c, cid, file_id, raw, body = await shared_private_file(client)
+    await client.post("/api/chats/" + cid + "/messages", headers=headers(a), json=body)
+    endpoint = "/api/attachments/" + file_id + "/download"
+    expired = ticket_path((await client.get(endpoint, headers=headers(b))).json())
+    await server.db.file_tickets.update_many({}, {"$set": {"expires_at": now() - timedelta(seconds=1)}})
+    assert (await client.get(expired)).status_code == 401
+    after_logout = ticket_path((await client.get(endpoint, headers=headers(b))).json())
+    await client.post("/api/auth/logout", headers=headers(b))
+    assert (await client.get(after_logout)).status_code == 401
+    after_delete = ticket_path((await client.get(endpoint, headers=headers(a))).json())
+    assert (await client.delete("/api/attachments/" + file_id, headers=headers(a))).status_code == 200
+    assert (await client.get(after_delete)).status_code == 404
+    assert private_files.data == {}
+    assert (await server.db.storage_usage.find_one({"_id": "files"}))["bytes"] == 0
+    assert (await server.db.users.find_one({"id": a["user"]["id"]}))["storage_bytes"] == 0
+
+@pytest.mark.asyncio
+async def test_private_blob_shared_quota_rolls_back_owner_reservation(client, private_files, monkeypatch):
+    import attachments
+    monkeypatch.setattr(attachments, "TOTAL_QUOTA_BYTES", 5)
+    a, b, c, cid = await pair(client)
+    endpoint = "/api/chats/" + cid + "/attachments?name=small.txt"
+    assert (await client.post(endpoint, headers=headers(a), content=b"12345")).status_code == 200
+    denied = await client.post(endpoint, headers=headers(b), content=b"1")
+    assert denied.status_code == 413
+    assert (await server.db.users.find_one({"id": b["user"]["id"]})).get("storage_bytes", 0) == 0
+    status = (await client.get("/api/files/status", headers=headers(b))).json()
+    assert status["available"] is True and status["remaining_bytes"] == 0
+    assert (await server.db.storage_usage.find_one({"_id": "files"}))["bytes"] == 5
+
+@pytest.mark.asyncio
+async def test_private_blob_failed_store_upload_leaks_neither_quota_nor_provider_secret(client, private_files, monkeypatch):
+    from fastapi import HTTPException
+    def fail(*args): raise HTTPException(503, "Your file couldn’t be saved. Please try again.")
+    monkeypatch.setattr(private_files, "put", fail)
+    a, b, c, cid = await pair(client)
+    response = await client.post("/api/chats/" + cid + "/attachments?name=test.txt", headers=headers(a), content=b"123")
+    assert response.status_code == 503
+    assert (await server.db.users.find_one({"id": a["user"]["id"]}))["storage_bytes"] == 0
+    assert (await server.db.storage_usage.find_one({"_id": "files"}))["bytes"] == 0
+    assert await server.db.attachments.count_documents({}) == 0
+
+@pytest.mark.asyncio
+async def test_missing_private_storage_is_honest_and_does_not_reserve_space(client, monkeypatch):
+    monkeypatch.setenv("FILE_STORAGE_PROVIDER", "vercel")
+    monkeypatch.delenv("BLOB_READ_WRITE_TOKEN", raising=False)
+    a, b, c, cid = await pair(client)
+    status = await client.get("/api/files/status", headers=headers(a))
+    assert status.status_code == 200 and status.json()["available"] is False
+    response = await client.post("/api/chats/" + cid + "/attachments?name=test.txt", headers=headers(a), content=b"123")
+    assert response.status_code == 503 and "getting ready" in response.json()["detail"]
+    assert (await server.db.users.find_one({"id": a["user"]["id"]})).get("storage_bytes", 0) == 0
+    assert (await client.get("/api/files/status")).status_code == 401
+
+def test_private_blob_adapter_always_uses_private_access_and_sanitizes_failures(monkeypatch):
+    import tempfile
+    from vercel.blob import sync
+    from private_blob import PrivateBlobStore
+    from fastapi import HTTPException
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "synthetic-provider-secret")
+    captured = {}
+    def put(key, file, **options): captured.update(key=key, data=file.read(), **options)
+    monkeypatch.setattr(sync, "put_blob", put)
+    with tempfile.TemporaryFile() as file:
+        file.write(b"real bytes"); file.seek(0)
+        PrivateBlobStore().put("attachments/unique", file)
+    assert captured["data"] == b"real bytes" and captured["access"] == "private"
+    assert captured["content_type"] == "application/octet-stream" and captured["allow_overwrite"] is False
+    def fail(*args, **kwargs): raise RuntimeError("synthetic-provider-secret")
+    monkeypatch.setattr(sync, "put_blob", fail)
+    with tempfile.TemporaryFile() as file:
+        file.write(b"x"); file.seek(0)
+        with pytest.raises(HTTPException) as result: PrivateBlobStore().put("attachments/unique", file)
+    assert result.value.status_code == 503 and "synthetic-provider-secret" not in result.value.detail
+
+@pytest.mark.asyncio
+async def test_private_blob_concurrent_uploads_cannot_exceed_shared_quota(client, private_files, monkeypatch):
+    import attachments
+    monkeypatch.setattr(attachments, "TOTAL_QUOTA_BYTES", 5)
+    a, b, c, cid = await pair(client)
+    endpoint = "/api/chats/" + cid + "/attachments?name=small.txt"
+    responses = await asyncio.gather(client.post(endpoint, headers=headers(a), content=b"1234"), client.post(endpoint, headers=headers(b), content=b"5678"))
+    assert sorted(response.status_code for response in responses) == [200, 413]
+    assert (await server.db.storage_usage.find_one({"_id": "files"}))["bytes"] == 4
+    assert len(private_files.data) == 1
+    users = await server.db.users.find({"id": {"$in": [a["user"]["id"], b["user"]["id"]]}}).to_list(2)
+    assert sum(user.get("storage_bytes", 0) for user in users) == 4
+
+@pytest.mark.asyncio
+async def test_private_blob_download_ticket_cannot_outlive_chat_membership(client, private_files):
+    a, b, c, cid, file_id, raw, body = await shared_private_file(client)
+    await client.post("/api/chats/" + cid + "/messages", headers=headers(a), json=body)
+    issued = (await client.get("/api/attachments/" + file_id + "/download", headers=headers(b))).json()
+    await server.db.chats.update_one({"id": cid}, {"$pull": {"members": b["user"]["id"]}})
+    assert (await client.get(ticket_path(issued))).status_code == 404

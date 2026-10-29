@@ -122,3 +122,14 @@ test("invitation fragments accept only complete codes and never treat a query as
   assert.equal(invitationFromUrl("https://kuku.example/login#invite=short"),"");
   assert.equal(invitationFromUrl(null),"");
 });
+
+test("private downloads survive asynchronous preparation without a browser popup",async()=>{
+  const ts=require("typescript"),exports={},navigations=[];
+  const source=ts.transpileModule(fs.readFileSync("src/downloads.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
+  vm.runInNewContext(source,{exports,URL,Error,require:()=>({Platform:{OS:"web"},Linking:{openURL:()=>{throw new Error("Unexpected popup");}}}),window:{location:{assign:url=>navigations.push(url)}}});
+  await Promise.resolve();
+  await exports.openPrivateDownload("https://files.example.test/content?ticket=synthetic");
+  assert.equal(navigations.length,1);
+  await assert.rejects(exports.openPrivateDownload("javascript:alert(1)"),/isn’t valid/);
+  await assert.rejects(exports.openPrivateDownload("http://files.example.test/private"),/isn’t valid/);
+});

@@ -1,3 +1,5 @@
+import {openPrivateDownload} from "../../src/downloads";
+import FileSharingStatus from "../../src/FileSharingStatus";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
@@ -98,6 +100,7 @@ export default function FilesScreen() {
         <Text style={styles.title}>Files</Text>
       </View>
 
+      <View style={{paddingHorizontal: 24}}><FileSharingStatus/></View>
       <View style={{flexDirection: "row", paddingHorizontal: 24, gap: 10, marginBottom: 14}}>
         <Pressable accessibilityRole="button" accessibilityLabel="Upload a file" onPress={() => router.push("/new-message?mode=file")} style={{flex: 1, minHeight: 48, borderRadius: 14, padding: 12, backgroundColor: c.surface, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center"}}><Ionicons name="cloud-upload-outline" size={20} color={c.primaryDark}/><Text style={{color: c.text, fontFamily: f.bodyMedium}}>Upload file</Text></Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="Share a photo" onPress={() => router.push("/new-message?mode=photo")} style={{flex: 1, minHeight: 48, borderRadius: 14, padding: 12, backgroundColor: c.surface, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center"}}><Ionicons name="image-outline" size={20} color={c.primaryDark}/><Text style={{color: c.text, fontFamily: f.bodyMedium}}>Share photo</Text></Pressable>
@@ -224,7 +227,7 @@ function FileRow({ f: fileItem, showSender = false }: { f: FileMsg; showSender?:
     fileItem.file_name || (fileItem.type === "voice" ? "Voice message" : fileItem.type === "image" ? "Image" : "File");
   return (
     <Pressable disabled={!fileItem.attachment_id} accessibilityLabel={"Download " + title} onPress={async () => {
-      try { const result = await api.get<{url:string}>("/attachments/" + fileItem.attachment_id + "/download"); await Linking.openURL(result.url); }
+      try { const result = await api.get<{url:string}>("/attachments/" + fileItem.attachment_id + "/download"); await openPrivateDownload(result.url); }
       catch { Alert.alert("Download failed", "Please try again."); }
     }} style={styles.fileRow}>
       <View style={styles.fileIcon}>

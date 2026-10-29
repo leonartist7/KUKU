@@ -12,3 +12,4 @@ livekit-api==1.2.2
 python-multipart==0.0.32
 httpx==0.28.1
 Pillow==13.0.0
+vercel-blob==0.5.0
