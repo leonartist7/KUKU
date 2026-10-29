@@ -1,6 +1,6 @@
-import React, {useState} from "react";
+import React, {useRef, useState} from "react";
 import {Pressable, Text, View} from "react-native";
-import {useLocalSearchParams, useRouter} from "expo-router";
+import {Redirect, useLocalSearchParams, useRouter} from "expo-router";
 import {Ionicons} from "@expo/vector-icons";
 import {useAuth} from "../src/AuthContext";
 import {useTheme} from "../src/ThemeContext";
@@ -12,6 +12,7 @@ export default function Onboarding() {
   const {user, updateProfile} = useAuth(); const {c, f, themeName, setTheme} = useTheme(); const router = useRouter();
   const {edit} = useLocalSearchParams<{edit?: string}>(); const editing = edit === "1" && user?.onboarding_complete !== false;
   const [name, setName] = useState(user?.name || ""); const [bio, setBio] = useState(user?.bio || "");
+  const completedAtEntry = useRef(user?.onboarding_complete !== false).current;
   const [done, setDone] = useState(false); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
   async function save() {
     if (busy) return; setError("");
@@ -21,6 +22,7 @@ export default function Onboarding() {
     catch (e) {setError(e instanceof Error ? e.message : "Your profile couldn't be saved. Please try again.");}
     finally {setBusy(false);}
   }
+  if (completedAtEntry && !editing) return <Redirect href="/(tabs)"/>;
   if (done) return <WelcomeShell step={3} title={"You're home,\n" + name.trim().split(/\s+/)[0] + "."} subtitle="Your little corner is ready. Start with someone you'd love to hear from.">
     <View style={{padding: 20, borderRadius: 18, backgroundColor: c.surface, gap: 12}}>
       <View style={{flexDirection: "row", gap: 12, alignItems: "center"}}><Avatar name={name} seed={user?.id} size={48}/><View style={{flex: 1}}><Text style={{fontFamily: f.bodyMedium, color: c.text, fontSize: 16}}>{name.trim()}</Text><Text style={{fontFamily: f.body, color: c.textSecondary, fontSize: 12, marginTop: 4}}>Email verified · Profile ready</Text></View><Ionicons name="checkmark-circle" size={24} color={c.success}/></View>
