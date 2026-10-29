@@ -1,4 +1,6 @@
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import {openPrivateDownload} from "./downloads";
+import { api } from "./api";
+import { View, Text, StyleSheet, Pressable, Linking, Alert, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { createAudioPlayer } from "expo-audio";
 import { useRef, useState, useEffect } from "react";
@@ -85,16 +87,29 @@ export function VoiceMessageBubble({
 }
 
 export function FilePreviewCard({
+  attachmentId,
+  canDelete = false,
+  unavailable = false,
   fileName,
   fileSize,
   type,
 }: {
+  attachmentId?: string;
+  canDelete?: boolean;
+  unavailable?: boolean;
   fileName?: string | null;
   fileSize?: number | null;
   type: "file" | "image";
 }) {
   const { c, f } = useTheme();
   const styles = makeStyles(c, f);
+  const [deleted, setDeleted] = useState(false);
+  const remove = async () => {try {await api.delete("/attachments/"+attachmentId);setDeleted(true);}catch{Alert.alert("Could not delete file", "Please try again.");}};
+  const confirmDelete = () => {
+    if (!canDelete || !attachmentId || deleted || unavailable) return;
+    if(Platform.OS==="web"){if(window.confirm("Delete this file for everyone in this chat?"))void remove();}
+    else Alert.alert("Delete file", "This removes the file for everyone in this chat.", [{text:"Cancel",style:"cancel"},{text:"Delete",style:"destructive",onPress:()=>void remove()}]);
+  };
   const icon = type === "image" ? "image-outline" : "document-text-outline";
   const sizeLabel = fileSize
     ? fileSize > 1024
@@ -102,7 +117,10 @@ export function FilePreviewCard({
       : `${fileSize} B`
     : "";
   return (
-    <View style={styles.fileWrap}>
+    <Pressable accessibilityRole="button" accessibilityLabel={"Download " + (fileName || "file")} disabled={!attachmentId || deleted || unavailable} onLongPress={confirmDelete} onPress={async () => {
+      try { const {url} = await api.get<{url:string}>("/attachments/" + attachmentId + "/download"); await openPrivateDownload(url); }
+      catch { Alert.alert("Download failed", "Please try again."); }
+    }} style={styles.fileWrap}>
       <View style={styles.fileIcon}>
         <Ionicons name={icon as any} size={22} color={c.primaryDark} />
       </View>
@@ -110,10 +128,10 @@ export function FilePreviewCard({
         <Text style={styles.fileName} numberOfLines={1}>
           {fileName || "file"}
         </Text>
-        <Text style={styles.fileMeta}>{sizeLabel || (type === "image" ? "Image" : "File")}</Text>
+        <Text style={styles.fileMeta}>{deleted || unavailable ? "File deleted" : (sizeLabel || (type === "image" ? "Image" : "File")) + (canDelete ? " · Hold to delete" : "")}</Text>
       </View>
       <Ionicons name="arrow-down-outline" size={18} color={c.textSecondary} />
-    </View>
+    </Pressable>
   );
 }
 

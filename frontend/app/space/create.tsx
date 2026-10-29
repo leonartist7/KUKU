@@ -104,7 +104,7 @@ export default function CreateSpaceScreen() {
                   ]}
                   testID={`pick-${u.id}`}
                 >
-                  <Avatar name={u.name} seed={u.id} size={42} />
+                  <Avatar name={u.name} seed={u.id} photo={u.avatar} size={42} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.personName}>{u.name}</Text>
                     <Text style={styles.personEmail}>{u.email}</Text>

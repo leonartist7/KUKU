@@ -9,11 +9,18 @@ import uuid
 import logging
 import bcrypt
 import jwt
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect, Query
+from pymongo.errors import DuplicateKeyError
+from auth_service import AuthService, hash_password, verify_password, profile
+import settings
+from safety import safety_router, allow_direct
+from attachments import attachment_router
+from account_recovery import recovery_router
+from push_service import device_router, run_worker
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -24,129 +31,80 @@ from livekit import api as lkapi
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("connect")
 
-MONGO_URL = os.environ.get("MONGO_URL", "mongodb://127.0.0.1:27017")
-DB_NAME = os.environ.get("DB_NAME", "connect")
-JWT_SECRET = os.environ.get("JWT_SECRET", "")
-JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_TTL_MIN = 60 * 24 * 7  # 7 days for mobile convenience
-
+MONGO_URL = settings.MONGO_URL
+DB_NAME = settings.DB_NAME
+JWT_SECRET = settings.JWT_SECRET
 LIVEKIT_URL = os.environ.get("LIVEKIT_URL", "")
 LIVEKIT_API_KEY = os.environ.get("LIVEKIT_API_KEY", "")
 LIVEKIT_API_SECRET = os.environ.get("LIVEKIT_API_SECRET", "")
 
-if not JWT_SECRET or JWT_SECRET == "supersecret-dev-token":
-    raise RuntimeError(
-        "JWT_SECRET is missing or set to the insecure dev default. "
-        "Generate one (python -c 'import secrets; print(secrets.token_hex(32))') "
-        "and set it in backend/.env and in your hosting provider's env vars."
-    )
-
-if not os.environ.get("MONGO_URL") or not os.environ.get("DB_NAME"):
-    logger.warning(
-        "Missing backend env vars. Using local development defaults from backend/.env.example. "
-        "Create backend/.env and set MONGO_URL, DB_NAME, and JWT_SECRET for a stable local backend."
-    )
-
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
+auth = AuthService(db)
+get_current_user = auth.verified
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    try:
+    await db.command("ping")
+    await auth.indexes()
+    await db.blocks.create_index("owner_id")
+    await db.reports.create_index([("status", 1), ("created_at", 1)])
+    await db.account_codes.create_index("expires_at", expireAfterSeconds=0)
+    await db.attachments.create_index("id", unique=True)
+    await db.chats.create_index("key", unique=True)
+    await db.messages.create_index([("chat_id", 1), ("created_at", 1), ("id", 1)])
+    await db.messages.create_index([("chat_id", 1), ("sender_id", 1), ("client_message_id", 1)],
+        unique=True, partialFilterExpression={"client_message_id": {"$type": "string"}})
+    await db.messages.create_index([("push_state", 1), ("push_due", 1)])
+    await db.push_receipts.create_index("expires_at", expireAfterSeconds=0)
+    if settings.SEED_DEMO_DATA:
         await seed()
-        logger.info("Seed complete")
-    except Exception as e:
-        logger.exception(f"Seed failed: {e}")
-    yield
-    client.close()
-
-
-app = FastAPI(title="Connect API", lifespan=lifespan)
-api = APIRouter(prefix="/api")
-bearer_scheme = HTTPBearer(auto_error=False)
-
-
-# ---------- Helpers ----------
-def hash_password(pw: str) -> str:
-    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-
-def verify_password(pw: str, hashed: str) -> bool:
+    worker = asyncio.create_task(run_worker(db)) if settings.PUSH_ENABLED else None
     try:
-        return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
-    except Exception:
-        return False
+        yield
+    finally:
+        if worker:
+            worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker
+        client.close()
 
 
-def create_token(user_id: str, email: str) -> str:
-    payload = {
-        "sub": user_id,
-        "email": email,
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_TTL_MIN),
-        "type": "access",
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+app = FastAPI(title="KUKU API", lifespan=lifespan)
+api = APIRouter(prefix="/api")
+api.include_router(auth.router)
+api.include_router(safety_router(lambda: db, auth))
+api.include_router(device_router(lambda: db, auth))
+api.include_router(recovery_router(lambda: db, auth))
+api.include_router(attachment_router(lambda: db, auth))
 
+@app.middleware("http")
+async def private_responses(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
+def public_message(message):
+    return {k: v for k, v in message.items() if k != "_id" and not k.startswith("push_")} if message else None
 
-def serialize_user(u: dict) -> dict:
-    return {
-        "id": u["id"],
-        "email": u["email"],
-        "name": u["name"],
-        "avatar": u.get("avatar"),
-        "bio": u.get("bio", ""),
-        "created_at": u.get("created_at"),
-    }
-
-
-async def get_current_user(
-    request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
-) -> dict:
-    token = None
-    if credentials and credentials.scheme.lower() == "bearer":
-        token = credentials.credentials
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
+def serialize_user(user: dict) -> dict:
+    return profile(user)
 
 
 # ---------- Models ----------
-class RegisterIn(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=4)
-    name: str
-
-
-class LoginIn(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class TokenOut(BaseModel):
-    token: str
-    user: dict
-
-
 class MessageIn(BaseModel):
     chat_id: str
     type: Literal["text", "voice", "image", "file", "space_invite"]
-    text: Optional[str] = None
-    media: Optional[str] = None  # base64 data URL
+    text: Optional[str] = Field(default=None, max_length=10000)
+    client_message_id: Optional[str] = Field(default=None, max_length=100)
+    media: Optional[str] = Field(default=None, max_length=100)
+    attachment_id: Optional[str] = Field(default=None, max_length=100)
     file_name: Optional[str] = None
     file_size: Optional[int] = None
     duration_ms: Optional[int] = None  # for voice
@@ -164,51 +122,11 @@ class CallCreateIn(BaseModel):
     status: Literal["completed", "missed", "outgoing", "incoming"] = "completed"
 
 
-# ---------- Auth Routes ----------
-@api.post("/auth/register")
-async def register(payload: RegisterIn):
-    email = payload.email.lower().strip()
-    existing = await db.users.find_one({"email": email})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    user = {
-        "id": str(uuid.uuid4()),
-        "email": email,
-        "name": payload.name.strip(),
-        "password_hash": hash_password(payload.password),
-        "avatar": None,
-        "bio": "",
-        "created_at": now_iso(),
-    }
-    await db.users.insert_one(user)
-    token = create_token(user["id"], email)
-    return {"token": token, "user": serialize_user(user)}
-
-
-@api.post("/auth/login")
-async def login(payload: LoginIn):
-    email = payload.email.lower().strip()
-    user = await db.users.find_one({"email": email}, {"_id": 0})
-    if not user or not verify_password(payload.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = create_token(user["id"], email)
-    return {"token": token, "user": serialize_user(user)}
-
-
-@api.get("/auth/me")
-async def me(current=Depends(get_current_user)):
-    return serialize_user(current)
-
-
-@api.post("/auth/logout")
-async def logout(current=Depends(get_current_user)):
-    return {"ok": True}
-
-
 # ---------- Users ----------
 @api.get("/users")
 async def list_users(current=Depends(get_current_user)):
-    users = await db.users.find({"id": {"$ne": current["id"]}}, {"_id": 0, "password_hash": 0}).to_list(200)
+    ids = await auth.contacts(current["id"])
+    users = await db.users.find({"id": {"$in": list(ids)}}, {"_id": 0, "password_hash": 0}).to_list(200)
     return [serialize_user(u) for u in users]
 
 
@@ -233,7 +151,7 @@ async def list_chats(current=Depends(get_current_user)):
                 "id": c["id"],
                 "type": c.get("type", "dm"),
                 "other": serialize_user(other) if other else None,
-                "last_message": last_msg,
+                "last_message": public_message(last_msg),
                 "updated_at": c.get("updated_at", c.get("created_at")),
             }
         )
@@ -248,6 +166,7 @@ async def create_chat(payload: ChatCreateIn, current=Depends(get_current_user)):
     other = await db.users.find_one({"id": payload.other_user_id}, {"_id": 0})
     if not other:
         raise HTTPException(status_code=404, detail="User not found")
+    await auth.require_contact(current["id"], payload.other_user_id)
     key = chat_key(current["id"], payload.other_user_id)
     existing = await db.chats.find_one({"key": key}, {"_id": 0})
     if existing:
@@ -260,7 +179,10 @@ async def create_chat(payload: ChatCreateIn, current=Depends(get_current_user)):
         "created_at": now_iso(),
         "updated_at": now_iso(),
     }
-    await db.chats.insert_one(chat)
+    try:
+        await db.chats.insert_one(chat)
+    except DuplicateKeyError:
+        chat = await db.chats.find_one({"key": key})
     return {"id": chat["id"], "type": chat["type"]}
 
 
@@ -279,12 +201,24 @@ async def get_chat(chat_id: str, current=Depends(get_current_user)):
 
 
 @api.get("/chats/{chat_id}/messages")
-async def list_messages(chat_id: str, current=Depends(get_current_user)):
+async def list_messages(chat_id: str, before: Optional[str] = None, after: Optional[str] = None, limit: int = Query(50, ge=1, le=100), current=Depends(get_current_user)):
     chat = await db.chats.find_one({"id": chat_id, "members": current["id"]})
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
-    msgs = await db.messages.find({"chat_id": chat_id}, {"_id": 0}).sort("created_at", 1).to_list(2000)
-    return msgs
+    query = {"chat_id": chat_id}
+    if before and after:
+        raise HTTPException(400, "Choose before or after")
+    cursor = before or after
+    if cursor:
+        anchor = await db.messages.find_one({"chat_id": chat_id, "id": cursor})
+        if not anchor:
+            raise HTTPException(400, "Invalid message cursor")
+        op = "$lt" if before else "$gt"
+        query["$or"] = [{"created_at": {op: anchor["created_at"]}},
+            {"created_at": anchor["created_at"], "id": {op: anchor["id"]}}]
+    direction = 1 if after else -1
+    msgs = await db.messages.find(query, {"_id": 0}).sort([("created_at", direction), ("id", direction)]).limit(limit).to_list(limit)
+    return [public_message(m) for m in (msgs if after else list(reversed(msgs)))]
 
 
 @api.post("/chats/{chat_id}/messages")
@@ -292,28 +226,64 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
     chat = await db.chats.find_one({"id": chat_id, "members": current["id"]})
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
-    # rough size guard: reject > 14MB base64 (~10MB binary) to stay under Mongo doc limit
+    for other_id in chat["members"]:
+        if other_id != current["id"]:
+            await allow_direct(db, current["id"], other_id)
+    if payload.chat_id != chat_id:
+        raise HTTPException(400, "Conversation does not match")
+    if payload.client_message_id:
+        previous = await db.messages.find_one({"chat_id": chat_id, "sender_id": current["id"], "client_message_id": payload.client_message_id}, {"_id": 0})
+        if previous:
+            if previous.get("text") != payload.text or previous["type"] != payload.type or previous.get("attachment_id") != payload.attachment_id or previous.get("space_id") != payload.space_id:
+                raise HTTPException(409, "Message ID already used")
+            return public_message(previous)
+    if payload.type == "text" and not (payload.text or "").strip():
+        raise HTTPException(400, "Empty message")
+    if payload.type == "voice":
+        raise HTTPException(400, "Voice recording is not enabled for this release")
+    if payload.media:
+        raise HTTPException(400, "Upload files through the attachments endpoint")
+    attachment = None
+    if payload.type in ("file", "image"):
+        attachment = await db.attachments.find_one({"id": payload.attachment_id, "chat_id": chat_id, "owner_id": current["id"]})
+        if not attachment:
+            raise HTTPException(400, "Upload a file to this conversation first")
+    if payload.type == "space_invite":
+        space = await db.spaces.find_one({"id": payload.space_id})
+        if not space or not set(chat["members"]).issubset(space["members"]):
+            raise HTTPException(403, "Space membership is required for all recipients")
+    # Legacy media limit while old messages remain readable.
     if payload.media and len(payload.media) > 14 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Media is too large (max ~10MB)")
     msg = {
         "id": str(uuid.uuid4()),
         "chat_id": chat_id,
+        **({"client_message_id": payload.client_message_id} if payload.client_message_id else {}),
         "sender_id": current["id"],
         "sender_name": current["name"],
         "type": payload.type,
         "text": payload.text,
         "media": payload.media,
-        "file_name": payload.file_name,
-        "file_size": payload.file_size,
+        "attachment_id": payload.attachment_id,
+        "file_name": attachment["name"] if attachment else None,
+        "file_size": attachment["size"] if attachment else None,
         "duration_ms": payload.duration_ms,
         "space_id": payload.space_id,
         "space_name": payload.space_name,
         "created_at": now_iso(),
     }
-    await db.messages.insert_one(msg)
+    if settings.PUSH_ENABLED:
+        from auth_service import now
+        msg.update({"push_state": "pending", "push_due": now(), "push_attempts": 0})
+    try:
+        await db.messages.insert_one(msg)
+    except DuplicateKeyError:
+        previous = await db.messages.find_one({"chat_id": chat_id, "sender_id": current["id"], "client_message_id": payload.client_message_id}, {"_id": 0})
+        if not previous or previous.get("text") != payload.text or previous["type"] != payload.type or previous.get("attachment_id") != payload.attachment_id or previous.get("space_id") != payload.space_id:
+            raise HTTPException(409, "Message ID already used")
+        return public_message(previous)
     await db.chats.update_one({"id": chat_id}, {"$set": {"updated_at": msg["created_at"]}})
-    msg.pop("_id", None)
-    return msg
+    return public_message(msg)
 
 
 # ---------- Files Hub ----------
@@ -335,7 +305,7 @@ async def list_files(current=Depends(get_current_user)):
     out = []
     for m in msgs:
         s = senders.get(m["sender_id"])
-        out.append({**m, "sender": serialize_user(s) if s else None})
+        out.append({**public_message(m), "sender": serialize_user(s) if s else None})
     return out
 
 
@@ -373,6 +343,9 @@ async def list_calls(current=Depends(get_current_user)):
 
 @api.post("/calls")
 async def create_call(payload: CallCreateIn, current=Depends(get_current_user)):
+    if not settings.ENABLE_CALLS:
+        raise HTTPException(503, "Calls are not enabled for this release")
+    await auth.require_contact(current["id"], payload.other_user_id)
     if payload.other_user_id == current["id"]:
         raise HTTPException(status_code=400, detail="Cannot call yourself")
     other = await db.users.find_one({"id": payload.other_user_id}, {"_id": 0})
@@ -697,9 +670,18 @@ class SpaceHub:
         dead = []
         for ws in sockets:
             try:
+                identity = ws.scope.get("kuku_user")
+                if identity:
+                    await auth.session_user(identity["_session_id"], identity["id"])
+                    if not await db.spaces.find_one({"id": space_id, "members": identity["id"]}):
+                        raise HTTPException(404, "Space not found")
                 await ws.send_json(message)
             except Exception:
                 dead.append(ws)
+                try:
+                    await ws.close(code=4401)
+                except Exception:
+                    pass
         if dead:
             async with self.lock:
                 for ws in dead:
@@ -775,7 +757,7 @@ async def _enrich_users(ids: list[str]) -> dict:
 # ---------- Models ----------
 class SpaceCreateIn(BaseModel):
     name: Optional[str] = None
-    member_ids: List[str] = []
+    member_ids: List[str] = Field(default_factory=list)
 
 
 class SpaceContentIn(BaseModel):
@@ -860,6 +842,11 @@ async def upload_audio(payload: AudioUploadIn, current=Depends(get_current_user)
 
 @api.post("/spaces")
 async def create_space(payload: SpaceCreateIn, current=Depends(get_current_user)):
+    if len(payload.member_ids) > 20:
+        raise HTTPException(400, "A Space supports up to 20 invited people")
+    for member_id in payload.member_ids:
+        if member_id != current["id"]:
+            await auth.require_contact(current["id"], member_id)
     members = list({current["id"], *payload.member_ids})
     space = {
         "id": str(uuid.uuid4()),
@@ -907,9 +894,7 @@ async def _ensure_member(space_id: str, user_id: str) -> dict:
     if not s:
         raise HTTPException(status_code=404, detail="Space not found")
     if user_id not in s.get("members", []):
-        # auto-add (open join model for invited demo)
-        await db.spaces.update_one({"id": space_id}, {"$addToSet": {"members": user_id}})
-        s = await db.spaces.find_one({"id": space_id}, {"_id": 0})
+        raise HTTPException(status_code=404, detail="Space not found")
     return s
 
 
@@ -933,9 +918,7 @@ async def join_space(space_id: str, current=Depends(get_current_user)):
 
 @api.post("/spaces/{space_id}/leave")
 async def leave_space(space_id: str, current=Depends(get_current_user)):
-    s = await db.spaces.find_one({"id": space_id}, {"_id": 0})
-    if not s:
-        raise HTTPException(status_code=404, detail="Space not found")
+    s = await _ensure_member(space_id, current["id"])
     await db.spaces.update_one(
         {"id": space_id},
         {"$unset": {f"presence.{current['id']}": ""}, "$set": {"updated_at": now_iso()}},
@@ -996,8 +979,8 @@ async def set_space_content(space_id: str, payload: SpaceContentIn, current=Depe
         # Uploaded audio takes precedence if provided
         if payload.upload_id:
             up = await db.audio_uploads.find_one({"id": payload.upload_id}, {"_id": 0})
-            if not up:
-                raise HTTPException(status_code=400, detail="Audio upload not found")
+            if not up or up["uploader_id"] != current["id"]:
+                raise HTTPException(status_code=404, detail="Audio upload not found")
             content = {
                 "type": "audio",
                 "source": "upload",
@@ -1117,36 +1100,26 @@ async def list_sessions(current=Depends(get_current_user)):
 
 
 # ---------- WebSocket ----------
-def _verify_ws_token(token: str) -> Optional[dict]:
-    try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    except Exception:
-        return None
-
-
 @app.websocket("/api/ws/spaces/{space_id}")
-async def space_ws(websocket: WebSocket, space_id: str, token: str = Query(...)):
-    payload = _verify_ws_token(token)
-    if not payload:
-        await websocket.close(code=4401)
-        return
-    user_id = payload["sub"]
-    user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+async def space_ws(websocket: WebSocket, space_id: str, ticket: str = Query(...)):
+    user = await auth.consume_ticket(ticket, "space:" + space_id)
     if not user:
         await websocket.close(code=4401)
         return
-    space = await db.spaces.find_one({"id": space_id}, {"_id": 0})
+    user_id = user["id"]
+    space = await db.spaces.find_one({"id": space_id, "members": user_id})
     if not space:
         await websocket.close(code=4404)
         return
-
     await websocket.accept()
+    websocket.scope["kuku_user"] = user
+    auth.sockets.setdefault(user["_session_id"], set()).add(websocket)
     await hub.join(space_id, websocket)
 
     # mark presence
     await db.spaces.update_one(
         {"id": space_id},
-        {"$addToSet": {"members": user_id}, "$set": {f"presence.{user_id}": now_iso(), "updated_at": now_iso()}},
+        {"$set": {f"presence.{user_id}": now_iso(), "updated_at": now_iso()}},
     )
     await hub.broadcast(space_id, {
         "type": "presence",
@@ -1163,7 +1136,12 @@ async def space_ws(websocket: WebSocket, space_id: str, token: str = Query(...))
 
     try:
         while True:
-            data = await websocket.receive_text()
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30)
+            except asyncio.TimeoutError:
+                await auth.session_user(user["_session_id"], user["id"])
+                continue
+            await auth.session_user(user["_session_id"], user["id"])
             try:
                 msg = _json.loads(data)
             except Exception:
@@ -1173,9 +1151,13 @@ async def space_ws(websocket: WebSocket, space_id: str, token: str = Query(...))
                 await websocket.send_json({"type": "pong"})
             # All other state changes go through HTTP POST endpoints which
             # then broadcast via hub. Keep WS read loop alive only.
-    except WebSocketDisconnect:
-        pass
+    except (WebSocketDisconnect, HTTPException):
+        try:
+            await websocket.close(code=4401)
+        except Exception:
+            pass
     finally:
+        auth.sockets.get(user["_session_id"], set()).discard(websocket)
         await hub.leave(space_id, websocket)
         await db.spaces.update_one(
             {"id": space_id},
@@ -1191,17 +1173,13 @@ async def space_ws(websocket: WebSocket, space_id: str, token: str = Query(...))
 
 
 @app.websocket("/api/ws/calls")
-async def call_ws(websocket: WebSocket, token: str = Query(...)):
-    payload = _verify_ws_token(token)
-    if not payload:
-        await websocket.close(code=4401)
-        return
-    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+async def call_ws(websocket: WebSocket, ticket: str = Query(...)):
+    user = await auth.consume_ticket(ticket, "calls")
     if not user:
         await websocket.close(code=4401)
         return
-
     await websocket.accept()
+    auth.sockets.setdefault(user["_session_id"], set()).add(websocket)
     user_id = user["id"]
     await call_hub.register(user_id, websocket)
     try:
@@ -1216,28 +1194,29 @@ async def call_ws(websocket: WebSocket, token: str = Query(...)):
     except WebSocketDisconnect:
         pass
     finally:
+        auth.sockets.get(user["_session_id"], set()).discard(websocket)
         await call_hub.unregister(user_id, websocket)
 
+
+@app.get("/health/live")
+async def live():
+    return {"ok": True}
+
+@app.get("/health/ready")
+async def ready():
+    try:
+        await db.command("ping")
+    except Exception:
+        raise HTTPException(503, "Database unavailable")
+    return {"ok": True}
 
 # Mount router & CORS
 app.include_router(api)
 
-# Explicit origins (no wildcard + credentials). Override via CORS_ORIGINS
-# (comma-separated) in env, e.g. Render: https://my-app.vercel.app
-CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()] or [
-    "http://localhost:8081",
-    "http://localhost:19006",
-    "http://127.0.0.1:8081",
-    "http://127.0.0.1:19006",
-]
-# Regex fallback: any Vercel preview/deployment host (dev convenience).
-CORS_ORIGIN_REGEX = os.environ.get("CORS_ORIGIN_REGEX", r"https://.*\.vercel\.app")
-
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=CORS_ORIGINS,
-    allow_origin_regex=CORS_ORIGIN_REGEX,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.CORS_ORIGINS,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Kuku-Platform"],
 )

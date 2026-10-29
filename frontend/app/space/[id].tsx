@@ -299,7 +299,7 @@ export default function SpaceRoomScreen() {
         <View style={styles.avatarStack}>
           {activeUsers.slice(0, 3).map((u, i) => (
             <View key={u.id} style={[styles.stackedAvatar, { marginLeft: i === 0 ? 0 : -10 }]}>
-              <Avatar name={u.name} seed={u.id} size={28} />
+              <Avatar name={u.name} seed={u.id} photo={u.avatar} size={28} />
             </View>
           ))}
         </View>

@@ -25,6 +25,7 @@ export default function YouScreen() {
   const currentTheme = themeMeta.find((t) => t.name === themeName)?.label ?? "Warm";
 
   const items: { icon: keyof typeof Ionicons.glyphMap; label: string; sub: string; onPress?: () => void; testID: string }[] = [
+    { icon: "person-outline", label: "Edit profile", sub: "Your name and a little about you", onPress: () => router.push("/onboarding?edit=1"), testID: "settings-profile" },
     {
       icon: "color-palette-outline",
       label: "Appearance",
@@ -32,16 +33,16 @@ export default function YouScreen() {
       onPress: () => router.push("/appearance"),
       testID: "settings-appearance",
     },
-    { icon: "notifications-outline", label: "Notifications", sub: "Quiet hours on", testID: "settings-notifications" },
-    { icon: "lock-closed-outline", label: "Privacy", sub: "End-to-end is coming", testID: "settings-privacy" },
+    { icon: "person-add-outline", label: "Invite someone", sub: "Share KUKU privately", onPress: () => router.push("/invite"), testID: "settings-invite" },
+    { icon: "notifications-outline", label: "Notifications", sub: "Message alerts on this device", onPress: () => router.push("/notifications"), testID: "settings-notifications" },
+    { icon: "lock-closed-outline", label: "Privacy", sub: "Blocked contacts and privacy", onPress: () => router.push("/privacy"), testID: "settings-privacy" },
     { icon: "sparkles-outline", label: "Spaces (soon)", sub: "Shared rooms in Phase 2", testID: "settings-spaces" },
-    { icon: "help-circle-outline", label: "Help & feedback", sub: "We read everything", testID: "settings-help" },
   ];
 
   function confirmSignOut() {
     const doSignOut = async () => {
-      await signOut();
-      router.replace("/login");
+      try { await signOut(); router.replace("/login"); }
+      catch { Alert.alert("Could not sign out", "Check your connection and try again."); }
     };
     if (Platform.OS === "web") {
       doSignOut();
@@ -65,7 +66,7 @@ export default function YouScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.profileCard}>
-          <Avatar name={user?.name} seed={user?.id} size={72} />
+          <Avatar name={user?.name} seed={user?.id} photo={user?.avatar} size={72} />
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{user?.name}</Text>
             <Text style={styles.email}>{user?.email}</Text>
@@ -102,7 +103,7 @@ export default function YouScreen() {
           <Text style={styles.signOutText}>Sign out</Text>
         </Pressable>
 
-        <Text style={styles.version}>Connect · v0.2 · made quietly</Text>
+        <Text style={styles.version}>KUKU · v1.0 beta</Text>
       </ScrollView>
     </SafeAreaView>
   );

@@ -1,3 +1,5 @@
+import Decor from "../../src/Decor";
+import { getOutbox, queueMessage, retryMessage, removePending, subscribeOutbox, PendingMessage } from "../../src/outbox";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
@@ -17,7 +19,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import * as Haptics from "expo-haptics";
-import { api, Message, User } from "../../src/api";
+import { api, Message, User, uploadAttachment } from "../../src/api";
+import { CALLS_ENABLED } from "../../src/config";
 import { radius, spacing } from "../../src/theme";
 import { useTheme } from "../../src/ThemeContext";
 import Avatar from "../../src/Avatar";
@@ -32,6 +35,15 @@ export default function ChatScreen() {
   const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
   const [chatInfo, setChatInfo] = useState<{ other: User | null } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [pending, setPending] = useState<PendingMessage[]>([]);
+  const messagesRef = useRef<Message[]>([]);
+  messagesRef.current = messages;
+  useEffect(() => {
+    let active = true;
+    const sync = async () => { if (user) { const all = await getOutbox(user.id); if(active)setPending(all.filter(m=>m.chat_id===id)); } };
+    void sync().catch(()=>setError("Could not read queued messages")); const stop=subscribeOutbox(()=>void sync().catch(()=>setError("Could not read queued messages")));
+    return()=>{active=false;stop();};
+  },[user?.id,id]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -39,6 +51,9 @@ export default function ChatScreen() {
   const [recording, setRecording] = useState(false);
   const [recordSec, setRecordSec] = useState(0);
   const loadingRef = useRef(false);
+  const activeChat = useRef(id);
+  activeChat.current = id;
+
   const recordTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
 
@@ -48,10 +63,11 @@ export default function ChatScreen() {
     try {
       const [info, msgs] = await Promise.all([
         api.get<{ other: User | null }>(`/chats/${id}`),
-        api.get<Message[]>(`/chats/${id}/messages`),
+        api.get<Message[]>("/chats/"+id+"/messages?limit=100"+(messagesRef.current.length ? "&after="+messagesRef.current[messagesRef.current.length-1].id : "")),
       ]);
+      if (activeChat.current !== id) return;
       setChatInfo(info);
-      setMessages(msgs);
+      setMessages((previous) => Array.from(new Map([...previous, ...msgs].map(m => [m.id, m])).values()).sort((a,b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)));
       setError(null);
     } catch {
       setError("Couldn't load messages — check your connection");
@@ -62,6 +78,8 @@ export default function ChatScreen() {
   }, [id]);
 
   useEffect(() => {
+    setMessages([]); setChatInfo(null); setLoading(true);
+    messagesRef.current = []; loadingRef.current = false;
     load();
   }, [load]);
 
@@ -78,26 +96,19 @@ export default function ChatScreen() {
       const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
       return () => clearTimeout(t);
     }
-  }, [messages.length]);
+  }, [messages[messages.length - 1]?.id]);
 
   useEffect(() => () => {
     if (recordTimer.current) clearInterval(recordTimer.current);
   }, []);
 
-  async function send(payload: any): Promise<boolean> {
+  async function send(payload: Record<string,unknown>): Promise<boolean> {
+    if (!user) return false;
     setSending(true);
-    try {
-      const m = await api.post<Message>(`/chats/${id}/messages`, payload);
-      setMessages((prev) => [...prev, m]);
-      return true;
-    } catch {
-      setError("Couldn't send — check your connection");
-      return false;
-    } finally {
-      setSending(false);
-    }
+    try { await queueMessage(user.id,payload); return true; }
+    catch(e) { setError(e instanceof Error ? e.message : "Could not save this message for sending");return false; }
+    finally {setSending(false);}
   }
-
   async function sendText() {
     const t = text.trim();
     if (!t) return;
@@ -105,41 +116,25 @@ export default function ChatScreen() {
     if (ok) setText("");
   }
 
+  async function shareFile(uri: string, name: string, type: "file" | "image" = "file") {
+    setSending(true);
+    try {
+      const file = await uploadAttachment(id, uri, name);
+      await send({ chat_id: id, type, attachment_id: file.id });
+    } catch (e) { setError(e instanceof Error ? e.message : "Upload failed. Try again."); }
+    finally { setSending(false); }
+  }
   async function attachImage() {
-    try {
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        base64: true,
-        quality: 0.6,
-      });
-      if (res.canceled || !res.assets?.[0]) return;
-      const a = res.assets[0];
-      const mime = a.mimeType || "image/jpeg";
-      const dataUrl = a.base64 ? `data:${mime};base64,${a.base64}` : a.uri;
-      await send({
-        chat_id: id,
-        type: "image",
-        media: dataUrl,
-        file_name: a.fileName || "image.jpg",
-        file_size: a.fileSize || null,
-      });
-    } catch {}
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
+    if (!result.canceled && result.assets[0]) {
+      const a = result.assets[0];
+      await shareFile(a.uri, a.fileName || "image.jpg", "image");
+    }
   }
-
   async function attachFile() {
-    try {
-      const res = await DocumentPicker.getDocumentAsync({ multiple: false });
-      if (res.canceled || !res.assets?.[0]) return;
-      const a = res.assets[0];
-      await send({
-        chat_id: id,
-        type: "file",
-        file_name: a.name,
-        file_size: a.size || null,
-      });
-    } catch {}
+    const result = await DocumentPicker.getDocumentAsync({ multiple: false, copyToCacheDirectory: true });
+    if (!result.canceled && result.assets[0]) await shareFile(result.assets[0].uri, result.assets[0].name);
   }
-
   function startRecording() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setRecording(true);
@@ -167,21 +162,22 @@ export default function ChatScreen() {
           <Ionicons name="chevron-back" size={22} color={c.text} />
         </Pressable>
         <View style={styles.headerCenter}>
-          <Avatar name={chatInfo?.other?.name} seed={chatInfo?.other?.id} size={36} />
+          <Avatar name={chatInfo?.other?.name} seed={chatInfo?.other?.id} photo={chatInfo?.other?.avatar} size={36} />
           <View>
             <Text style={styles.headerName} numberOfLines={1}>
               {chatInfo?.other?.name || "Chat"}
             </Text>
-            <Text style={styles.headerSub}>quietly online</Text>
+            <Text style={styles.headerSub}>Private conversation</Text>
           </View>
         </View>
-        <Pressable
+        <Pressable accessibilityRole="button" accessibilityLabel="Contact privacy and reporting" onPress={()=>chatInfo?.other && router.push(("/privacy?contact="+chatInfo.other.id) as never)} style={styles.iconBtn}><Ionicons name="ellipsis-horizontal" size={22} color={c.text}/></Pressable>
+        {CALLS_ENABLED && <Pressable
           onPress={() => chatInfo?.other && router.push(`/call/${chatInfo.other.id}`)}
           style={styles.iconBtn}
           testID="chat-call"
         >
           <Ionicons name="call-outline" size={20} color={c.primaryDark} />
-        </Pressable>
+        </Pressable>}
       </View>
 
       {/* Phase 2 — Start a shared space */}
@@ -234,7 +230,7 @@ export default function ChatScreen() {
             <ActivityIndicator color={c.primary} />
           </View>
         ) : (
-          <FlatList
+          <View style={{flex: 1}}><Decor/><FlatList
             ref={listRef}
             data={messages}
             keyExtractor={(m) => m.id}
@@ -242,13 +238,24 @@ export default function ChatScreen() {
             renderItem={({ item }) => (
               <MessageRow msg={item} mine={item.sender_id === user?.id} />
             )}
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+            ListHeaderComponent={messages.length >= 50 ? <Pressable onPress={async () => {
+              try {
+                const older = await api.get<Message[]>("/chats/" + id + "/messages?before=" + messages[0].id);
+                setMessages(prev => Array.from(new Map([...older, ...prev].map(m => [m.id, m])).values()));
+              } catch { setError("Could not load older messages"); }
+            }}><Text style={{ color: c.primary, padding: 12 }}>Load older messages</Text></Pressable> : null}
+            ListFooterComponent={<View>{pending.filter(p => !messages.some(m=>m.client_message_id===p.id)).map(p => <View key={p.id} style={{padding:12,alignSelf:"flex-end"}}>
+              <Text style={{color:c.text}}>{String(p.payload.text || "File waiting to send")}</Text>
+              <Text style={{color:c.textSecondary}}>{p.state==="failed"?p.error:"Waiting to send…"}</Text>
+              {p.state==="failed" ? <Pressable onPress={()=>user && retryMessage(user.id,p.id)}><Text style={{color:c.primary}}>Retry</Text></Pressable>:null}
+              <Pressable onPress={()=>user && removePending(user.id,p.id)}><Text style={{color:c.textSecondary}}>Remove from queue</Text></Pressable>
+            </View>)}</View>}
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Text style={styles.emptyText}>Say something gentle.</Text>
               </View>
             }
-          />
+          /></View>
         )}
 
         {recording ? (
@@ -296,7 +303,7 @@ export default function ChatScreen() {
               </Pressable>
             ) : (
               <Pressable
-                onPress={startRecording}
+                onPress={() => setError("Voice messages are coming in a later release")}
                 style={styles.sendBtn}
                 testID="mic-button"
               >
@@ -336,10 +343,10 @@ function MessageRow({ msg, mine }: { msg: Message; mine: boolean }) {
             resizeMode="cover"
           />
         ) : msg.type === "image" ? (
-          <FilePreviewCard fileName={msg.file_name} fileSize={msg.file_size} type="image" />
+          <FilePreviewCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="image" />
         ) : null}
         {msg.type === "file" && (
-          <FilePreviewCard fileName={msg.file_name} fileSize={msg.file_size} type="file" />
+          <FilePreviewCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="file" />
         )}
         {msg.type === "space_invite" && (
           <Pressable

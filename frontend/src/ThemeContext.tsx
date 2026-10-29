@@ -1,77 +1,64 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
+import React, {createContext, useContext, useEffect, useState, useCallback, useMemo, useRef} from "react";
+import {AppState, Platform, useColorScheme} from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  palettes,
-  ThemeName,
-  Palette,
-  fontPairs,
-  FontPair,
-} from "./theme";
+import {palettes, ThemeName, Palette, fontPairs, FontPair} from "./theme";
+import {AppearanceMode, DecorName, resolveDark, validTime} from "./appearance";
 
-type ThemeState = {
-  c: Palette;
-  themeName: ThemeName;
-  setTheme: (t: ThemeName) => void;
-  fontKey: FontPair;
-  setFontKey: (f: FontPair) => void;
-  f: typeof fontPairs["fraunces"];
-};
-
+type Preferences = {mode: AppearanceMode; dayTheme: ThemeName; nightTheme: ThemeName; dayAt: string; nightAt: string; decor: DecorName};
+const defaults: Preferences = {mode: "schedule", dayTheme: "warm", nightTheme: "evening", dayAt: "07:00", nightAt: "19:00", decor: "plain"};
+type ThemeState = Preferences & {c: Palette; themeName: ThemeName; setTheme: (t: ThemeName) => void; setAppearance: (p: Partial<Preferences>) => void; fontKey: FontPair; setFontKey: (f: FontPair) => void; f: typeof fontPairs.fraunces};
 const ThemeCtx = createContext<ThemeState | null>(null);
-
-const THEME_KEY = "connect_theme";
-const FONT_KEY = "connect_font";
-
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [themeName, setThemeName] = useState<ThemeName>("warm");
+export function ThemeProvider({children}: {children: React.ReactNode}) {
+  const [prefs, setPrefs] = useState(defaults);
   const [fontKey, setFontKeyState] = useState<FontPair>("fraunces");
-
+  const [clock, setClock] = useState(() => new Date());
+  const scheme = useColorScheme(); const edited = useRef(false); const fontEdited = useRef(false);
+  const prefsRef = useRef(prefs);
+  const writes = useRef(Promise.resolve());
   useEffect(() => {
-    (async () => {
-      const t = (await AsyncStorage.getItem(THEME_KEY)) as ThemeName | null;
-      if (t && palettes[t]) setThemeName(t);
-      const f = (await AsyncStorage.getItem(FONT_KEY)) as FontPair | null;
-      if (f && fontPairs[f]) setFontKeyState(f);
-    })();
+    let live = true;
+    void Promise.all([AsyncStorage.getItem("kuku_appearance_v1"), AsyncStorage.getItem("connect_theme"), AsyncStorage.getItem("connect_font")]).then(([raw, legacy, font]) => {
+      if (!live) return;
+      if (!edited.current) {
+        let next = {...defaults};
+        if (legacy && Object.prototype.hasOwnProperty.call(palettes, legacy)) {const name = legacy as ThemeName; next[palettes[name].isDark ? "nightTheme" : "dayTheme"] = name;}
+        if (raw) {try {
+          const p = JSON.parse(raw);
+          if (["schedule", "light", "dark", "system"].includes(p.mode)) next.mode = p.mode;
+          if (Object.prototype.hasOwnProperty.call(palettes, p.dayTheme) && !palettes[p.dayTheme as ThemeName].isDark) next.dayTheme = p.dayTheme;
+          if (Object.prototype.hasOwnProperty.call(palettes, p.nightTheme) && palettes[p.nightTheme as ThemeName].isDark) next.nightTheme = p.nightTheme;
+          if (validTime(p.dayAt) && validTime(p.nightAt) && p.dayAt !== p.nightAt) {next.dayAt = p.dayAt; next.nightAt = p.nightAt;}
+          if (["plain", "dots", "leaves", "orbits"].includes(p.decor)) next.decor = p.decor;
+        } catch { /* keep safe defaults */ }}
+        prefsRef.current = next; setPrefs(next);
+      }
+      if (!fontEdited.current && font && font in fontPairs) setFontKeyState(font as FontPair);
+    }).catch(() => {});
+    const tick = () => setClock(new Date());
+    const timer = setInterval(tick, 1000);
+    const sub = AppState.addEventListener("change", state => {if (state === "active") tick();});
+    if (Platform.OS === "web") document.addEventListener("visibilitychange", tick);
+    return () => {live = false; clearInterval(timer); sub.remove(); if (Platform.OS === "web") document.removeEventListener("visibilitychange", tick);};
   }, []);
-
-  const setTheme = useCallback((t: ThemeName) => {
-    setThemeName(t);
-    AsyncStorage.setItem(THEME_KEY, t).catch(() => {});
+  const setAppearance = useCallback((patch: Partial<Preferences>) => {
+    edited.current = true;
+    const next = {...prefsRef.current, ...patch};
+      if (!validTime(next.dayAt) || !validTime(next.nightAt) || next.dayAt === next.nightAt) return;
+      // Serialize writes so rapid palette taps cannot leave an older preference on disk.
+      writes.current = writes.current.then(() => AsyncStorage.setItem("kuku_appearance_v1", JSON.stringify(next))).catch(() => {});
+      prefsRef.current = next; setPrefs(next);
   }, []);
-
-  const setFontKey = useCallback((f: FontPair) => {
-    setFontKeyState(f);
-    AsyncStorage.setItem(FONT_KEY, f).catch(() => {});
-  }, []);
-
-  const value = useMemo<ThemeState>(
-    () => ({
-      c: palettes[themeName],
-      themeName,
-      setTheme,
-      fontKey,
-      setFontKey,
-      f: fontPairs[fontKey],
-    }),
-    [themeName, fontKey, setTheme, setFontKey],
-  );
-
+  const setTheme = useCallback((t: ThemeName) => setAppearance(palettes[t].isDark ? {nightTheme: t} : {dayTheme: t}), [setAppearance]);
+  const setFontKey = useCallback((font: FontPair) => {fontEdited.current = true; setFontKeyState(font); void AsyncStorage.setItem("connect_font", font).catch(() => {});}, []);
+  const dark = resolveDark(prefs.mode, clock, scheme === "dark", prefs.nightAt, prefs.dayAt);
+  const themeName = dark ? prefs.nightTheme : prefs.dayTheme;
+  const c = palettes[themeName];
+  useEffect(() => {
+    if (Platform.OS === "web") {document.documentElement.style.colorScheme = c.isDark ? "dark" : "light"; document.querySelector('meta[name="theme-color"]')?.setAttribute("content", c.bg);}
+  }, [c]);
+  const value = useMemo(() => ({...prefs, c, themeName, setTheme, setAppearance, fontKey, setFontKey, f: fontPairs[fontKey]}), [prefs, c, themeName, setTheme, setAppearance, fontKey, setFontKey]);
   return <ThemeCtx.Provider value={value}>{children}</ThemeCtx.Provider>;
 }
-
 export function useTheme(): ThemeState {
-  const v = useContext(ThemeCtx);
-  if (!v) {
-    // fallback so any accidental-out-of-provider calls don't crash
-    return {
-      c: palettes.warm,
-      themeName: "warm",
-      setTheme: () => {},
-      fontKey: "fraunces",
-      setFontKey: () => {},
-      f: fontPairs.fraunces,
-    };
-  }
-  return v;
+  return useContext(ThemeCtx) || {...defaults, c: palettes.warm, themeName: "warm", setTheme: () => {}, setAppearance: () => {}, fontKey: "fraunces", setFontKey: () => {}, f: fontPairs.fraunces};
 }

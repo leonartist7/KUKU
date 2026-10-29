@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import {
   View,
+  Image,
   Text,
   StyleSheet,
   Pressable,
@@ -75,11 +76,11 @@ export default function HomeScreen() {
           ]}
           testID="profile-button"
         >
-          <Avatar name={user?.name} seed={user?.id} size={40} />
+          <Avatar name={user?.name} seed={user?.id} photo={user?.avatar} size={40} />
         </Pressable>
         <View style={styles.titleBlock}>
           <Text style={styles.kicker}>Today</Text>
-          <Text style={styles.title}>Connect</Text>
+          <View style={{flexDirection: "row", alignItems: "center", gap: 10}}><Image source={require("../../assets/images/kuku-brand.png")} style={{width: 42, height: 42, borderRadius: 14}} accessibilityLabel="KUKU birds"/><Text style={styles.title}>KUKU</Text></View>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -105,8 +106,9 @@ export default function HomeScreen() {
           }
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>No conversations yet</Text>
-              <Text style={styles.emptyText}>Tap the + below to start one.</Text>
+              <Text style={styles.emptyTitle}>Good things start with a hello.</Text>
+              <Text style={styles.emptyText}>Invite someone close, or start a conversation with a contact who's already here.</Text>
+              <Pressable accessibilityRole="button" onPress={() => router.push("/invite")} style={{padding: 15, marginTop: 16, backgroundColor: c.surface, borderRadius: 14}}><Text style={{fontFamily: f.bodyMedium, color: c.primaryDark}}>Invite someone</Text></Pressable>
             </View>
           }
           renderItem={({ item }) => (
@@ -118,7 +120,7 @@ export default function HomeScreen() {
               ]}
               testID={`chat-row-${item.id}`}
             >
-              <Avatar name={item.other?.name} seed={item.other?.id} size={52} />
+              <Avatar name={item.other?.name} seed={item.other?.id} photo={item.other?.avatar} size={52} />
               <View style={styles.rowMain}>
                 <View style={styles.rowTop}>
                   <Text style={styles.rowName} numberOfLines={1}>
