@@ -30,25 +30,27 @@ Implemented:
 
 Local backend: the regression suite covers synthetic accounts, verification, sessions, messages, attachments, quota/deletion and push delivery. See the latest PR checks for the current test count.
 Local frontend infrastructure: 5 Node tests cover service-worker privacy, refresh-cookie proxy, persistent retries and outbox account isolation.
-The prior release commit f57c8ff passed 21 backend tests against MongoDB 7 plus five frontend tests and the production build in GitHub CI. On 2026-10-28 the local Linux suite passes 24 backend tests, five frontend tests, TypeScript and the production web export with contact safety added.
-TypeScript and the production web export passed for the first foundation commit d002260. The latest PR checks validate the subsequent verification, outbox and notification additions. Provider integration and physical-device checks remain required.
+Commit 5a0a59d passes all 24 backend tests against MongoDB 7, five frontend infrastructure tests, TypeScript and the production web export in GitHub CI: https://github.com/leonartist7/KUKU/actions/runs/40907280223 . The five frontend infrastructure tests also pass locally on Windows.
+On 2026-10-29 the deployed API readiness endpoint returns 200 after a real Atlas ping. Unauthenticated account and chat requests return 401. The allowed preview origin passes CORS preflight; an unrelated origin is rejected. The deployed web preview serves its install manifest and deep-link shell. Its explicit API rewrite reaches the backend and returns uncached JSON responses (405 for GET on the POST-only refresh endpoint, 404 for an unknown API route). The connector misclassifies application 401 responses as deployment-protection errors; that is not evidence of a broken proxy. Full account sessions, email delivery, private file transfers and physical-device checks remain unverified.
 Historical test reports in this repository are not evidence for this branch.
 
 ## Infrastructure discovered
 
 An existing Vercel project named `kuku` is available in the connected account.
 Observed production alias: https://kuku-lac.vercel.app
-The Vercel project root/build/output settings have been corrected to frontend / npm run build:web / dist. Its existing sign-in protection still covers non-custom domains. A real preview build correctly refuses to continue until EXPO_PUBLIC_BACKEND_URL is supplied.
-Do not confuse an existing READY deployment with validation of this branch.
-Verified Resend sending domains are available, including `lionovart.com`; no email has been sent by this execution.
-Render, Atlas, R2 and Expo credentials/projects have not been verified or provisioned.
+The Vercel project uses frontend / npm run build:web / dist. Its existing sign-in protection still covers non-custom domains. Preview-only variables on this review branch now target the staging API; production variables and aliases have not been promoted.
+Reviewed preview: https://kuku-git-codex-kuku-release-20261027-lionovart.vercel.app . Deployment dpl_dEr7pkDHW31E5gZfgy5SEyQTWqCV is READY on commit 5a0a59d. The API catch-all needs the explicit rewrite in frontend/vercel.json; a successful static build alone did not reveal the original API 404.
+Free Render service kuku-api-staging (srv-dbhmdac9v7es73bb0pe0) is live in Frankfurt: https://kuku-api-staging.onrender.com . Deployment dep-dbhmq86tlv9c7396dvjg runs backend code from 44a8b74, with one worker and automatic deploys off. This service is configured directly, not synced from the production Blueprint. Free hosting can sleep and is only the initial staging environment. No paid tier has been selected.
+Free Atlas cluster kuku is healthy in AWS EU_CENTRAL_1. Runtime user kuku-runtime has readWrite on kuku_staging only, no collection restriction, and access restricted to that cluster. The owner supplied MONGO_URL privately through Render. Atlas allows exactly the owner-confirmed Render outbound ranges 74.220.51.0/24 and 74.220.59.0/24.
+A sending-only Resend key scoped to the verified lionovart.com domain is configured on the backend, with sender KUKU <kuku@lionovart.com>. No email has been sent by this execution, and delivery remains an acceptance gate. R2 storage and Expo/FCM signing/push configuration remain unconfigured.
+The service currently uses Render's default TCP health check. Set its Dashboard HTTP health-check path to /health/ready before inviting testers; that endpoint was checked manually during deployment.
 
 ## Deployment sequence
 
 1. Provision an always-on Render Python web service and MongoDB Atlas database in compatible regions. Choose and approve the paid service tier before provisioning paid resources. Use a fresh production database, not a demo database. Restrict Atlas network access to the backend's outbound addresses.
 2. Create a PRIVATE R2 bucket. Do not enable r2.dev or a public custom domain. Issue a least-privilege bucket-scoped read/write token. Set the backend variables listed in `backend/.env.example`; generate a random JWT secret, never copy test values.
 3. Configure a verified Resend sender and a sending-only API key. Set `EMAIL_FROM` and `RESEND_API_KEY`. Validate delivery to the operator before opening registration.
-4. Deploy the reviewed branch using `render.yaml`. Keep one process/worker: rate limits and realtime socket fan-out currently live in process memory. The readiness endpoint checks database reachability; additionally test upload/download and email credentials.
+4. The staging API is directly configured as recorded above. For a separate production deployment, review and apply `render.yaml` with a production-specific database user and environment. Do not sync its kuku_production database name into the staging service: the staging user's permissions intentionally cover only kuku_staging. Keep one process/worker: rate limits and realtime socket fan-out currently live in process memory. The readiness endpoint checks database reachability; additionally test upload/download and email credentials.
 5. Configure Vercel root directory `frontend`, the build/output settings in `frontend/vercel.json`, `BACKEND_URL` and `EXPO_PUBLIC_BACKEND_URL` with the backend HTTPS origin (no /api suffix). Backend `WEB_ORIGIN` and `CORS_ORIGINS` must exactly include the intended web origin. Add only specific preview origins when testing them.
 6. Deploy a preview. Test web signup/signin/refresh/logout in two separate browser profiles, direct deep links, invitation redemption and a real file upload/download. Ensure 25 MB web uploads go directly to the API, not through a serverless proxy.
 7. From the backend's trusted shell run `python bootstrap.py owner@example.com` ONCE to generate the first private, email-bound, 24-hour invitation. Register the owner; use You > Invite someone for subsequent users. The code must be delivered privately by the owner.
@@ -98,9 +100,9 @@ Push delivery is at least once; generic alerts use the message ID for notificati
 
 Unsent message payloads are intentionally saved locally, separately for each account, and cleared on explicit signout. File bytes upload first; the queued message holds the private attachment ID. An interrupted upload must be retried by the user. Already accepted push notifications cannot be recalled on logout, so notification previews never contain message text or filenames.
 
-## Hosting connection handoff (2026-10-28)
+## Hosting connection handoff (2026-10-29)
 
-Render and MongoDB Atlas integrations were found but were not installed/connected at the time of this check. Install and connect both in ChatGPT to continue provisioning through their authenticated tools. The existing Vercel connection remains available. R2 bucket credentials and Expo/FCM signing/push configuration must still be supplied through the relevant service environment settings, never in source code or chat. No new hosting resource, production release or signed APK was created in this continuation.
+Render, MongoDB Atlas, Vercel and Resend are connected. Staging API/database provisioning and web-preview deployment have succeeded as recorded above. The first owner email and private bootstrap invitation are still needed; no user account or demo account was created by this execution. R2 bucket credentials and Expo/FCM signing/push configuration must still be supplied through the relevant service environment settings, never in source code or chat. No production release or signed APK has been distributed. Keep the PR in draft until account, storage, email and device acceptance checks pass.
 
 ## Reports and blocking
 
