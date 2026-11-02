@@ -20,13 +20,13 @@ export default function VoiceComposer({getChatId, onSent, onClose}: {
   const uri = useRef<string | null>(null); const uploaded = useRef<{id: string; chatId: string} | null>(null);
   const uid = useRef(user?.id); uid.current = user?.id;
   const stopRef = useRef<(cancel?: boolean) => Promise<void>>(async () => {});
-  useEffect(() => () => {
+  useEffect(() => {alive.current = true; return () => {
     alive.current = false; cancelled.current = true; operation.current++;
     stream.current?.getTracks().forEach(track => track.stop());
     if(recorder.current?.state === "recording") recorder.current.stop();
     else void recorder.current?.stopAndUnloadAsync?.().catch(()=>{});
     if(uri.current && Platform.OS === "web") URL.revokeObjectURL(uri.current);
-  }, []);
+  };}, []);
   useEffect(() => {
     if(phase !== "recording") return;
     const timer = setInterval(() => {
@@ -60,7 +60,7 @@ export default function VoiceComposer({getChatId, onSent, onClose}: {
         record.onerror = () => {void stopRef.current(true); if(alive.current)setError("Recording was interrupted. Please try again.");};
         record.onstop = () => {
           input.getTracks().forEach(t=>t.stop());
-          if(!alive.current || cancelled.current || uid.current !== account)return;
+          if(!alive.current || cancelled.current || attempt !== operation.current || uid.current !== account)return;
           const duration = Math.min(300000, Date.now() - started.current);
           if(duration < 250 || !size) {setPhase("idle");setError("Record a little longer, then stop.");return;}
           const blob = new Blob(chunks, {type}); const url = URL.createObjectURL(blob); uri.current = url;
@@ -79,6 +79,7 @@ export default function VoiceComposer({getChatId, onSent, onClose}: {
       }
       if(alive.current){setSeconds(0);setPhase("recording");}
     } catch(e) {
+      if(attempt !== operation.current)return;
       stream.current?.getTracks().forEach(t=>t.stop());
       if(alive.current){setPhase("idle");setError(e instanceof Error && e.name !== "NotAllowedError" ? e.message : "Allow microphone access, then tap Record again.");}
     }

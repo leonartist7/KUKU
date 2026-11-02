@@ -4,7 +4,16 @@ export function browserPushAvailable() {
   return typeof window !== "undefined" && window.isSecureContext && "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
 }
 export async function pushRegistration() {
-  const registration = await navigator.serviceWorker.register("/sw.js");
+  const registration = await navigator.serviceWorker.register("/sw.js", {updateViaCache: "none"});
+  const updating = registration.installing || registration.waiting;
+  if(updating && updating.state !== "activated") await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {updating.removeEventListener("statechange", changed); reject(new Error("Please reload KUKU and try again."));}, 15000);
+    function changed() {
+      if(updating?.state === "activated") {clearTimeout(timer); updating.removeEventListener("statechange", changed); resolve();}
+      else if(updating?.state === "redundant") {clearTimeout(timer); updating.removeEventListener("statechange", changed); reject(new Error("Please reload KUKU and try again."));}
+    }
+    updating.addEventListener("statechange", changed); changed();
+  });
   await Promise.race([navigator.serviceWorker.ready, new Promise((_, reject) => setTimeout(() => reject(new Error("Please reload KUKU and try again.")), 15000))]);
   return registration;
 }
