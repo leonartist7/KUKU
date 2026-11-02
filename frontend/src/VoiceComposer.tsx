@@ -30,7 +30,7 @@ export default function VoiceComposer({getChatId, onSent, onClose}: {
   useEffect(() => {
     if(phase !== "recording") return;
     const timer = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - started.current) / 1000); setSeconds(elapsed);
+      const elapsed = Math.floor((performance.now() - started.current) / 1000); setSeconds(elapsed);
       if(elapsed >= 300) void stopRef.current();
     }, 250);
     return () => clearInterval(timer);
@@ -61,13 +61,13 @@ export default function VoiceComposer({getChatId, onSent, onClose}: {
         record.onstop = () => {
           input.getTracks().forEach(t=>t.stop());
           if(!alive.current || cancelled.current || attempt !== operation.current || uid.current !== account)return;
-          const duration = Math.min(300000, Date.now() - started.current);
+          const duration = Math.min(300000, Math.round(performance.now() - started.current));
           if(duration < 250 || !size) {setPhase("idle");setError("Record a little longer, then stop.");return;}
           const blob = new Blob(chunks, {type}); const url = URL.createObjectURL(blob); uri.current = url;
           setMemo({uri: url, name: "voice-memo." + (type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm"), duration});
           setPhase("preview");
         };
-        recorder.current = record; started.current = Date.now(); record.start(1000);
+        recorder.current = record; started.current = performance.now(); record.start(1000);
       } else {
         const {Audio} = await import("expo-av");
         if(!(await Audio.requestPermissionsAsync()).granted) throw new Error("Allow microphone access in your phone settings to record.");
@@ -75,7 +75,7 @@ export default function VoiceComposer({getChatId, onSent, onClose}: {
         await Audio.setAudioModeAsync({allowsRecordingIOS: true, playsInSilentModeIOS: true});
         const result = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
         if(!alive.current || cancelled.current || attempt !== operation.current || uid.current !== account){await result.recording.stopAndUnloadAsync();return;}
-        recorder.current = result.recording; started.current = Date.now();
+        recorder.current = result.recording; started.current = performance.now();
       }
       if(alive.current){setSeconds(0);setPhase("recording");}
     } catch(e) {
@@ -95,7 +95,7 @@ export default function VoiceComposer({getChatId, onSent, onClose}: {
       await recorder.current.stopAndUnloadAsync();
       const {Audio} = await import("expo-av"); await Audio.setAudioModeAsync({allowsRecordingIOS: false});
       const path = recorder.current.getURI();
-      const duration = Math.min(300000,Date.now()-started.current);
+      const duration = Math.min(300000,Math.round(performance.now()-started.current));
       if(!cancel && path && alive.current){uri.current=path;setMemo({uri:path,name:"voice-memo.m4a",duration});setPhase("preview");}
     }
     if(cancel && alive.current){setMemo(null);setPhase("idle");}
