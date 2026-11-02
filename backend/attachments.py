@@ -86,7 +86,9 @@ def attachment_router(db_getter, auth):
             "remaining_bytes": max(0, min(USER_QUOTA_BYTES - user.get("storage_bytes", 0), TOTAL_QUOTA_BYTES - usage.get("bytes", 0)))}
 
     @router.post("/chats/{chat_id}/attachments")
-    async def upload(chat_id: str, request: Request, name: str, user=Depends(auth.verified)):
+    async def upload(chat_id: str, request: Request, name: str, kind: str = "file", user=Depends(auth.verified)):
+        if kind not in ("file", "voice"):
+            raise HTTPException(400, "Unsupported attachment kind")
         await member(chat_id, user)
         chat = await db_getter().chats.find_one({"id": chat_id})
         for other_id in chat["members"]:
@@ -110,6 +112,22 @@ def attachment_router(db_getter, auth):
                 file.write(chunk)
             if not size:
                 raise HTTPException(400, "The file is empty")
+            media_type = "application/octet-stream"
+            if kind == "voice":
+                if size > 10 * 1024 * 1024:
+                    raise HTTPException(413, "Voice memos must be 10 MB or smaller")
+                file.seek(0)
+                prefix = file.read(32)
+                if prefix.startswith(b"\x1a\x45\xdf\xa3"):
+                    media_type = "audio/webm"
+                elif prefix.startswith(b"OggS"):
+                    media_type = "audio/ogg"
+                elif prefix[4:8] == b"ftyp":
+                    media_type = "audio/mp4"
+                elif prefix.startswith(b"RIFF") and prefix[8:12] == b"WAVE":
+                    media_type = "audio/wav"
+                else:
+                    raise HTTPException(400, "This recording format is not supported")
             file.seek(0)
             reserved = await db_getter().users.update_one({"id": user["id"],
                 "$or": [{"storage_bytes": {"$exists": False}}, {"storage_bytes": {"$lte": USER_QUOTA_BYTES - size}}]},
@@ -132,7 +150,7 @@ def attachment_router(db_getter, auth):
                 raise
         doc = {"id": str(uuid.uuid4()), "key": key, "chat_id": chat_id,
             "owner_id": user["id"], "name": name, "size": size, "created_at": now(),
-            "storage_provider": storage_provider, "quota_version": 1}
+            "storage_provider": storage_provider, "quota_version": 1, "kind": kind, "media_type": media_type}
         try:
             await db_getter().attachments.insert_one(doc)
         except Exception:
@@ -148,14 +166,14 @@ def attachment_router(db_getter, auth):
         doc = await visible_file(attachment_id, user)
         await auth.limit("download:" + user["id"], 120, 3600)
         if doc.get("storage_provider", "r2") != "vercel":
-            return {"url": await run_in_threadpool(store.download, doc), "expires_in": 60}
+            return {"url": await run_in_threadpool(store.download, doc), "expires_in": 60, "media_type": doc.get("media_type", "application/octet-stream")}
         origin = os.getenv("PUBLIC_API_ORIGIN", "").rstrip("/")
         if not origin.startswith("https://") or "/" in origin[8:] or "?" in origin or "#" in origin:
             raise HTTPException(503, "Downloads are getting ready. Please try again later.")
         token = secrets.token_urlsafe(32)
         await db_getter().file_tickets.insert_one({"_id": digest(token), "attachment_id": attachment_id,
             "user_id": user["id"], "session_id": user["_session_id"], "expires_at": now() + timedelta(seconds=60)})
-        return {"url": origin + "/api/attachments/" + attachment_id + "/content?ticket=" + token, "expires_in": 60}
+        return {"url": origin + "/api/attachments/" + attachment_id + "/content?ticket=" + token, "expires_in": 60, "media_type": doc.get("media_type", "application/octet-stream")}
 
     @router.get("/attachments/{attachment_id}/content")
     async def content(attachment_id: str, ticket: str = Query(min_length=32, max_length=128)):

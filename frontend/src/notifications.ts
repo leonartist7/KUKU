@@ -2,11 +2,17 @@ import {Platform} from "react-native";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {api} from "./api";
-export const PUSH_AVAILABLE = Platform.OS !== "web" && process.env.EXPO_PUBLIC_ENABLE_PUSH === "true";
+import {browserPushAvailable, enableBrowserPush, disableBrowserPush} from "./browserPush";
+export const PUSH_AVAILABLE = Platform.OS === "web" ? browserPushAvailable() : process.env.EXPO_PUBLIC_ENABLE_PUSH === "true";
 const pref=(uid:string)=>"kuku_push_opt_in_"+uid;
 export async function enableNotifications(uid:string,ask=true){
   if(!PUSH_AVAILABLE)throw new Error("Notifications are not available in this build.");
   if(!ask && await AsyncStorage.getItem(pref(uid))!=="true")return;
+  if(Platform.OS==="web") {
+    await enableBrowserPush(uid,ask);
+    await AsyncStorage.setItem(pref(uid),"true");
+    return;
+  }
   const n=await import("expo-notifications");
   if(Platform.OS==="android")await n.setNotificationChannelAsync("messages",{name:"Messages",importance:n.AndroidImportance.DEFAULT});
   let permissions=await n.getPermissionsAsync();
@@ -19,6 +25,6 @@ export async function enableNotifications(uid:string,ask=true){
   await AsyncStorage.setItem(pref(uid),"true");
 }
 export async function disableNotifications(uid:string){
-  await api.delete("/devices");
+  if(Platform.OS==="web")await disableBrowserPush();else await api.delete("/devices");
   await AsyncStorage.setItem(pref(uid),"false");
 }

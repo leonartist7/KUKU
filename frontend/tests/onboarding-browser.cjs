@@ -14,11 +14,11 @@ const server=http.createServer((req,res)=>{
 });
 (async()=>{
   await new Promise(resolve=>server.listen(4173,"127.0.0.1",resolve));
-  const browser=await chromium.launch({headless:true});
+  const browser=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream"]});
   const origin="http://127.0.0.1:4173",errors=[];
   async function scenario(width,height){
-    const context=await browser.newContext({viewport:{width,height},reducedMotion:"reduce",timezoneId:"UTC",permissions:["clipboard-read","clipboard-write"]});
-    const page=await context.newPage();let user=null,sends=0,profiles=0,uploadedBytes=null,shared=null,inviteEmail="unset",photoSaves=0,uploadAttempts=0,statusChecks=0;
+    const context=await browser.newContext({viewport:{width,height},reducedMotion:"reduce",timezoneId:"UTC",permissions:["clipboard-read","clipboard-write","microphone"]});
+    const page=await context.newPage();let voiceBytes=null;let user=null,sends=0,profiles=0,uploadedBytes=null,shared=null,inviteEmail="unset",photoSaves=0,uploadAttempts=0,statusChecks=0;
     page.on("pageerror",e=>errors.push(String(e)));
     await page.clock.setFixedTime(new Date("2026-10-29T12:00:00Z"));
     await page.route("**/api/**",async route=>{
@@ -35,6 +35,8 @@ const server=http.createServer((req,res)=>{
       if(endpoint==="/api/files/status")return respond(200,{available:++statusChecks>1,used_bytes:0,remaining_bytes:500*1024*1024,max_file_bytes:25*1024*1024});
       if(endpoint==="/api/users")return respond(200,[{id:"sister",name:"Sam",email_verified:true}]);
       if(endpoint==="/api/chats"&&req.method()==="POST")return respond(200,{id:"synthetic-chat"});
+      if(endpoint==="/api/chats/synthetic-chat/attachments" && new URL(req.url()).searchParams.get("kind")==="voice"){voiceBytes=req.postDataBuffer();return respond(200,{id:"synthetic-voice",file_name:"voice-memo.webm",file_size:voiceBytes.length});}
+      if(endpoint==="/api/attachments/synthetic-voice/download")return respond(200,{url:origin+"/voice-bytes",media_type:"audio/webm"});
       if(endpoint==="/api/chats/synthetic-chat/attachments"){if(req.method()==="OPTIONS")return respond(200,{});uploadedBytes=req.postDataBuffer();uploadAttempts++;if(uploadAttempts===1)return respond(503,{detail:"Your file couldn’t be saved. Please try again."});return respond(200,{id:"synthetic-attachment",file_name:"family.txt",file_size:uploadedBytes.length});}
       if(endpoint==="/api/attachments/synthetic-attachment/download")return respond(200,{url:"https://downloads.example.test/family.txt"});
       if(endpoint==="/api/chats/synthetic-chat/messages"&&req.method()==="GET")return respond(200,shared?[{...shared,id:"synthetic-message",file_name:"family.txt",file_size:18,sender_id:"qa-user",created_at:new Date().toISOString()}]:[]);
@@ -46,7 +48,8 @@ const server=http.createServer((req,res)=>{
     await page.goto(origin+(width===320?"/":"/login"));await page.getByTestId("auth-switch").waitFor();
     assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),width,"No horizontal overflow at "+width);
     await page.screenshot({path:path.join(shots,"login-"+width+".png"),fullPage:true});
-    return {page,context,state:()=>({user,sends,profiles,uploadedBytes,shared,inviteEmail,photoSaves})};
+    await page.route(origin+"/voice-bytes",route=>route.fulfill({status:200,contentType:"audio/webm",headers:{"cache-control":"no-store"},body:voiceBytes}));
+    return {page,context,state:()=>({user,sends,profiles,uploadedBytes,shared,inviteEmail,photoSaves,voiceBytes})};
   }
   try {
     const {page,context,state}=await scenario(390,844);
@@ -163,6 +166,22 @@ const server=http.createServer((req,res)=>{
     const chunks=[];for await(const chunk of await downloaded.createReadStream())chunks.push(chunk);
     assert.equal(Buffer.concat(chunks).toString(),"A real family file.");
     assert.ok(page.url().includes("/chat/synthetic-chat"),"Downloading must retain the conversation");
+    await page.getByTestId("mic-button").click();
+    await page.getByTestId("voice-record").click();
+    await page.getByTestId("voice-stop").waitFor();
+    await page.waitForTimeout(1300);
+    await page.getByTestId("voice-stop").click();
+    await page.getByTestId("voice-send").waitFor();
+    await page.screenshot({path:path.join(shots,"voice-preview-390.png"),fullPage:true});
+    await page.getByTestId("voice-send").click();
+    await page.waitForFunction(()=>!document.querySelector('[data-testid="voice-composer"]'));
+    await page.getByTestId("voice-play").waitFor();
+    await page.getByTestId("voice-play").click();
+    await page.getByText("Playing…",{exact:true}).waitFor();
+    assert.ok(state().voiceBytes.length>50,"Recorder must upload actual encoded audio bytes");
+    assert.equal(state().shared.type,"voice");
+    assert.equal(state().shared.attachment_id,"synthetic-voice");
+    await page.screenshot({path:path.join(shots,"voice-playing-390.png"),fullPage:true});
     await page.goto(origin+"/");
     await page.setViewportSize({width:320,height:844});
     await page.getByRole("button",{name:"Open quick actions",exact:true}).click();

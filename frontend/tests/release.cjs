@@ -133,3 +133,25 @@ test("private downloads survive asynchronous preparation without a browser popup
   await assert.rejects(exports.openPrivateDownload("javascript:alert(1)"),/isn’t valid/);
   await assert.rejects(exports.openPrivateDownload("http://files.example.test/private"),/isn’t valid/);
 });
+
+test("browser push respects account changes and never exposes message content",async()=>{
+  const listeners={}, shown=[], opened=[],notifications=[];const values=new Map();
+  const db={createObjectStore:()=>{},close:()=>{},transaction:()=>{
+    const tx={};tx.objectStore=()=>({get:key=>{const op={result:values.get(key)};queueMicrotask(()=>tx.oncomplete());return op;},put:(value,key)=>{values.set(key,value);const op={result:key};queueMicrotask(()=>tx.oncomplete());return op;}});return tx;
+  }};
+  const indexedDB={open:()=>{const req={result:db};queueMicrotask(()=>req.onsuccess());return req;}};
+  const self={location:{origin:"https://kuku.example"},addEventListener:(name,fn)=>listeners[name]=fn,
+    registration:{getNotifications:async()=>notifications,showNotification:async(title,opts)=>shown.push({title,...opts})},
+    clients:{matchAll:async()=>[],openWindow:async path=>opened.push(path)}};
+  vm.runInNewContext(fs.readFileSync("public/sw.js","utf8"),{self,indexedDB,URL,Promise,Error,queueMicrotask});
+  const uid="11111111-1111-4111-8111-111111111111",chatId="22222222-2222-4222-8222-222222222222",messageId="33333333-3333-4333-8333-333333333333";
+  async function dispatch(name,data){let done;listeners[name]({...data,waitUntil:p=>{done=p;}});await done;}
+  await dispatch("message",{data:{type:"KUKU_ACCOUNT",userId:uid},ports:[{postMessage:()=>{}}]});
+  const payload={userId:uid,chatId,messageId,body:"PRIVATE TEXT"};
+  await dispatch("push",{data:{json:()=>({...payload,userId:"another-account"})}});assert.equal(shown.length,0);
+  await dispatch("push",{data:{json:()=>payload}});assert.equal(shown.length,1);assert.equal(shown[0].body,"You have a new message.");assert.ok(!JSON.stringify(shown).includes("PRIVATE TEXT"));
+  await dispatch("notificationclick",{notification:{close:()=>{},data:{userId:uid,chatId:"https://evil.example"}}});assert.equal(opened.length,0);
+  await dispatch("notificationclick",{notification:{close:()=>{},data:{userId:uid,chatId}}});assert.equal(opened[0],"/chat/"+chatId);
+  await dispatch("message",{data:{type:"KUKU_ACCOUNT",userId:null},ports:[]});
+  await dispatch("push",{data:{json:()=>payload}});assert.equal(shown.length,1,"Logged out devices must ignore queued alerts");
+});

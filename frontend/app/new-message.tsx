@@ -1,3 +1,4 @@
+import VoiceComposer from "../src/VoiceComposer";
 import FileSharingStatus from "../src/FileSharingStatus";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -19,7 +20,6 @@ import {useAuth} from "../src/AuthContext";
 import {queueMessage} from "../src/outbox";
 import {Notice} from "../src/WelcomeUI";
 import * as DocumentPicker from "expo-document-picker";
-import * as Haptics from "expo-haptics";
 import { api, User, uploadAttachment } from "../src/api";
 import { useTheme } from "../src/ThemeContext";
 import { Palette, radius, spacing } from "../src/theme";
@@ -33,25 +33,18 @@ export default function QuickMessage() {
   const { c, f } = useTheme();
   const styles = makeStyles(c, f);
   const inputRef = useRef<TextInput>(null);
-  const recordTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [selected, setSelected] = useState<User | null>(null);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [recording, setRecording] = useState(false);
-  const [recordSec, setRecordSec] = useState(0);
-  const [voiceDur, setVoiceDur] = useState<number | null>(null);
   const [file, setFile] = useState<{ name: string; uri: string; size: number | null } | null>(null);
 
   const voiceMode = mode === "voice";
   const photoMode = mode === "photo";
   const fileMode = mode === "file" || photoMode;
 
-  useEffect(() => () => {
-    if (recordTimer.current) clearInterval(recordTimer.current);
-  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -91,22 +84,6 @@ export default function QuickMessage() {
     finally {setSending(false);}
   }
 
-  function startRecord() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    setRecording(true);
-    setRecordSec(0);
-    recordTimer.current = setInterval(() => setRecordSec((s) => s + 1), 1000);
-  }
-
-  function stopRecord(cancel = false) {
-    if (recordTimer.current) clearInterval(recordTimer.current);
-    const sec = recordSec;
-    setRecording(false);
-    setRecordSec(0);
-    if (cancel || sec < 1) return;
-    setVoiceDur(sec * 1000);
-  }
-
   async function pickFile() {
     setSendError("");
     try {
@@ -127,10 +104,7 @@ export default function QuickMessage() {
   }
 
   async function sendIt() {
-    if (voiceMode) {
-      if (!voiceDur) return;
-      await sendMessage({ type: "voice", duration_ms: voiceDur });
-    } else if (fileMode) {
+    if (fileMode) {
       if (!file) return;
       await sendMessage({ type: "file" });
     } else {
@@ -139,9 +113,7 @@ export default function QuickMessage() {
     }
   }
 
-  const canSend = voiceMode
-    ? !!selected && !!voiceDur
-    : fileMode
+  const canSend = fileMode
       ? !!selected && !!file
       : !!selected && !!text.trim();
 
@@ -225,66 +197,7 @@ export default function QuickMessage() {
             {voiceMode ? "Voice memo" : fileMode ? "File" : "Message"}
           </Text>
           {voiceMode ? (
-            recording ? (
-              <View style={styles.inputRow}>
-                <View style={styles.recordDot} />
-                <Text style={styles.recordText}>
-                  Recording  ·  0:{recordSec.toString().padStart(2, "0")}
-                </Text>
-                <Pressable onPress={() => stopRecord(true)} style={styles.cancelBtn} testID="voice-cancel">
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => stopRecord(false)}
-                  disabled={recordSec < 1}
-                  style={({ pressed }) => [
-                    styles.sendBtn,
-                    recordSec < 1 && { opacity: 0.4 },
-                    pressed && { transform: [{ scale: 0.95 }] },
-                  ]}
-                  testID="voice-stop"
-                >
-                  <Ionicons name="stop" size={18} color={c.textInverse} />
-                </Pressable>
-              </View>
-            ) : voiceDur ? (
-              <View style={styles.inputRow}>
-                <View style={styles.chip}>
-                  <Ionicons name="mic" size={16} color={c.primary} />
-                  <Text style={styles.chipText}>
-                    0:{Math.round(voiceDur / 1000).toString().padStart(2, "0")}
-                  </Text>
-                </View>
-                <Pressable onPress={() => setVoiceDur(null)} style={styles.cancelBtn} testID="voice-remove">
-                  <Ionicons name="close" size={18} color={c.textSecondary} />
-                </Pressable>
-                <Pressable
-                  onPress={sendIt}
-                  disabled={!canSend || sending}
-                  style={({ pressed }) => [
-                    styles.sendBtn,
-                    !canSend && { opacity: 0.4 },
-                    pressed && { transform: [{ scale: 0.95 }] },
-                  ]}
-                  accessibilityRole="button" accessibilityLabel={sending ? "Sending" : "Send"} testID="quick-send"
-                >
-                  {sending ? (
-                    <ActivityIndicator color={c.textInverse} />
-                  ) : (
-                    <Ionicons name="arrow-up" size={20} color={c.textInverse} />
-                  )}
-                </Pressable>
-              </View>
-            ) : (
-              <View style={styles.inputRow}>
-                <Pressable onPress={startRecord} style={styles.attachBtn} testID="voice-record">
-                  <Ionicons name="mic" size={20} color={c.textInverse} />
-                </Pressable>
-                <Text style={styles.hintText}>
-                  {selected ? "Tap the mic to record…" : "Pick someone above, then tap the mic"}
-                </Text>
-              </View>
-            )
+            <VoiceComposer key={selected?.id || "none"} getChatId={async()=>{if(!selected || !user)throw new Error("Choose someone above first.");const chat=await api.postAs<{id:string}>(user.id,"/chats",{other_user_id:selected.id});return chat.id;}} onSent={chatId=>router.replace(`/chat/${chatId}`)}/>
           ) : fileMode ? (
             <View style={styles.inputRow}>
               {file ? (

@@ -84,6 +84,7 @@ function CustomTabBar({ state, navigation }: any) {
       onPress: () => router.push("/new-message?mode=file"),
     },
     {key: "share-photo", label: "Share a photo", icon: "image-outline", onPress: () => router.push("/new-message?mode=photo")},
+    {key: "share-voice", label: "Voice memo", icon: "mic-outline", onPress: () => router.push("/new-message?mode=voice")},
     {key: "invite", label: "Invite someone", icon: "person-add-outline", onPress: () => router.push("/invite")},
     {
       key: "shared-space",

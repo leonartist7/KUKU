@@ -7,83 +7,64 @@ import { useRef, useState, useEffect } from "react";
 import { useTheme } from "./ThemeContext";
 import { Palette, radius, spacing } from "./theme";
 
-export function VoiceMessageBubble({
-  durationMs,
-  outgoing,
-  media,
-}: {
-  durationMs: number;
-  outgoing: boolean;
-  media?: string | null;
+export function VoiceMessageBubble({durationMs, outgoing, media, attachmentId, unavailable = false}: {
+  durationMs: number; outgoing: boolean; media?: string | null; attachmentId?: string; unavailable?: boolean;
 }) {
-  const { c, f } = useTheme();
-  const styles = makeStyles(c, f);
-  const playerRef = useRef<any>(null);
-  const [playing, setPlaying] = useState(false);
-  const seconds = Math.max(1, Math.round(durationMs / 1000));
-  const bars = 22;
-  // deterministic pseudo-waveform
-  const heights = Array.from({ length: bars }, (_, i) => {
-    const h = Math.abs(Math.sin(i * 1.7 + seconds)) * 16 + 6;
-    return h;
-  });
-
-  useEffect(() => () => {
+  const {c, f} = useTheme(); const styles = makeStyles(c, f);
+  const player = useRef<any>(null); const objectUrl = useRef<string | null>(null);
+  const cleanupNative = useRef<(() => void) | null>(null); const alive = useRef(true);
+  const [playing,setPlaying] = useState(false); const [busy,setBusy] = useState(false); const [error,setError] = useState("");
+  const seconds = Math.max(1,Math.round(durationMs/1000));
+  useEffect(()=>()=>{alive.current=false;player.current?.pause?.();player.current?.release?.();if(objectUrl.current)URL.revokeObjectURL(objectUrl.current);cleanupNative.current?.();},[]);
+  async function togglePlay() {
+    if(busy || unavailable)return;
+    setError("");
     try {
-      playerRef.current?.release?.();
-    } catch {}
-  }, []);
-
-  function togglePlay() {
-    if (!media) return;
-    try {
-      if (!playerRef.current) {
-        playerRef.current = createAudioPlayer(media);
-        playerRef.current.onPlaybackStatusUpdate = (s: any) => {
-          if (s?.didJustFinish) setPlaying(false);
-        };
+      if(!player.current) {
+        setBusy(true);let source = media;
+        if(attachmentId) {
+          const download = await api.get<{url:string;media_type:string}>("/attachments/"+attachmentId+"/download");
+          if(!download.url.startsWith("https://"))throw new Error("This memo could not be opened.");
+          if(Platform.OS === "web") {
+            const response = await fetch(download.url,{cache:"no-store"});
+            if(!response.ok)throw new Error("Could not open this memo. Try again.");
+            const bytes = await response.arrayBuffer();
+            if(bytes.byteLength>10*1024*1024)throw new Error("This memo is too large.");
+            source = URL.createObjectURL(new Blob([bytes],{type:download.media_type || "audio/webm"}));objectUrl.current=source;
+          } else {
+            const files = await import("expo-file-system/legacy");
+            const path = files.cacheDirectory+"kuku-voice-"+attachmentId+".m4a";
+            const result = await files.downloadAsync(download.url,path);
+            if(result.status!==200)throw new Error("Could not open this memo. Try again.");
+            source=result.uri;cleanupNative.current=()=>{void files.deleteAsync(path,{idempotent:true});};
+          }
+        }
+        if(!source)throw new Error("This older memo has no recording attached.");
+        if(!alive.current)return;
+        if(Platform.OS === "web") {
+          player.current = new Audio(source);
+          player.current.onended=()=>{if(alive.current)setPlaying(false);};
+        } else {
+          player.current = createAudioPlayer(source);
+          player.current.addListener("playbackStatusUpdate",(status:any)=>{if(status.didJustFinish && alive.current)setPlaying(false);});
+        }
       }
-      if (playing) {
-        playerRef.current.pause();
-        setPlaying(false);
-      } else {
-        playerRef.current.play();
-        setPlaying(true);
+      if(!alive.current)return;
+      if(playing){player.current.pause();setPlaying(false);}
+      else {
+        if(Platform.OS === "web" && player.current.ended)player.current.currentTime=0;
+        if(Platform.OS !== "web" && player.current.currentTime>=seconds-0.1)await player.current.seekTo(0);
+        await player.current.play();setPlaying(true);
       }
-    } catch {}
+    }catch(e){if(alive.current)setError(e instanceof Error && e.name!=="NotAllowedError"?e.message:"Ready — tap Play to listen.");}
+    finally{if(alive.current)setBusy(false);}
   }
-
-  return (
-    <View style={styles.voiceWrap}>
-      <Pressable
-        onPress={togglePlay}
-        disabled={!media}
-        style={({ pressed }) => [
-          styles.playBtn,
-          !media && styles.playBtnDisabled,
-          pressed && { transform: [{ scale: 0.92 }] },
-        ]}
-        testID="voice-play"
-      >
-        <Ionicons name={playing ? "pause" : "play"} size={14} color={c.textInverse} />
-      </Pressable>
-      <View style={styles.waveform}>
-        {heights.map((h, i) => (
-          <View
-            key={i}
-            style={{
-              width: 2.5,
-              height: h,
-              borderRadius: 2,
-              marginHorizontal: 1.5,
-              backgroundColor: i < bars * 0.4 ? c.primary : c.border,
-            }}
-          />
-        ))}
-      </View>
-      <Text style={styles.voiceTime}>0:{seconds.toString().padStart(2, "0")}</Text>
-    </View>
-  );
+  return <View style={{gap:6}}><View style={styles.voiceWrap}>
+    <Pressable accessibilityRole="button" accessibilityLabel={playing?"Pause voice memo":"Play voice memo"} disabled={busy || unavailable || (!media && !attachmentId)} onPress={()=>void togglePlay()} style={[styles.playBtn,{minWidth:44,minHeight:44,opacity:unavailable?0.4:1}]} testID="voice-play">
+      <Ionicons name={busy?"hourglass-outline":playing?"pause":"play"} size={18} color={c.textInverse}/>
+    </Pressable>
+    <View style={{flex:1,paddingHorizontal:12}}><Text style={{color:c.text,fontFamily:f.bodyMedium}}>{unavailable?"Voice memo deleted":busy?"Opening memo…":playing?"Playing…":"Voice memo"}</Text><Text style={{color:c.textSecondary,fontSize:12}}>{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,"0")}</Text></View>
+  </View>{error?<Text accessibilityRole="alert" style={{color:c.error,fontSize:12,maxWidth:240}}>{error}</Text>:null}</View>;
 }
 
 export function FilePreviewCard({

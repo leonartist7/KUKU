@@ -10,6 +10,7 @@ from pymongo import ReturnDocument
 from auth_service import now
 import settings
 from safety import blocked
+from web_push import configured as web_push_configured, send_browser
 
 log = logging.getLogger("kuku.push")
 class DeviceIn(BaseModel):
@@ -58,11 +59,16 @@ async def deliver_one(db):
         chat = await db.chats.find_one({"id": message["chat_id"]})
         recipients = [uid for uid in (chat or {}).get("members", []) if uid != message["sender_id"]]
         devices = []
-        for device in await db.devices.find({"user_id": {"$in": recipients}}).limit(100).to_list(100):
+        native = await db.devices.find({"user_id": {"$in": recipients}}).limit(100).to_list(100) if settings.PUSH_ENABLED else []
+        browser = await db.web_devices.find({"user_id": {"$in": recipients}}).limit(100).to_list(100) if web_push_configured() else []
+        for device in native + browser:
             session = await db.sessions.find_one({"_id": device["session_id"], "revoked": False, "expires_at": {"$gt": now()}})
             user = await db.users.find_one({"id": device["user_id"], "disabled": {"$ne": True}})
-            if session and user and not await blocked(db, message["sender_id"], device["user_id"]):
-                devices.append(device)
+            if session and user and user.get("email_verified") and not await blocked(db, message["sender_id"], device["user_id"]):
+                if "subscription" in device:
+                    await send_browser(db, device, message)
+                else:
+                    devices.append(device)
         if devices:
             notifications = [{"to": d["_id"], "title": "KUKU", "body": "You have a new message.",
                 "sound": "default", "channelId": "messages", "collapseId": message["id"], "tag": message["id"],
@@ -113,7 +119,8 @@ async def run_worker(db):
                 {"$set":{"push_state":"failed"}})
             for _ in range(20):
                 if not await deliver_one(db): break
-            await check_receipts(db)
+            if settings.PUSH_ENABLED:
+                await check_receipts(db)
         except asyncio.CancelledError:
             raise
         except Exception:

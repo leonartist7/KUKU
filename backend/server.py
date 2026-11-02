@@ -21,6 +21,7 @@ from safety import safety_router, allow_direct
 from attachments import attachment_router
 from account_recovery import recovery_router
 from push_service import device_router, run_worker
+from web_push import web_push_router, configured as web_push_configured
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -60,7 +61,7 @@ async def lifespan(app: FastAPI):
     await db.push_receipts.create_index("expires_at", expireAfterSeconds=0)
     if settings.SEED_DEMO_DATA:
         await seed()
-    worker = asyncio.create_task(run_worker(db)) if settings.PUSH_ENABLED else None
+    worker = asyncio.create_task(run_worker(db)) if settings.PUSH_ENABLED or web_push_configured() else None
     try:
         yield
     finally:
@@ -76,6 +77,7 @@ api = APIRouter(prefix="/api")
 api.include_router(auth.router)
 api.include_router(safety_router(lambda: db, auth))
 api.include_router(device_router(lambda: db, auth))
+api.include_router(web_push_router(lambda: db, auth))
 api.include_router(recovery_router(lambda: db, auth))
 api.include_router(attachment_router(lambda: db, auth))
 
@@ -239,15 +241,15 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
             return public_message(previous)
     if payload.type == "text" and not (payload.text or "").strip():
         raise HTTPException(400, "Empty message")
-    if payload.type == "voice":
-        raise HTTPException(400, "Voice recording is not enabled for this release")
     if payload.media:
         raise HTTPException(400, "Upload files through the attachments endpoint")
     attachment = None
-    if payload.type in ("file", "image"):
+    if payload.type in ("file", "image", "voice"):
         attachment = await db.attachments.find_one({"id": payload.attachment_id, "chat_id": chat_id, "owner_id": current["id"]})
         if not attachment:
             raise HTTPException(400, "Upload a file to this conversation first")
+        if payload.type == "voice" and (attachment.get("kind") != "voice" or not payload.duration_ms or not 250 <= payload.duration_ms <= 300000):
+            raise HTTPException(400, "Upload a voice recording of up to five minutes first")
     if payload.type == "space_invite":
         space = await db.spaces.find_one({"id": payload.space_id})
         if not space or not set(chat["members"]).issubset(space["members"]):
@@ -272,7 +274,7 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
         "space_name": payload.space_name,
         "created_at": now_iso(),
     }
-    if settings.PUSH_ENABLED:
+    if settings.PUSH_ENABLED or web_push_configured():
         from auth_service import now
         msg.update({"push_state": "pending", "push_due": now(), "push_attempts": 0})
     try:

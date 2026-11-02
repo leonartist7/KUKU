@@ -1,6 +1,54 @@
 // Only public shell assets are cached. Never cache authenticated APIs or signed file URLs.
-const CACHE = "kuku-static-v5";
+const CACHE = "kuku-static-v6";
 const PRECACHE = ["/", "/manifest.json", "/pwa-192.png", "/pwa-512.png", "/register-sw.js"];
+// Persist only the notification account ID, never credentials or private message content.
+function accountStore(mode, action) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("kuku-notification-account", 1);
+    request.onupgradeneeded = () => request.result.createObjectStore("account");
+    request.onerror = () => reject(new Error("Account storage unavailable"));
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction("account", mode);
+      const operation = action(tx.objectStore("account"));
+      tx.oncomplete = () => {const value = operation.result; db.close(); resolve(value);};
+      tx.onerror = () => {db.close(); reject(new Error("Account storage unavailable"));};
+    };
+  });
+}
+self.addEventListener("message", event => {
+  if(event.data?.type !== "KUKU_ACCOUNT") return;
+  const uid = event.data.userId;
+  if(uid !== null && (typeof uid !== "string" || !/^[a-f0-9-]{36}$/.test(uid)))return;
+  event.waitUntil(accountStore("readwrite", store => store.put(uid, "userId")).then(async () => {
+    for(const notification of await self.registration.getNotifications()) notification.close();
+    event.ports[0]?.postMessage({ok: true});
+  }));
+});
+self.addEventListener("push", event => {
+  event.waitUntil((async () => {
+    let data; try {data = event.data.json();} catch {return;}
+    const uid = await accountStore("readonly", store => store.get("userId"));
+    if(!uid || uid !== data.userId || !/^[a-f0-9-]{36}$/.test(data.chatId) || !/^[a-f0-9-]{36}$/.test(data.messageId))return;
+    await self.registration.showNotification("KUKU", {
+      body: "You have a new message.", icon: "/pwa-192.png", badge: "/pwa-192.png",
+      tag: data.messageId, data: {chatId: data.chatId, userId: uid},
+    });
+  })());
+});
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const data = event.notification.data;
+    const uid = await accountStore("readonly", store => store.get("userId"));
+    if(!uid || uid !== data?.userId || !/^[a-f0-9-]{36}$/.test(data.chatId))return;
+    const path = "/chat/" + data.chatId;
+    for(const client of await self.clients.matchAll({type: "window", includeUncontrolled: true})) {
+      if(new URL(client.url).origin === self.location.origin) {await client.navigate(path); await client.focus(); return;}
+    }
+    await self.clients.openWindow(path);
+  })());
+});
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
 });

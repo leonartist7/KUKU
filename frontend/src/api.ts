@@ -100,9 +100,9 @@ export type Message = {
 };
 export type Chat = { id: string; type: string; other: User | null; last_message: Message | null; updated_at: string };
 
-export async function uploadAttachment(chatId: string, uri: string, name: string, expectedUser?: string) {
+export async function uploadAttachment(chatId: string, uri: string, name: string, expectedUser?: string, kind = "file") {
   if (expectedUser && sessionUserId !== expectedUser) throw new ApiError("Account changed", 401);
-  const url = API_ORIGIN + "/api/chats/" + encodeURIComponent(chatId) + "/attachments?name=" + encodeURIComponent(name);
+  const url = API_ORIGIN + "/api/chats/" + encodeURIComponent(chatId) + "/attachments?name=" + encodeURIComponent(name) + "&kind=" + encodeURIComponent(kind);
   const token = await getToken();
   if (expectedUser && sessionUserId !== expectedUser) throw new ApiError("Account changed", 401);
   if (Platform.OS !== "web") {

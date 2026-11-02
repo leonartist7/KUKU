@@ -291,6 +291,7 @@ class AuthService:
     async def revoke(self, sid):
         await self.db.sessions.update_one({"_id": sid}, {"$set": {"revoked": True}})
         await self.db.devices.delete_many({"session_id": sid})
+        await self.db.web_devices.delete_many({"session_id": sid})
         for socket in list(self.sockets.pop(sid, set())):
             try:
                 await socket.close(code=4401)

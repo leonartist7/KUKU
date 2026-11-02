@@ -1,15 +1,21 @@
 import {useEffect} from "react";
-import {AppState} from "react-native";
+import {AppState,Platform} from "react-native";
 import {useRouter} from "expo-router";
 import {useAuth} from "./AuthContext";
 import {api} from "./api";
 import {PUSH_AVAILABLE,enableNotifications} from "./notifications";
+import {setBrowserPushAccount} from "./browserPush";
 export default function NotificationListener(){
   const {user}=useAuth();const router=useRouter();
+  useEffect(()=>{
+    if(Platform.OS!=="web" || user===undefined)return;
+    void setBrowserPushAccount(user?.email_verified ? user.id : null).catch(()=>{});
+  },[user?.id,user?.email_verified,user===undefined]);
   useEffect(()=>{
     if(!user?.email_verified || !PUSH_AVAILABLE)return;
     let active=true;let dispose=()=>{};
     const setup=async()=>{
+      if(Platform.OS==="web") {await enableNotifications(user.id,false);return;}
       const n=await import("expo-notifications");
       if(!active)return;
       n.setNotificationHandler({handleNotification:async()=>({shouldPlaySound:active,shouldSetBadge:false,shouldShowBanner:active,shouldShowList:active})});

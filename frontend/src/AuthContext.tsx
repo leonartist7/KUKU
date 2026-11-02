@@ -1,4 +1,6 @@
 import { clearOutbox } from "./outbox";
+import {setBrowserPushAccount} from "./browserPush";
+import {Platform} from "react-native";
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { View, Text, Pressable } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -56,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     // Do not claim a server logout succeeded while offline.
     await api.post("/auth/logout");
+    if(Platform.OS==="web")await setBrowserPushAccount(null).catch(()=>{});
     if (user) await clearOutbox(user.id);
     await setToken(null); await remember(null);
   }, [remember, user]);

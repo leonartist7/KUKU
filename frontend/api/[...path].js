@@ -14,7 +14,7 @@ module.exports = async function handler(req, res) {
     if (typeof req.headers[name] === "string") headers[name] = req.headers[name];
   try {
     const upstream = await fetch(new URL(path.pathname + path.search, origin), {
-      method:req.method, headers, redirect:"error", signal:AbortSignal.timeout(20000),
+      method:req.method, headers, redirect:"error", signal:AbortSignal.timeout(90000),
       ...(req.method === "POST" ? {body:JSON.stringify(req.body ?? {})} : {}),
     });
     res.statusCode = upstream.status;

@@ -1,3 +1,4 @@
+import VoiceComposer from "../../src/VoiceComposer";
 import Decor from "../../src/Decor";
 import { getOutbox, queueMessage, retryMessage, removePending, subscribeOutbox, PendingMessage } from "../../src/outbox";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -18,7 +19,6 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import * as Haptics from "expo-haptics";
 import { api, Message, User, uploadAttachment } from "../../src/api";
 import { CALLS_ENABLED } from "../../src/config";
 import { radius, spacing } from "../../src/theme";
@@ -48,13 +48,11 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [recording, setRecording] = useState(false);
-  const [recordSec, setRecordSec] = useState(0);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const loadingRef = useRef(false);
   const activeChat = useRef(id);
   activeChat.current = id;
 
-  const recordTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
 
   const load = useCallback(async () => {
@@ -98,9 +96,6 @@ export default function ChatScreen() {
     }
   }, [messages[messages.length - 1]?.id]);
 
-  useEffect(() => () => {
-    if (recordTimer.current) clearInterval(recordTimer.current);
-  }, []);
 
   async function send(payload: Record<string,unknown>): Promise<boolean> {
     if (!user) return false;
@@ -135,32 +130,13 @@ export default function ChatScreen() {
     const result = await DocumentPicker.getDocumentAsync({ multiple: false, copyToCacheDirectory: true });
     if (!result.canceled && result.assets[0]) await shareFile(result.assets[0].uri, result.assets[0].name);
   }
-  function startRecording() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    setRecording(true);
-    setRecordSec(0);
-    recordTimer.current = setInterval(() => setRecordSec((s) => s + 1), 1000);
-  }
-
-  async function stopRecording(cancel = false) {
-    if (recordTimer.current) clearInterval(recordTimer.current);
-    const sec = recordSec;
-    setRecording(false);
-    setRecordSec(0);
-    if (cancel || sec < 1) return;
-    await send({
-      chat_id: id,
-      type: "voice",
-      duration_ms: sec * 1000,
-    });
-  }
-
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.iconBtn} testID="chat-back">
           <Ionicons name="chevron-back" size={22} color={c.text} />
         </Pressable>
+        <Pressable accessibilityLabel="Message notifications" onPress={()=>router.push("/notifications")} style={styles.iconBtn}><Ionicons name="notifications-outline" size={20} color={c.primary}/></Pressable>
         <View style={styles.headerCenter}>
           <Avatar name={chatInfo?.other?.name} seed={chatInfo?.other?.id} photo={chatInfo?.other?.avatar} size={36} />
           <View>
@@ -258,24 +234,7 @@ export default function ChatScreen() {
           /></View>
         )}
 
-        {recording ? (
-          <View style={styles.recordBar}>
-            <View style={styles.recordDot} />
-            <Text style={styles.recordText}>
-              Recording  ·  0:{recordSec.toString().padStart(2, "0")}
-            </Text>
-            <Pressable onPress={() => stopRecording(true)} style={styles.recordCancel}>
-              <Text style={styles.recordCancelText}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => stopRecording(false)}
-              style={styles.recordSend}
-              testID="voice-send"
-            >
-              <Ionicons name="send" size={16} color={c.textInverse} />
-            </Pressable>
-          </View>
-        ) : (
+        {voiceOpen ? <VoiceComposer getChatId={async()=>id} onSent={()=>setVoiceOpen(false)} onClose={()=>setVoiceOpen(false)}/> : (
           <View style={styles.composer}>
             <Pressable onPress={attachFile} style={styles.attachBtn} testID="attach-file">
               <Ionicons name="add" size={22} color={c.text} />
@@ -303,7 +262,7 @@ export default function ChatScreen() {
               </Pressable>
             ) : (
               <Pressable
-                onPress={() => setError("Voice messages are coming in a later release")}
+                onPress={() => setVoiceOpen(true)}
                 style={styles.sendBtn}
                 testID="mic-button"
               >
@@ -334,7 +293,7 @@ function MessageRow({ msg, mine }: { msg: Message; mine: boolean }) {
           <Text style={styles.msgText}>{msg.text}</Text>
         )}
         {msg.type === "voice" && (
-          <VoiceMessageBubble durationMs={msg.duration_ms || 0} outgoing={mine} media={msg.media} />
+          <VoiceMessageBubble durationMs={msg.duration_ms || 0} outgoing={mine} media={msg.media} attachmentId={msg.attachment_id} unavailable={msg.attachment_deleted} />
         )}
         {msg.type === "image" && msg.media ? (
           <Image
