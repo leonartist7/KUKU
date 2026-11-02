@@ -1,4 +1,5 @@
 import NotificationListener from "../src/NotificationListener";
+import MessageSoundListener from "../src/MessageSoundListener";
 import OutboxRunner from "../src/OutboxRunner";
 import React from "react";
 import { Stack } from "expo-router";
@@ -43,6 +44,7 @@ export default function RootLayout() {
         <AuthProvider>
           <OutboxRunner />
           <NotificationListener />
+          <MessageSoundListener />
           <ThemedStack />
         </AuthProvider>
       </ThemeProvider>

@@ -6,6 +6,7 @@ import {useRouter} from "expo-router";
 import {useAuth} from "../src/AuthContext";
 import {useTheme} from "../src/ThemeContext";
 import {PUSH_AVAILABLE,enableNotifications,disableNotifications} from "../src/notifications";
+import NotificationSoundSettings from "../src/NotificationSoundSettings";
 export default function NotificationsScreen(){
   const {c,f}=useTheme();const {user}=useAuth();const router=useRouter();
   const [message,setMessage]=useState("");const [busy,setBusy]=useState(false);const [enabled,setEnabled]=useState(false);
@@ -33,6 +34,7 @@ export default function NotificationsScreen(){
       {enabled?<Pressable accessibilityRole="button" disabled={busy} onPress={()=>void change(false)} style={{minHeight:44,alignItems:"center",justifyContent:"center"}}><Text style={{color:c.textSecondary}}>Turn off on this device</Text></Pressable>:null}</>:<Text style={{color:c.textSecondary,lineHeight:22}}>On Android, open this KUKU link in Chrome. An embedded browser may not support notifications.</Text>}
     </View>
     <Text accessibilityRole="alert" style={{fontFamily:f.body,color:c.text,lineHeight:22}}>{message}</Text>
+    <NotificationSoundSettings/>
     {Platform.OS==="web"?<Text style={{fontFamily:f.body,color:c.textSecondary,lineHeight:23}}>On Android: tap Enable, then choose Allow in Chrome. You can also use Chrome’s ⋮ menu → Add to Home screen for an app shortcut. If alerts stay silent, check Chrome’s site notifications and Android’s notification settings.</Text>:null}
   </ScrollView></SafeAreaView>;
 }

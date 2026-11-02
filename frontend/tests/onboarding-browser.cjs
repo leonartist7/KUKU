@@ -129,6 +129,18 @@ const server=http.createServer((req,res)=>{
     await page.getByRole("radio",{name:"Always dark",exact:true}).click();
     await page.getByText("Active now: Forest.",{exact:false}).waitFor();
     await page.clock.resume();
+    await page.goto(origin+"/notifications");
+    await page.getByTestId("notification-sound-settings").waitFor();
+    await page.getByRole("radio",{name:"Raindrop message sound",exact:true}).click();
+    await page.getByRole("radio",{name:"Low message volume",exact:true}).click();
+    await page.getByRole("button",{name:"Preview Soft bell",exact:true}).click();
+    await page.getByRole("radio",{name:"Silent message sound",exact:true}).click();
+    await page.getByRole("alert").filter({hasText:"Silent mode saved"}).waitFor();
+    await page.reload();
+    await page.getByRole("radio",{name:"Silent message sound",exact:true}).waitFor();
+    assert.equal(await page.getByRole("radio",{name:"Silent message sound",exact:true}).getAttribute("aria-checked"),"true");
+    assert.equal(await page.getByRole("radio",{name:"Low message volume",exact:true}).getAttribute("aria-checked"),"true");
+    await page.screenshot({path:path.join(shots,"notification-sounds-390.png"),fullPage:true});
     await page.goto(origin+"/invite");
     await page.getByRole("button",{name:"Create invitation link",exact:true}).click();
     await page.getByRole("button",{name:"Copy invitation link",exact:true}).click();

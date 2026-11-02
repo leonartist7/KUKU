@@ -149,9 +149,43 @@ test("browser push respects account changes and never exposes message content",a
   await dispatch("message",{data:{type:"KUKU_ACCOUNT",userId:uid},ports:[{postMessage:()=>{}}]});
   const payload={userId:uid,chatId,messageId,body:"PRIVATE TEXT"};
   await dispatch("push",{data:{json:()=>({...payload,userId:"another-account"})}});assert.equal(shown.length,0);
-  await dispatch("push",{data:{json:()=>payload}});assert.equal(shown.length,1);assert.equal(shown[0].body,"You have a new message.");assert.ok(!JSON.stringify(shown).includes("PRIVATE TEXT"));
+  self.clients.matchAll=async()=>[{visibilityState:"visible"}];
+  await dispatch("push",{data:{json:()=>payload}});assert.equal(shown[0].silent,true,"Visible apps use their selected tone without a second system sound");self.clients.matchAll=async()=>[];assert.equal(shown.length,1);assert.equal(shown[0].body,"You have a new message.");assert.ok(!JSON.stringify(shown).includes("PRIVATE TEXT"));
   await dispatch("notificationclick",{notification:{close:()=>{},data:{userId:uid,chatId:"https://evil.example"}}});assert.equal(opened.length,0);
   await dispatch("notificationclick",{notification:{close:()=>{},data:{userId:uid,chatId}}});assert.equal(opened[0],"/chat/"+chatId);
   await dispatch("message",{data:{type:"KUKU_ACCOUNT",userId:null},ports:[]});
   await dispatch("push",{data:{json:()=>payload}});assert.equal(shown.length,1,"Logged out devices must ignore queued alerts");
+});
+
+test("message sound settings isolate accounts, survive reload and validate saved values",async()=>{
+  const storage=new Map();const ts=require("typescript");
+  function harness(){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync("src/messageSounds.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports,Map,Set,Promise,JSON,Number,Array,Error,require:()=>({default:{getItem:async key=>storage.get(key)||null,setItem:async(key,value)=>storage.set(key,value)}})});return exports;}
+  let sounds=harness();
+  await sounds.saveSound("alice",{sound:"drop",volume:0.25});
+  await sounds.saveSound("bob",{sound:"silent",volume:0.85});
+  sounds=harness();assert.equal((await sounds.readSound("alice")).sound,"drop");assert.equal((await sounds.readSound("bob")).sound,"silent");
+  assert.equal(sounds.normalizeSound({sound:"unexpected",volume:99}).sound,"bell");assert.equal(sounds.normalizeSound({volume:99}).volume,1);assert.equal(sounds.normalizeSound({volume:-2}).volume,0);
+  assert.equal(sounds.normalizeSound({volume:NaN}).volume,0.5);
+  await sounds.playMessageSound({sound:"silent",volume:1},true);
+  await sounds.playMessageSound({sound:"bell",volume:0},true);
+});
+
+test("incoming sound tracking ignores history, own sends and duplicate polls",()=>{
+  const ts=require("typescript"),exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync("src/messageSounds.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports,Map,Set,Promise,JSON,Number,Array,require:()=>({})});
+  const track=exports.incomingSoundTracker("alice");
+  assert.equal(track([{id:"old",sender_id:"bob"}]),undefined);
+  assert.equal(track([{id:"mine",sender_id:"alice"}]),undefined);
+  assert.equal(track([{id:"new",sender_id:"bob"}]),"new");
+  assert.equal(track([{id:"new",sender_id:"bob"}]),undefined);
+  const other=exports.incomingSoundTracker("bob");assert.equal(other([]),undefined);assert.equal(other([{id:"own",sender_id:"bob"}]),undefined);
+});
+
+test("sound previews create distinct tones at bounded volume and silent creates no audio",async()=>{
+  const ts=require("typescript"),exports={},frequencies=[],levels=[];let contexts=0;
+  class Context{constructor(){contexts++;this.state="running";this.currentTime=0;this.destination={};}createOscillator(){return {frequency:{setValueAtTime:value=>frequencies.push(value),exponentialRampToValueAtTime:()=>{}},connect:()=>{},disconnect:()=>{},start:()=>{},stop:()=>{}};}createGain(){return {gain:{setValueAtTime:()=>{},exponentialRampToValueAtTime:value=>levels.push(value)},connect:()=>{},disconnect:()=>{}};}}
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync("src/messageSounds.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports,Map,Set,Promise,JSON,Number,Array,Error,window:{AudioContext:Context},require:()=>({})});
+  await exports.playMessageSound({sound:"silent",volume:1},true);assert.equal(contexts,0);
+  for(const sound of ["bell","wood","chime","drop"])await exports.playMessageSound({sound,volume:0.5},true);
+  assert.equal(contexts,1);assert.deepEqual(frequencies,[523.25,1046.5,245,390,659.25,987.77,1100]);assert.ok(levels.every(value=>value<=0.11));
+  const before=frequencies.length;await exports.playMessageSound({sound:"silent",volume:1},true);assert.equal(frequencies.length,before);
 });

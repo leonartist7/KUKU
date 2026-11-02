@@ -1,5 +1,5 @@
 // Only public shell assets are cached. Never cache authenticated APIs or signed file URLs.
-const CACHE = "kuku-static-v6";
+const CACHE = "kuku-static-v7";
 const PRECACHE = ["/", "/manifest.json", "/pwa-192.png", "/pwa-512.png", "/register-sw.js"];
 // Persist only the notification account ID, never credentials or private message content.
 function accountStore(mode, action) {
@@ -30,9 +30,11 @@ self.addEventListener("push", event => {
     let data; try {data = event.data.json();} catch {return;}
     const uid = await accountStore("readonly", store => store.get("userId"));
     if(!uid || uid !== data.userId || !/^[a-f0-9-]{36}$/.test(data.chatId) || !/^[a-f0-9-]{36}$/.test(data.messageId))return;
+    const windows = await self.clients.matchAll({type: "window", includeUncontrolled: true});
+    const foreground = windows.some(client => client.visibilityState === "visible");
     await self.registration.showNotification("KUKU", {
       body: "You have a new message.", icon: "/pwa-192.png", badge: "/pwa-192.png",
-      tag: data.messageId, data: {chatId: data.chatId, userId: uid},
+      tag: data.messageId, silent: foreground, data: {chatId: data.chatId, userId: uid},
     });
   })());
 });
