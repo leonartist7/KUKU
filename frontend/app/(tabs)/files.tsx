@@ -1,5 +1,8 @@
 import {openPrivateDownload} from "../../src/downloads";
 import FileSharingStatus from "../../src/FileSharingStatus";
+import PrivateImageCard from "../../src/PrivateImageCard";
+import {isImageFilename} from "../../src/imagePreview";
+import {useAuth} from "../../src/AuthContext";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
@@ -21,6 +24,7 @@ import { useTheme } from "../../src/ThemeContext";
 import { spacesApi, SpaceSession } from "../../src/spaces";
 
 type FileMsg = Message & { sender: User | null };
+const fileCategory = (file: FileMsg) => file.type === "image" || (file.type === "file" && isImageFilename(file.file_name)) ? "image" : file.type;
 
 const SECTIONS = ["Recent", "By person", "Categories", "Sessions"] as const;
 type Section = (typeof SECTIONS)[number];
@@ -89,7 +93,7 @@ export default function FilesScreen() {
   }, [files]);
 
   const filtered = useMemo(() => {
-    if (section === "Categories" && activeCat) return files.filter((f) => f.type === activeCat);
+    if (section === "Categories" && activeCat) return files.filter((f) => fileCategory(f) === activeCat);
     return files;
   }, [files, section, activeCat]);
 
@@ -135,7 +139,7 @@ export default function FilesScreen() {
       ) : section === "Categories" && !activeCat ? (
         <ScrollView contentContainerStyle={styles.catGrid}>
           {CATEGORIES.map((cat) => {
-            const count = files.filter((f) => f.type === cat.key).length;
+            const count = files.filter((f) => fileCategory(f) === cat.key).length;
             return (
               <Pressable
                 key={cat.key}
@@ -220,11 +224,13 @@ export default function FilesScreen() {
 
 function FileRow({ f: fileItem, showSender = false }: { f: FileMsg; showSender?: boolean }) {
   const { c, f: font } = useTheme();
+  const {user} = useAuth();
   const styles = React.useMemo(() => makeStyles(c, font), [c, font]);
   const icon =
     fileItem.type === "image" ? "image-outline" : fileItem.type === "voice" ? "musical-notes-outline" : "document-text-outline";
   const title =
     fileItem.file_name || (fileItem.type === "voice" ? "Voice message" : fileItem.type === "image" ? "Image" : "File");
+  if (fileCategory(fileItem) === "image" && fileItem.attachment_id) return <PrivateImageCard compact attachmentId={fileItem.attachment_id} fileName={title} unavailable={fileItem.attachment_deleted} canDelete={fileItem.sender_id === user?.id} subtitle={[showSender ? fileItem.sender?.name : null,fmtBytes(fileItem.file_size),dateLabel(fileItem.created_at)].filter(Boolean).join(" · ")}/>;
   return (
     <Pressable disabled={!fileItem.attachment_id} accessibilityLabel={"Download " + title} onPress={async () => {
       try { const result = await api.get<{url:string}>("/attachments/" + fileItem.attachment_id + "/download"); await openPrivateDownload(result.url); }

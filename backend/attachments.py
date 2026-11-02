@@ -3,6 +3,8 @@ import os
 import uuid
 import tempfile
 import secrets
+import asyncio
+from typing import Literal
 from datetime import timedelta
 from contextlib import AsyncExitStack
 from urllib.parse import quote
@@ -15,12 +17,23 @@ from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 from private_blob import PrivateBlobStore
 from safety import allow_direct
+from image_previews import cached_preview, remember_preview, discard_previews, render_preview
 
 MAX_BYTES = 25 * 1024 * 1024
 USER_QUOTA_BYTES = 500 * 1024 * 1024
 TOTAL_QUOTA_BYTES = 750 * 1024 * 1024
 
 class ObjectStore:
+    def read_preview_source(self, key):
+        response = self.client().get_object(Bucket=os.environ["R2_BUCKET"], Key=key)
+        body = response["Body"]
+        try:
+            raw = body.read(MAX_BYTES + 1)
+            if len(raw) > MAX_BYTES:
+                raise HTTPException(413, "This file is too large to preview")
+            return raw
+        finally:
+            body.close()
     def ready(self):
         return all(os.getenv(k) for k in ["R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"])
     def require_config(self):
@@ -60,6 +73,7 @@ def storage_for(name):
 
 def attachment_router(db_getter, auth):
     router = APIRouter()
+    preview_gate = asyncio.Semaphore(1)
     async def member(chat_id, user):
         if not await db_getter().chats.find_one({"id": chat_id, "members": user["id"]}):
             raise HTTPException(404, "Chat not found")
@@ -161,6 +175,39 @@ def attachment_router(db_getter, auth):
             raise
         return {"id": doc["id"], "file_name": name, "file_size": size}
 
+    @router.get("/attachments/{attachment_id}/preview")
+    async def preview(attachment_id: str, size: Literal["thumb", "full"] = "thumb", user=Depends(auth.verified)):
+        await visible_file(attachment_id, user)
+        await auth.limit("preview:" + user["id"], 300, 3600)
+        async with preview_gate:
+            doc = await visible_file(attachment_id, user)
+            key = (attachment_id, size)
+            result = cached_preview(key)
+            if result is None:
+                selected = storage_for(doc.get("storage_provider", "r2"))
+                try:
+                    if doc.get("storage_provider", "r2") == "vercel":
+                        data = bytearray()
+                        async with selected.stream(doc["key"]) as chunks:
+                            async for chunk in chunks:
+                                data.extend(chunk)
+                                if len(data) > MAX_BYTES:
+                                    raise HTTPException(413, "This file is too large to preview")
+                        raw = bytes(data)
+                    else:
+                        raw = await run_in_threadpool(selected.read_preview_source, doc["key"])
+                except HTTPException:
+                    raise
+                except Exception:
+                    raise HTTPException(503, "The image preview could not be opened. Try again shortly.") from None
+                result = await run_in_threadpool(render_preview, raw, size)
+                remember_preview(key, result)
+            current = await auth.session_user(user["_session_id"], user["id"])
+            if not current.get("email_verified"):
+                raise HTTPException(403, "Verify your email before viewing images")
+            await visible_file(attachment_id, user)
+            return result
+
     @router.get("/attachments/{attachment_id}/download")
     async def download(attachment_id: str, user=Depends(auth.verified)):
         doc = await visible_file(attachment_id, user)
@@ -205,6 +252,7 @@ def attachment_router(db_getter, auth):
             raise HTTPException(404, "File not found")
         await run_in_threadpool(storage_for(doc.get("storage_provider", "r2")).delete, doc["key"])
         removed = await db_getter().attachments.delete_one({"id": attachment_id, "owner_id": user["id"]})
+        discard_previews(attachment_id)
         if removed.deleted_count:
             if doc.get("quota_version") == 1:
                 await release_quota(user["id"], doc["size"])

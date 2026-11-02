@@ -1,5 +1,6 @@
 import VoiceComposer from "../src/VoiceComposer";
 import FileSharingStatus from "../src/FileSharingStatus";
+import {isImageFilename} from "../src/imagePreview";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
@@ -9,6 +10,7 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
@@ -199,6 +201,8 @@ export default function QuickMessage() {
           {voiceMode ? (
             <VoiceComposer key={selected?.id || "none"} getChatId={async()=>{if(!selected || !user)throw new Error("Choose someone above first.");const chat=await api.postAs<{id:string}>(user.id,"/chats",{other_user_id:selected.id});return chat.id;}} onSent={chatId=>router.replace(`/chat/${chatId}`)}/>
           ) : fileMode ? (
+            <>
+            {file && (photoMode || isImageFilename(file.name)) ? <View style={{backgroundColor:c.surface,borderRadius:18,overflow:"hidden",marginBottom:12,padding:8}}><Image source={{uri:file.uri}} accessibilityLabel="Selected image preview" testID="selected-image-preview" resizeMode="contain" style={{width:"100%",height:220}}/><Text style={{fontFamily:f.body,color:c.textSecondary,fontSize:12,textAlign:"center",padding:8}}>Ready to share with {selected?.name || "someone you choose"}</Text></View> : null}
             <View style={styles.inputRow}>
               {file ? (
                 <>
@@ -235,6 +239,7 @@ export default function QuickMessage() {
                 )}
               </Pressable>
             </View>
+            </>
           ) : (
             <View style={styles.inputRow}>
               <TextInput

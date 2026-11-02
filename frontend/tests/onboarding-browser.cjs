@@ -18,7 +18,8 @@ const server=http.createServer((req,res)=>{
   const origin="http://127.0.0.1:4173",errors=[];
   async function scenario(width,height){
     const context=await browser.newContext({viewport:{width,height},reducedMotion:"reduce",timezoneId:"UTC",permissions:["clipboard-read","clipboard-write","microphone"]});
-    const page=await context.newPage();let voiceBytes=null;let user=null,sends=0,profiles=0,uploadedBytes=null,shared=null,inviteEmail="unset",photoSaves=0,uploadAttempts=0,statusChecks=0;
+    const page=await context.newPage();let voiceBytes=null;let user=null,sends=0,profiles=0,uploadedBytes=null,shared=null,inviteEmail="unset",photoSaves=0,uploadAttempts=0,statusChecks=0,fullPreviews=0;
+    const message=()=>({...shared,id:"synthetic-message",file_name:shared?.attachment_id==="synthetic-photo"?"family-photo.jpg":"family.txt",file_size:18,sender_id:"qa-user",created_at:new Date().toISOString()});
     page.on("pageerror",e=>errors.push(String(e)));
     await page.clock.setFixedTime(new Date("2026-10-29T12:00:00Z"));
     await page.route("**/api/**",async route=>{
@@ -36,10 +37,14 @@ const server=http.createServer((req,res)=>{
       if(endpoint==="/api/users")return respond(200,[{id:"sister",name:"Sam",email_verified:true}]);
       if(endpoint==="/api/chats"&&req.method()==="POST")return respond(200,{id:"synthetic-chat"});
       if(endpoint==="/api/chats/synthetic-chat/attachments" && new URL(req.url()).searchParams.get("kind")==="voice"){voiceBytes=req.postDataBuffer();return respond(200,{id:"synthetic-voice",file_name:"voice-memo.webm",file_size:voiceBytes.length});}
+      if(endpoint==="/api/chats/synthetic-chat/attachments" && new URL(req.url()).searchParams.get("name")==="family-photo.jpg" && req.method()==="POST"){uploadedBytes=req.postDataBuffer();return respond(200,{id:"synthetic-photo",file_name:"family-photo.jpg",file_size:uploadedBytes.length});}
+      if(endpoint==="/api/attachments/synthetic-photo/preview"){if(new URL(req.url()).searchParams.get("size")==="full" && ++fullPreviews===1)return respond(503,{detail:"Please retry"});return respond(200,{image:"data:image/jpeg;base64,"+TEST_PHOTO,width:16,height:16});}
+      if(endpoint==="/api/attachments/synthetic-photo/download")return respond(200,{url:"https://downloads.example.test/family-photo.jpg"});
+      if(endpoint==="/api/files")return respond(200,shared?.attachment_id==="synthetic-photo"?[{...message(),sender:user}]:[]);
       if(endpoint==="/api/attachments/synthetic-voice/download")return respond(200,{url:"https://voice-downloads.example.test/memo.webm",media_type:"audio/webm"});
       if(endpoint==="/api/chats/synthetic-chat/attachments"){if(req.method()==="OPTIONS")return respond(200,{});uploadedBytes=req.postDataBuffer();uploadAttempts++;if(uploadAttempts===1)return respond(503,{detail:"Your file couldn’t be saved. Please try again."});return respond(200,{id:"synthetic-attachment",file_name:"family.txt",file_size:uploadedBytes.length});}
       if(endpoint==="/api/attachments/synthetic-attachment/download")return respond(200,{url:"https://downloads.example.test/family.txt"});
-      if(endpoint==="/api/chats/synthetic-chat/messages"&&req.method()==="GET")return respond(200,shared?[{...shared,id:"synthetic-message",file_name:"family.txt",file_size:18,sender_id:"qa-user",created_at:new Date().toISOString()}]:[]);
+      if(endpoint==="/api/chats/synthetic-chat/messages"&&req.method()==="GET")return respond(200,shared?[message()]:[]);
       if(endpoint==="/api/chats/synthetic-chat/messages"&&req.method()==="POST"){shared=body;return respond(200,{...body,id:"synthetic-message",sender_id:"qa-user",created_at:new Date().toISOString()});}
       if(endpoint==="/api/chats/synthetic-chat")return respond(200,{id:"synthetic-chat",other:{id:"sister",name:"Sam"}});
       if(endpoint==="/api/auth/logout"){user=null;return respond(200,{ok:true});}
@@ -196,6 +201,39 @@ const server=http.createServer((req,res)=>{
     assert.equal(state().shared.type,"voice");
     assert.equal(state().shared.attachment_id,"synthetic-voice");
     await page.screenshot({path:path.join(shots,"voice-playing-390.png"),fullPage:true});
+    await page.goto(origin+"/new-message?mode=file");
+    await page.getByTestId("contact-sister").click();
+    const imagePicker=page.waitForEvent("filechooser");
+    await page.getByRole("button",{name:"Choose a file",exact:true}).click();
+    await (await imagePicker).setFiles({name:"family-photo.jpg",mimeType:"image/jpeg",buffer:Buffer.from(TEST_PHOTO,"base64")});
+    await page.getByTestId("selected-image-preview").waitFor();
+    await page.screenshot({path:path.join(shots,"photo-before-sending-390.png"),fullPage:true});
+    await page.getByTestId("quick-send").click();
+    await page.waitForURL("**/chat/synthetic-chat");
+    await page.reload();
+    await page.getByTestId("image-thumbnail-synthetic-photo").waitFor();
+    assert.deepEqual(state().uploadedBytes,Buffer.from(TEST_PHOTO,"base64"));
+    await page.waitForFunction(()=>Array.from(document.querySelectorAll('[data-testid="image-thumbnail-synthetic-photo"] img')).some(img=>img.naturalWidth>0));
+    await page.screenshot({path:path.join(shots,"photo-chat-390.png"),fullPage:true});
+    await page.getByRole("button",{name:"View family-photo.jpg",exact:true}).click();
+    await page.getByRole("button",{name:"Retry image preview",exact:true}).click();
+    await page.getByTestId("image-enlarged").waitFor();
+    await page.waitForFunction(()=>Array.from(document.querySelectorAll('[data-testid="image-enlarged"] img')).some(img=>img.naturalWidth>0));
+    await page.screenshot({path:path.join(shots,"photo-enlarged-390.png"),fullPage:true});
+    await page.route("https://downloads.example.test/family-photo.jpg",route=>route.fulfill({status:200,contentType:"application/octet-stream",headers:{"content-disposition":"attachment; filename=family-photo.jpg","cache-control":"no-store"},body:Buffer.from(TEST_PHOTO,"base64")}));
+    const photoDownload=page.waitForEvent("download");
+    await page.getByRole("button",{name:"Download original family-photo.jpg",exact:true}).click();
+    const original=await photoDownload,photoChunks=[];
+    for await(const chunk of await original.createReadStream())photoChunks.push(chunk);
+    assert.deepEqual(Buffer.concat(photoChunks),Buffer.from(TEST_PHOTO,"base64"));
+    await page.getByRole("button",{name:"Close image preview",exact:true}).click();
+    await page.goto(origin+"/files");
+    await page.getByTestId("image-thumbnail-synthetic-photo").waitFor();
+    await page.getByTestId("files-segment-Categories").click();
+    await page.getByTestId("category-image").click();
+    await page.getByRole("button",{name:"View family-photo.jpg",exact:true}).waitFor();
+    assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),390);
+    await page.screenshot({path:path.join(shots,"photo-files-390.png"),fullPage:true});
     await page.goto(origin+"/");
     await page.setViewportSize({width:320,height:844});
     await page.getByRole("button",{name:"Open quick actions",exact:true}).click();

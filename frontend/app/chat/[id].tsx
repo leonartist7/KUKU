@@ -26,6 +26,8 @@ import { useTheme } from "../../src/ThemeContext";
 import Avatar from "../../src/Avatar";
 import { useAuth } from "../../src/AuthContext";
 import { VoiceMessageBubble, FilePreviewCard } from "../../src/MessageParts";
+import PrivateImageCard from "../../src/PrivateImageCard";
+import {isImageFilename} from "../../src/imagePreview";
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -302,10 +304,10 @@ function MessageRow({ msg, mine }: { msg: Message; mine: boolean }) {
             resizeMode="cover"
           />
         ) : msg.type === "image" ? (
-          <FilePreviewCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="image" />
+          <PrivateImageCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} />
         ) : null}
         {msg.type === "file" && (
-          <FilePreviewCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="file" />
+          isImageFilename(msg.file_name) ? <PrivateImageCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} /> : <FilePreviewCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="file" />
         )}
         {msg.type === "space_invite" && (
           <Pressable

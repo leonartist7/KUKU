@@ -2,6 +2,15 @@ const {test} = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
+test("image previews accept only bounded JPEG data and recognize legacy photo files",()=>{
+  const ts=require("typescript"),exports={};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync("src/imagePreview.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports});
+  for(const name of ["family.jpg","portrait.JPEG","photo.PNG","animated.gif","camera.HEIC"])assert.equal(exports.isImageFilename(name),true);
+  for(const name of [null,"notes.txt","fake.jpg.exe","image.svg"])assert.equal(exports.isImageFilename(name),false);
+  const good={image:"data:image/jpeg;base64,YWJj",width:512,height:200};
+  assert.equal(exports.validImagePreview(good),true);
+  for(const bad of [null,{...good,width:0},{...good,height:1601},{...good,width:1.5},...['https://example.com/private.jpg','javascript:alert(1)','data:image/svg+xml;base64,YWJj',good.image+'<script>','data:image/jpeg;base64,'+'A'.repeat(660000)].map(image=>({...good,image}))])assert.equal(exports.validImagePreview(bad),false);
+});
 test("service worker never intercepts private or cross-origin requests", () => {
   const listeners = {};
   vm.runInNewContext(fs.readFileSync("public/sw.js","utf8"), {
