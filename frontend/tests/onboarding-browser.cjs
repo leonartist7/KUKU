@@ -36,7 +36,7 @@ const server=http.createServer((req,res)=>{
       if(endpoint==="/api/users")return respond(200,[{id:"sister",name:"Sam",email_verified:true}]);
       if(endpoint==="/api/chats"&&req.method()==="POST")return respond(200,{id:"synthetic-chat"});
       if(endpoint==="/api/chats/synthetic-chat/attachments" && new URL(req.url()).searchParams.get("kind")==="voice"){voiceBytes=req.postDataBuffer();return respond(200,{id:"synthetic-voice",file_name:"voice-memo.webm",file_size:voiceBytes.length});}
-      if(endpoint==="/api/attachments/synthetic-voice/download")return respond(200,{url:origin+"/voice-bytes",media_type:"audio/webm"});
+      if(endpoint==="/api/attachments/synthetic-voice/download")return respond(200,{url:"https://voice-downloads.example.test/memo.webm",media_type:"audio/webm"});
       if(endpoint==="/api/chats/synthetic-chat/attachments"){if(req.method()==="OPTIONS")return respond(200,{});uploadedBytes=req.postDataBuffer();uploadAttempts++;if(uploadAttempts===1)return respond(503,{detail:"Your file couldn’t be saved. Please try again."});return respond(200,{id:"synthetic-attachment",file_name:"family.txt",file_size:uploadedBytes.length});}
       if(endpoint==="/api/attachments/synthetic-attachment/download")return respond(200,{url:"https://downloads.example.test/family.txt"});
       if(endpoint==="/api/chats/synthetic-chat/messages"&&req.method()==="GET")return respond(200,shared?[{...shared,id:"synthetic-message",file_name:"family.txt",file_size:18,sender_id:"qa-user",created_at:new Date().toISOString()}]:[]);
@@ -48,7 +48,7 @@ const server=http.createServer((req,res)=>{
     await page.goto(origin+(width===320?"/":"/login"));await page.getByTestId("auth-switch").waitFor();
     assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),width,"No horizontal overflow at "+width);
     await page.screenshot({path:path.join(shots,"login-"+width+".png"),fullPage:true});
-    await page.route(origin+"/voice-bytes",route=>route.fulfill({status:200,contentType:"audio/webm",headers:{"cache-control":"no-store"},body:voiceBytes}));
+    await page.route("https://voice-downloads.example.test/memo.webm",route=>route.fulfill({status:200,contentType:"audio/webm",headers:{"cache-control":"no-store","access-control-allow-origin":origin},body:voiceBytes}));
     return {page,context,state:()=>({user,sends,profiles,uploadedBytes,shared,inviteEmail,photoSaves,voiceBytes})};
   }
   try {
