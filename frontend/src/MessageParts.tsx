@@ -15,7 +15,7 @@ export function VoiceMessageBubble({durationMs, outgoing, media, attachmentId, u
   const cleanupNative = useRef<(() => void) | null>(null); const alive = useRef(true);
   const [playing,setPlaying] = useState(false); const [busy,setBusy] = useState(false); const [error,setError] = useState("");
   const seconds = Math.max(1,Math.round(durationMs/1000));
-  useEffect(()=>()=>{alive.current=false;player.current?.pause?.();player.current?.release?.();if(objectUrl.current)URL.revokeObjectURL(objectUrl.current);cleanupNative.current?.();},[]);
+  useEffect(()=>{alive.current=true;return ()=>{alive.current=false;player.current?.pause?.();player.current?.release?.();if(objectUrl.current)URL.revokeObjectURL(objectUrl.current);cleanupNative.current?.();};},[]);
   async function togglePlay() {
     if(busy || unavailable)return;
     setError("");

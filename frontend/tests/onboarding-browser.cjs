@@ -176,8 +176,10 @@ const server=http.createServer((req,res)=>{
     await page.getByTestId("voice-send").click();
     await page.waitForFunction(()=>!document.querySelector('[data-testid="voice-composer"]'));
     await page.getByTestId("voice-play").waitFor();
+    await page.evaluate(()=>{window.qaAudio=[];const Original=window.Audio;window.Audio=function(...args){const audio=new Original(...args);window.qaAudio.push(audio);return audio;};});
     await page.getByTestId("voice-play").click();
-    await page.getByText("Playing…",{exact:true}).waitFor();
+    try {await page.waitForFunction(()=>window.qaAudio.some(audio=>audio.currentTime>0 && !audio.error),null,{timeout:10000});}
+    catch(error){console.log("Voice playback diagnostics:",await page.evaluate(()=>({audio:window.qaAudio.map(a=>({readyState:a.readyState,currentTime:a.currentTime,paused:a.paused,error:a.error?.message})),screen:document.body.innerText})));await page.screenshot({path:path.join(shots,"voice-failure-390.png"),fullPage:true});throw error;}
     assert.ok(state().voiceBytes.length>50,"Recorder must upload actual encoded audio bytes");
     assert.equal(state().shared.type,"voice");
     assert.equal(state().shared.attachment_id,"synthetic-voice");
