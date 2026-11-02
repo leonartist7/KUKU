@@ -138,8 +138,8 @@ const server=http.createServer((req,res)=>{
     await page.getByRole("alert").filter({hasText:"Silent mode saved"}).waitFor();
     await page.reload();
     await page.getByRole("radio",{name:"Silent message sound",exact:true}).waitFor();
-    assert.equal(await page.getByRole("radio",{name:"Silent message sound",exact:true}).getAttribute("aria-checked"),"true");
-    assert.equal(await page.getByRole("radio",{name:"Low message volume",exact:true}).getAttribute("aria-checked"),"true");
+    await page.getByRole("radio",{name:"Silent message sound",exact:true,checked:true}).waitFor();
+    await page.getByRole("radio",{name:"Low message volume",exact:true,checked:true}).waitFor();
     await page.screenshot({path:path.join(shots,"notification-sounds-390.png"),fullPage:true});
     await page.goto(origin+"/invite");
     await page.getByRole("button",{name:"Create invitation link",exact:true}).click();
