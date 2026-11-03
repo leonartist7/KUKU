@@ -16,7 +16,7 @@ ITEMS = {
     'kiss': 'Face blowing a kiss', 'think': 'Thinking face',
     'party': 'Partying face', 'smile': 'Beaming face with smiling eyes',
     'sleep': 'Sleeping face', 'wow': 'Star-struck',
-    'fire': 'Fire', 'sparkles': 'Sparkles',
+    'fire': 'Fire', 'confetti': 'Party popper',
 }
 def sha(data):
     return hashlib.sha256(data).hexdigest()
