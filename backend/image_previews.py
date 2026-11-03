@@ -36,8 +36,11 @@ def discard_previews(attachment_id):
             _cache_bytes -= len(_cache.pop(key)[1]["image"])
 
 
-def render_preview(raw, size):
+def render_preview(raw, size, format="jpeg"):
     edge, limit = (512, 96 * 1024) if size == "thumb" else (1600, 480 * 1024)
+    webp = format == "webp"
+    if webp:
+        limit = (48 if size == "thumb" else 320) * 1024
     try:
         with Image.open(io.BytesIO(raw), formats=["JPEG", "PNG", "WEBP", "GIF", "BMP"]) as source:
             width, height = source.size
@@ -48,16 +51,22 @@ def render_preview(raw, size):
             source.thumbnail((edge, edge), Image.Resampling.LANCZOS)
             oriented = ImageOps.exif_transpose(source)
             rgba = oriented.convert("RGBA")
-            output = Image.new("RGB", rgba.size, "#F5F1E9")
-            output.paste(rgba, mask=rgba.getchannel("A"))
+            output = Image.new("RGBA" if webp else "RGB", rgba.size, (0, 0, 0, 0) if webp else "#F5F1E9")
+            if webp:
+                output.paste(rgba)
+            else:
+                output.paste(rgba, mask=rgba.getchannel("A"))
             rgba.close()
             oriented.close()
             try:
                 for quality in (82, 66, 50, 40):
                     data = io.BytesIO()
-                    output.save(data, "JPEG", quality=quality, optimize=True)
+                    if webp:
+                        output.save(data, "WEBP", quality=quality, method=3)
+                    else:
+                        output.save(data, "JPEG", quality=quality, optimize=True)
                     if data.tell() <= limit:
-                        return {"image": "data:image/jpeg;base64," + base64.b64encode(data.getvalue()).decode(),
+                        return {"image": "data:image/" + ("webp" if webp else "jpeg") + ";base64," + base64.b64encode(data.getvalue()).decode(),
                             "width": output.width, "height": output.height}
                     output.thumbnail((max(1, int(output.width * .8)), max(1, int(output.height * .8))))
             finally:

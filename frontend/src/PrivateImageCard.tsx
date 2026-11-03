@@ -15,7 +15,8 @@ function usePreview(id:string|undefined,size:"thumb"|"full",enabled:boolean){
   useEffect(()=>{
     if(!id || !user?.email_verified || !enabled)return;
     let active=true;setState({key});
-    void api.get<ImagePreview>("/attachments/"+encodeURIComponent(id)+"/preview?size="+size).then(result=>{
+    const format=Platform.OS==="web"?"webp":"jpeg";
+    void api.get<ImagePreview>("/attachments/"+encodeURIComponent(id)+"/preview?size="+size+"&format="+format).then(result=>{
       if(!validImagePreview(result))throw new Error("Preview unavailable. Download the original instead.");
       if(active)setState({key,data:result});
     }).catch(error=>{if(active)setState({key,error:error instanceof ApiError && error.status===404?"Image no longer available.":"Preview unavailable. Try again or download the original."});});
@@ -57,16 +58,15 @@ export default function PrivateImageCard({attachmentId,fileName="Photo",unavaila
   const button={minWidth:44,minHeight:44,alignItems:"center" as const,justifyContent:"center" as const,padding:10,borderRadius:14};
   const data=full.data||thumb.data;
   return <View ref={container} style={{maxWidth:"100%",width:compact?"100%":224}}>
-    <Pressable accessibilityRole="button" accessibilityLabel={"View "+title} disabled={gone||!attachmentId} onPress={()=>setOpen(true)} testID={"image-open-"+attachmentId} style={{overflow:"hidden",borderRadius:18,backgroundColor:c.surface,flexDirection:compact?"row":"column",alignItems:compact?"center":undefined,gap:compact?12:0,padding:compact?12:0,borderWidth:1,borderColor:c.border}}>
-      <View style={compact?{width:64,height:64,borderRadius:12,overflow:"hidden",alignItems:"center",justifyContent:"center",backgroundColor:c.surfaceElevated}:{width:"100%",aspectRatio:thumb.data?Math.max(.8,Math.min(1.6,thumb.data.width/thumb.data.height)):1.25,alignItems:"center",justifyContent:"center",backgroundColor:c.surfaceElevated}}>
+    <Pressable accessibilityRole="button" accessibilityLabel={"View "+title} disabled={gone||!attachmentId} onPress={()=>setOpen(true)} testID={"image-open-"+attachmentId} style={{flexDirection:compact?"row":"column",alignItems:compact?"center":undefined,gap:compact?14:0}}>
+      <View style={compact?{width:80,height:80,borderRadius:14,overflow:"hidden",alignItems:"center",justifyContent:"center",backgroundColor:c.surface}:{width:"100%",borderRadius:16,overflow:"hidden",aspectRatio:thumb.data?Math.max(.55,Math.min(1.8,thumb.data.width/thumb.data.height)):1.25,alignItems:"center",justifyContent:"center",backgroundColor:c.surface}}>
         {!gone && thumb.data?<Image source={{uri:thumb.data.image}} accessibilityLabel={"Preview "+title} testID={"image-thumbnail-"+attachmentId} style={{width:"100%",height:"100%"}} resizeMode="cover"/>:gone||thumb.error?<Ionicons name={gone?"image-outline":"cloud-offline-outline"} size={28} color={c.textSecondary}/>:<ActivityIndicator color={c.primary}/>}
       </View>
-      <View style={{flex:compact?1:undefined,padding:compact?0:12,gap:4}}><Text numberOfLines={1} style={{fontFamily:f.bodyMedium,color:c.text,fontSize:14}}>{gone?"Image deleted":title}</Text><Text numberOfLines={compact?1:2} style={{fontFamily:f.body,color:c.textSecondary,fontSize:12,lineHeight:17}}>{gone?"The original is no longer available.":thumb.error?"Tap for preview options":subtitle||"Tap to view photo"}</Text></View>
-      {compact?<Ionicons name="expand-outline" size={18} color={c.primary}/>:null}
+      {gone||thumb.error?<Text style={{flex:compact?1:undefined,paddingVertical:8,fontFamily:f.body,color:c.textSecondary,fontSize:12,lineHeight:17}}>{gone?"Image deleted":"Preview unavailable · Tap for options"}</Text>:compact&&subtitle?<Text numberOfLines={2} style={{flex:1,fontFamily:f.body,color:c.textSecondary,fontSize:12,lineHeight:19}}>{subtitle}</Text>:null}
     </Pressable>
     <Modal visible={open&&!gone} animationType="fade" onRequestClose={close} transparent={false}>
       <SafeAreaView edges={["top","bottom"]} style={{flex:1,backgroundColor:c.bg}}>
-        <View style={{flexDirection:"row",alignItems:"center",gap:12,padding:16,borderBottomWidth:1,borderColor:c.border}}><Text numberOfLines={1} style={{flex:1,fontFamily:f.bodyBold,fontSize:17,color:c.text}}>{title}</Text><Pressable accessibilityRole="button" accessibilityLabel="Close image preview" onPress={close} style={button}><Ionicons name="close" size={24} color={c.text}/></Pressable></View>
+        <View style={{flexDirection:"row",alignItems:"center",justifyContent:"flex-end",paddingHorizontal:16,paddingVertical:8}}><Pressable accessibilityRole="button" accessibilityLabel="Close image preview" onPress={close} style={button}><Ionicons name="close" size={24} color={c.text}/></Pressable></View>
         <View style={{flex:1,alignItems:"center",justifyContent:"center",padding:12}} testID="image-viewer">
           {data?<Image source={{uri:data.image}} accessibilityLabel={"Enlarged "+title} testID="image-enlarged" resizeMode="contain" style={{width:"100%",height:"100%"}}/>:full.error?<View style={{padding:24,alignItems:"center",gap:18}}><Ionicons name="image-outline" size={40} color={c.textSecondary}/><Text style={{textAlign:"center",color:c.textSecondary,lineHeight:22}}>{full.error}</Text></View>:<ActivityIndicator color={c.primary} size="large"/>}
           {!full.data && !full.error && data?<View style={{position:"absolute",bottom:24,borderRadius:20,padding:10,backgroundColor:c.surface}}><ActivityIndicator color={c.primary}/></View>:null}

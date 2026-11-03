@@ -176,37 +176,39 @@ def attachment_router(db_getter, auth):
         return {"id": doc["id"], "file_name": name, "file_size": size}
 
     @router.get("/attachments/{attachment_id}/preview")
-    async def preview(attachment_id: str, size: Literal["thumb", "full"] = "thumb", user=Depends(auth.verified)):
+    async def preview(attachment_id: str, size: Literal["thumb", "full"] = "thumb", format: Literal["jpeg", "webp"] = "jpeg", user=Depends(auth.verified)):
         await visible_file(attachment_id, user)
         await auth.limit("preview:" + user["id"], 300, 3600)
-        async with preview_gate:
-            doc = await visible_file(attachment_id, user)
-            key = (attachment_id, size)
-            result = cached_preview(key)
-            if result is None:
-                selected = storage_for(doc.get("storage_provider", "r2"))
-                try:
-                    if doc.get("storage_provider", "r2") == "vercel":
-                        data = bytearray()
-                        async with selected.stream(doc["key"]) as chunks:
-                            async for chunk in chunks:
-                                data.extend(chunk)
-                                if len(data) > MAX_BYTES:
-                                    raise HTTPException(413, "This file is too large to preview")
-                        raw = bytes(data)
-                    else:
-                        raw = await run_in_threadpool(selected.read_preview_source, doc["key"])
-                except HTTPException:
-                    raise
-                except Exception:
-                    raise HTTPException(503, "The image preview could not be opened. Try again shortly.") from None
-                result = await run_in_threadpool(render_preview, raw, size)
-                remember_preview(key, result)
-            current = await auth.session_user(user["_session_id"], user["id"])
-            if not current.get("email_verified"):
-                raise HTTPException(403, "Verify your email before viewing images")
-            await visible_file(attachment_id, user)
-            return result
+        key = (attachment_id, size, format)
+        result = cached_preview(key)
+        if result is None:
+            async with preview_gate:
+                doc = await visible_file(attachment_id, user)
+                result = cached_preview(key)
+                if result is None:
+                    selected = storage_for(doc.get("storage_provider", "r2"))
+                    try:
+                        if doc.get("storage_provider", "r2") == "vercel":
+                            data = bytearray()
+                            async with selected.stream(doc["key"]) as chunks:
+                                async for chunk in chunks:
+                                    data.extend(chunk)
+                                    if len(data) > MAX_BYTES:
+                                        raise HTTPException(413, "This file is too large to preview")
+                            raw = bytes(data)
+                        else:
+                            raw = await run_in_threadpool(selected.read_preview_source, doc["key"])
+                    except HTTPException:
+                        raise
+                    except Exception:
+                        raise HTTPException(503, "The image preview could not be opened. Try again shortly.") from None
+                    result = await run_in_threadpool(render_preview, raw, size, format)
+                    remember_preview(key, result)
+        current = await auth.session_user(user["_session_id"], user["id"])
+        if not current.get("email_verified"):
+            raise HTTPException(403, "Verify your email before viewing images")
+        await visible_file(attachment_id, user)
+        return result
 
     @router.get("/attachments/{attachment_id}/download")
     async def download(attachment_id: str, user=Depends(auth.verified)):

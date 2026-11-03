@@ -19,17 +19,33 @@ def photo(size=(1800, 900), orientation=None):
     return output.getvalue()
 
 
-def test_preview_resizes_orients_and_strips_metadata_without_changing_original():
+@pytest.mark.parametrize("format", ["jpeg", "webp"])
+def test_preview_resizes_orients_and_strips_metadata_without_changing_original(format):
     raw = photo(orientation=6)
     for size, edge in [("thumb", 512), ("full", 1600)]:
-        result = render_preview(raw, size)
+        result = render_preview(raw, size, format)
         assert result["width"] < result["height"] <= edge
         decoded = base64.b64decode(result["image"].split(",")[1])
         assert len(decoded) <= (96 if size == "thumb" else 480) * 1024
         with Image.open(io.BytesIO(decoded)) as preview:
-            assert preview.format == "JPEG" and not preview.getexif()
+            assert preview.format == format.upper() and not preview.getexif()
         with Image.open(io.BytesIO(raw)) as original:
             assert original.size == (1800, 900) and original.getexif()[270] == "Private camera metadata"
+
+
+@pytest.mark.parametrize("size,edge,limit", [("thumb",512,48*1024),("full",1600,320*1024)])
+def test_webp_preview_preserves_alpha_and_strips_metadata(size, edge, limit):
+    raw = io.BytesIO()
+    with Image.new("RGBA", (1800,900), (80,130,100,80)) as image:
+        exif = Image.Exif(); exif[270] = "Private source metadata"
+        image.save(raw, "PNG", exif=exif)
+    result = render_preview(raw.getvalue(), size, "webp")
+    assert result['image'].startswith('data:image/webp;base64,')
+    decoded = base64.b64decode(result['image'].split(',')[1])
+    assert len(decoded) <= limit and result['width'] <= edge
+    with Image.open(io.BytesIO(decoded)) as image:
+        assert image.format == 'WEBP' and image.mode == 'RGBA' and not image.getexif()
+        assert image.getpixel((0,0))[3] == 80
 
 
 @pytest.mark.parametrize("raw", [b"not a photo", b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', photo((4200, 8000))])
@@ -58,6 +74,11 @@ async def test_private_previews_require_sharing_and_recheck_access_on_warm_cache
     assert response.status_code == 200 and response.headers['cache-control'] == 'no-store'
     assert response.headers['x-content-type-options'] == 'nosniff'
     assert response.json()['image'].startswith('data:image/jpeg;base64,')
+    webp = await client.get(endpoint+'?format=webp', headers=headers(b))
+    assert webp.status_code == 200 and webp.json()['image'].startswith('data:image/webp;base64,')
+    # Old/native clients continue receiving JPEG after a WebP request warms the cache.
+    assert (await client.get(endpoint, headers=headers(b))).json()['image'].startswith('data:image/jpeg;base64,')
+    assert (await client.get(endpoint+'?format=svg', headers=headers(b))).status_code == 422
     assert (await client.get(endpoint+'?size=invalid', headers=headers(b))).status_code == 422
     assert list(private_files.data.values()) == [raw]
     # Cached bytes never bypass membership, verification, logout or deletion.

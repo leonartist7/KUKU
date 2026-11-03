@@ -282,15 +282,17 @@ function MessageRow({ msg, mine }: { msg: Message; mine: boolean }) {
   const { c, f } = useTheme();
   const router = useRouter();
   const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
+  const photo = msg.type === "image" || (msg.type === "file" && isImageFilename(msg.file_name));
   const bubbleStyle = [
     styles.bubble,
     mine
       ? { backgroundColor: c.surfaceElevated, borderBottomRightRadius: 4 }
       : { backgroundColor: c.surface, borderBottomLeftRadius: 4 },
+    photo && {paddingHorizontal:0,paddingVertical:0,backgroundColor:"transparent"},
   ];
   return (
     <View style={[styles.msgRow, mine ? styles.msgRight : styles.msgLeft]}>
-      <View style={bubbleStyle}>
+      <View style={bubbleStyle} testID={photo?"photo-message-"+msg.id:undefined}>
         {msg.type === "text" && (
           <Text style={styles.msgText}>{msg.text}</Text>
         )}
