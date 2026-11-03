@@ -30,6 +30,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     // Remove legacy plaintext access tokens; existing sessions sign in once again.
     await AsyncStorage.removeItem("connect_token");
+    // Fresh web visitors can open sign-in without waking the API first.
+    // HttpOnly cookies remain server-validated when restoring a saved account.
+    if (Platform.OS === "web" && currentUser.current === undefined && !await AsyncStorage.getItem(PROFILE_KEY)) {
+      await remember(null);
+      return;
+    }
     try {
       const token = await getToken();
       if (!token) { await remember(null); return; }

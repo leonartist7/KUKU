@@ -1,11 +1,11 @@
 import NotificationListener from "../src/NotificationListener";
 import MessageSoundListener from "../src/MessageSoundListener";
 import OutboxRunner from "../src/OutboxRunner";
-import React from "react";
+import React, {useEffect, useState} from "react";
 import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { View, Text, ActivityIndicator, StyleSheet, Platform } from "react-native";
 import {
   useFonts,
   Fraunces_400Regular,
@@ -22,7 +22,7 @@ import { CallProvider } from "../src/CallContext";
 import { colors } from "../src/theme";
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Fraunces_400Regular,
     Fraunces_600SemiBold,
     DMSans_400Regular,
@@ -30,13 +30,13 @@ export default function RootLayout() {
     DMSans_600SemiBold,
   });
 
-  if (!fontsLoaded) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
-  }
+  const [fontFallback,setFontFallback]=useState(false);
+  useEffect(()=>{
+    if(fontsLoaded||fontError||Platform.OS!=="web")return;
+    const timer=setTimeout(()=>setFontFallback(true),2500);
+    return()=>clearTimeout(timer);
+  },[fontsLoaded,fontError]);
+  if (!fontsLoaded && !fontError && !fontFallback) return <StartupStatus/>;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -55,7 +55,7 @@ export default function RootLayout() {
 function ThemedStack() {
   const { c } = useTheme();
   const { user } = useAuth();
-  if (user === undefined) return <View style={styles.loading}><ActivityIndicator color={c.primary} /></View>;
+  if (user === undefined) return <StartupStatus color={c.primary} background={c.bg}/>;
   const verified = !!user?.email_verified;
   return (
     <CallProvider>
@@ -89,6 +89,17 @@ function ThemedStack() {
       </Stack>
     </CallProvider>
   );
+}
+
+function StartupStatus({color=colors.primary,background=colors.bg}:{color?:string;background?:string}){
+  const [slow,setSlow]=useState(false);
+  useEffect(()=>{const timer=setTimeout(()=>setSlow(true),8000);return()=>clearTimeout(timer);},[]);
+  return <View testID="startup-status" accessibilityLiveRegion="polite" style={[styles.loading,{backgroundColor:background,padding:32,gap:16}]}>
+    <Text style={{fontSize:24,fontWeight:"600",letterSpacing:2,color}}>KUKU</Text>
+    <ActivityIndicator color={color}/>
+    <Text style={{fontSize:16,color,textAlign:"center"}}>{slow?"Still connecting to your space":"Opening your space"}</Text>
+    <Text style={{fontSize:14,lineHeight:21,color,textAlign:"center",maxWidth:340}}>{slow?"Reconnecting can take a moment. Please keep this page open while we reconnect.":"A little closer, in a moment."}</Text>
+  </View>;
 }
 
 const styles = StyleSheet.create({

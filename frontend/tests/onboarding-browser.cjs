@@ -19,7 +19,7 @@ const server=http.createServer((req,res)=>{
   async function scenario(width,height){
     const context=await browser.newContext({viewport:{width,height},reducedMotion:"reduce",timezoneId:"UTC",permissions:["clipboard-read","clipboard-write","microphone"]});
     const page=await context.newPage();let voiceBytes=null;let user=null,sends=0,profiles=0,uploadedBytes=null,shared=null,inviteEmail="unset",photoSaves=0,uploadAttempts=0,statusChecks=0,fullPreviews=0;
-    const previewFormats=[];let attachmentUploads=0,history=null;
+    const previewFormats=[];let attachmentUploads=0,history=null,refreshCalls=0;
     const testWebp=await page.evaluate(base64=>new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>{const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);resolve(canvas.toDataURL('image/webp',0.75));};image.onerror=reject;image.src='data:image/jpeg;base64,'+base64;}),TEST_PHOTO);
     assert.ok(testWebp.startsWith('data:image/webp;base64,'));
     const message=()=>({...shared,id:"synthetic-message",file_name:shared?.attachment_id==="synthetic-photo"?"family-photo.jpg":"family.txt",file_size:18,sender_id:"qa-user",created_at:new Date().toISOString()});
@@ -30,7 +30,7 @@ const server=http.createServer((req,res)=>{
       if(endpoint==="/api/chats/synthetic-chat/attachments"&&req.method()==="POST")attachmentUploads++;
       const respond=(status,data)=>route.fulfill({status,contentType:"application/json",headers:{"cache-control":"no-store","access-control-allow-origin":origin,"access-control-allow-headers":"authorization,content-type","access-control-allow-methods":"POST,GET,OPTIONS"},body:JSON.stringify(data)});
       if(endpoint==="/api/auth/register"){user={id:"qa-user",email:body.email,name:body.name,bio:"",email_verified:false,onboarding_complete:false};return respond(200,{token:"synthetic-test-access",user});}
-      if(endpoint==="/api/auth/refresh")return user?respond(200,{token:"synthetic-test-access",user}):respond(401,{detail:"Sign in again"});
+      if(endpoint==="/api/auth/refresh"){refreshCalls++;return user?respond(200,{token:"synthetic-test-access",user}):respond(401,{detail:"Sign in again"});}
       if(endpoint==="/api/auth/me")return user?respond(200,user):respond(401,{detail:"Sign in again"});
       if(endpoint==="/api/auth/verification"){sends++;return respond(200,{ok:true});}
       if(endpoint==="/api/auth/verify"){if(body.code!=="synthetic-email-code")return respond(400,{detail:"Invalid or expired code"});user.email_verified=true;return respond(200,{ok:true});}
@@ -55,6 +55,7 @@ const server=http.createServer((req,res)=>{
       return respond(200,[]);
     });
     await page.goto(origin+(width===320?"/":"/login"));await page.getByTestId("auth-switch").waitFor();
+    assert.equal(refreshCalls,0,"A fresh browser must reach sign-in without an API session request");
     assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),width,"No horizontal overflow at "+width);
     await page.screenshot({path:path.join(shots,"login-"+width+".png"),fullPage:true});
     await page.route("https://voice-downloads.example.test/memo.webm",route=>route.fulfill({status:200,contentType:"audio/webm",headers:{"cache-control":"no-store","access-control-allow-origin":origin},body:voiceBytes}));
