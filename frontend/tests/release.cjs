@@ -88,6 +88,7 @@ test("late refresh cannot restore a signed-out session or dispatch another accou
   assert.equal(await pending,null);
   await exports.acceptSession({token:"bob-access",user:{id:"bob"}});
   await assert.rejects(exports.api.postAs("alice","/chats/private/messages",{}),/Account changed/);
+  await assert.rejects(exports.api.getAs("alice","/chats/private/messages"),/Account changed/);
   assert.equal(calls,1);
 });
 
@@ -198,4 +199,14 @@ test("sound previews create distinct tones at bounded volume and silent creates 
   for(const sound of ["bell","wood","chime","drop"])await exports.playMessageSound({sound,volume:0.5},true);
   assert.equal(contexts,1);assert.deepEqual(frequencies,[523.25,1046.5,245,390,659.25,987.77,1100]);assert.ok(levels.every(value=>value<=0.11));
   const before=frequencies.length;await exports.playMessageSound({sound:"silent",volume:1},true);assert.equal(frequencies.length,before);
+});
+
+test("emotes resolve only approved IDs and use local assets",()=>{
+  const ts=require("typescript"),exports={};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync("src/emotes.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports});
+  assert.equal(exports.EMOTES.length,12);
+  assert.equal(new Set(exports.EMOTES.map(item=>item.id)).size,12);
+  for(const item of exports.EMOTES){assert.equal(exports.getEmote(item.id).slug,item.slug);assert.equal(exports.emoteAsset(item.slug,true),"/emotes/"+item.slug+".webp");}
+  for(const id of [null,"unknown","https://evil.example/image.webp","../../secret"])assert.equal(exports.getEmote(id),undefined);
+  assert.equal(exports.emoteAsset("../../secret",true),"");
 });

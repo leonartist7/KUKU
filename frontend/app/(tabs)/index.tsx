@@ -16,6 +16,7 @@ import { Palette, radius, spacing } from "../../src/theme";
 import { useTheme } from "../../src/ThemeContext";
 import { useAuth } from "../../src/AuthContext";
 import Avatar from "../../src/Avatar";
+import {getEmote} from "../../src/emotes";
 
 function timeAgo(iso?: string) {
   if (!iso) return "";
@@ -33,6 +34,7 @@ function previewText(chat: Chat) {
   const lm = chat.last_message;
   if (!lm) return "Start a conversation";
   if (lm.type === "text") return lm.text || "";
+  if (lm.type === "emote") return (getEmote(lm.emote_id)?.label || "A little feeling")+" emote";
   if (lm.type === "voice") return "Voice message";
   if (lm.type === "image") return "Photo";
   if (lm.type === "file") return lm.file_name || "File";

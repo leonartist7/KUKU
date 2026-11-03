@@ -87,13 +87,15 @@ async function request<T>(path: string, options: RequestInit = {}, retried = fal
 export const api = {
   postAs: <T = any>(uid:string,path:string,body:unknown) => request<T>(path,{method:"POST",body:JSON.stringify(body)},false,uid),
   get: <T = any>(path: string) => request<T>(path),
+  getAs: <T = any>(uid:string,path:string) => request<T>(path,{},false,uid),
   post: <T = any>(path: string, body?: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(body ?? {}) }),
   delete: <T = any>(path: string) => request<T>(path, { method: "DELETE" }),
 };
 export type User = { email_verified?: boolean; onboarding_complete?: boolean; id: string; email?: string; name: string; avatar?: string | null; bio?: string; created_at?: string };
 export type Message = {
   id: string; chat_id: string; sender_id: string; sender_name: string;
-  type: "text" | "voice" | "image" | "file" | "space_invite";
+  type: "text" | "voice" | "image" | "file" | "space_invite" | "emote";
+  emote_id?: string | null;
   text?: string | null; media?: string | null; file_name?: string | null; file_size?: number | null;
   duration_ms?: number | null; space_id?: string | null; space_name?: string | null;
   created_at: string; client_message_id?: string; attachment_id?: string; attachment_deleted?: boolean;

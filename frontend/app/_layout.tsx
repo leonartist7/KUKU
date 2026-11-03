@@ -81,6 +81,7 @@ function ThemedStack() {
             <Stack.Screen name="invite" />
             <Stack.Screen name="notifications" />
             <Stack.Screen name="privacy" />
+            <Stack.Screen name="credits" />
             <Stack.Screen name="space/[id]" options={{presentation: "fullScreenModal", animation: "slide_from_bottom"}} />
             <Stack.Screen name="space/create" options={{presentation: "modal", animation: "slide_from_bottom"}} />
           </Stack.Protected>

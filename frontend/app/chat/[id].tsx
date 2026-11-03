@@ -1,4 +1,7 @@
 import VoiceComposer from "../../src/VoiceComposer";
+import EmotePicker from "../../src/EmotePicker";
+import EmoteImage from "../../src/EmoteImage";
+import {getEmote} from "../../src/emotes";
 import Decor from "../../src/Decor";
 import { getOutbox, queueMessage, retryMessage, removePending, subscribeOutbox, PendingMessage } from "../../src/outbox";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -51,34 +54,38 @@ export default function ChatScreen() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [emotesOpen,setEmotesOpen]=useState(false);
+  const [draft,setDraft]=useState<{uri:string;name:string;type:"image"|"file";size?:number|null;uploadedId?:string}|null>(null);
+  const [newMessages,setNewMessages]=useState(false);
+  const nearBottom=useRef(true);
   const loadingRef = useRef(false);
   const activeChat = useRef(id);
-  activeChat.current = id;
+  activeChat.current = id+":"+(user?.id||"");
 
   const listRef = useRef<FlatList<Message>>(null);
 
   const load = useCallback(async () => {
-    if (!id || loadingRef.current) return;
+    if (!id || !user || loadingRef.current || (Platform.OS==="web" && document.hidden)) return;
+    const scope=id+":"+user.id;
     loadingRef.current = true;
     try {
       const [info, msgs] = await Promise.all([
-        api.get<{ other: User | null }>(`/chats/${id}`),
-        api.get<Message[]>("/chats/"+id+"/messages?limit=100"+(messagesRef.current.length ? "&after="+messagesRef.current[messagesRef.current.length-1].id : "")),
+        api.getAs<{ other: User | null }>(user.id,`/chats/${id}`),
+        api.getAs<Message[]>(user.id,"/chats/"+id+"/messages?limit=100"+(messagesRef.current.length ? "&after="+messagesRef.current[messagesRef.current.length-1].id : "")),
       ]);
-      if (activeChat.current !== id) return;
+      if (activeChat.current !== scope) return;
       setChatInfo(info);
       setMessages((previous) => Array.from(new Map([...previous, ...msgs].map(m => [m.id, m])).values()).sort((a,b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)));
       setError(null);
     } catch {
-      setError("Couldn't load messages — check your connection");
+      if(activeChat.current===scope)setError("Couldn't load messages — check your connection");
     } finally {
-      loadingRef.current = false;
-      setLoading(false);
+      if(activeChat.current===scope){loadingRef.current = false;setLoading(false);}
     }
-  }, [id]);
+  }, [id,user?.id]);
 
   useEffect(() => {
-    setMessages([]); setChatInfo(null); setLoading(true);
+    setMessages([]); setChatInfo(null); setLoading(true);setText("");setSending(false);setDraft(null);setEmotesOpen(false);setVoiceOpen(false);nearBottom.current=true;setNewMessages(false);
     messagesRef.current = []; loadingRef.current = false;
     load();
   }, [load]);
@@ -91,20 +98,24 @@ export default function ChatScreen() {
     }, [load]),
   );
 
-  useEffect(() => {
-    if (messages.length > 0) {
-      const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
-      return () => clearTimeout(t);
-    }
-  }, [messages[messages.length - 1]?.id]);
-
+  function jumpToLatest(){nearBottom.current=true;setNewMessages(false);listRef.current?.scrollToEnd({animated:true});}
+  useEffect(()=>{
+    const latest=messages[messages.length-1];if(!latest)return;
+    if(nearBottom.current||latest.sender_id===user?.id){const timer=setTimeout(jumpToLatest,60);return()=>clearTimeout(timer);}
+    setNewMessages(true);
+  },[messages[messages.length-1]?.id]);
+  useEffect(()=>{
+    if(Platform.OS!=="web")return;
+    const resume=()=>{if(!document.hidden)void load();};
+    document.addEventListener("visibilitychange",resume);return()=>document.removeEventListener("visibilitychange",resume);
+  },[load]);
 
   async function send(payload: Record<string,unknown>): Promise<boolean> {
     if (!user) return false;
-    setSending(true);
-    try { await queueMessage(user.id,payload); return true; }
+    const scope=id+":"+user.id;setSending(true);
+    try { await queueMessage(user.id,payload); if(activeChat.current===scope){nearBottom.current=true;setNewMessages(false);}return activeChat.current===scope; }
     catch(e) { setError(e instanceof Error ? e.message : "Could not save this message for sending");return false; }
-    finally {setSending(false);}
+    finally {if(activeChat.current===scope)setSending(false);}
   }
   async function sendText() {
     const t = text.trim();
@@ -113,24 +124,38 @@ export default function ChatScreen() {
     if (ok) setText("");
   }
 
-  async function shareFile(uri: string, name: string, type: "file" | "image" = "file") {
-    setSending(true);
-    try {
-      const file = await uploadAttachment(id, uri, name);
-      await send({ chat_id: id, type, attachment_id: file.id });
-    } catch (e) { setError(e instanceof Error ? e.message : "Upload failed. Try again."); }
-    finally { setSending(false); }
+  async function sendAttachment(){
+    if(!draft || !user || sending)return;
+    const selected=draft,uid=user.id,scope=id+":"+uid;setSending(true);setError(null);
+    try{
+      const uploadedId=selected.uploadedId||(await uploadAttachment(id,selected.uri,selected.name,uid)).id;
+      if(activeChat.current!==scope)return;
+      setDraft({...selected,uploadedId});
+      if(await send({chat_id:id,type:selected.type,attachment_id:uploadedId}))setDraft(null);
+    }catch(error){if(activeChat.current===scope)setError(error instanceof Error?error.message:"Couldn't upload. Your file is still selected; try again.");}
+    finally{if(activeChat.current===scope)setSending(false);}
   }
-  async function attachImage() {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
-    if (!result.canceled && result.assets[0]) {
-      const a = result.assets[0];
-      await shareFile(a.uri, a.fileName || "image.jpg", "image");
-    }
+  async function attachImage(){
+    if(sending)return;const scope=activeChat.current;
+    try{
+      const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:["images"],quality:0.8});
+      const photo=!result.canceled&&result.assets[0];
+      if(photo&&activeChat.current===scope){
+        if(photo.fileSize&&photo.fileSize>25*1024*1024)throw Error("Choose a photo up to 25 MB.");
+        setDraft({uri:photo.uri,name:photo.fileName||"image.jpg",type:"image",size:photo.fileSize});setError(null);
+      }
+    }catch(error){if(activeChat.current===scope)setError(error instanceof Error?error.message:"Couldn't choose this photo.");}
   }
-  async function attachFile() {
-    const result = await DocumentPicker.getDocumentAsync({ multiple: false, copyToCacheDirectory: true });
-    if (!result.canceled && result.assets[0]) await shareFile(result.assets[0].uri, result.assets[0].name);
+  async function attachFile(){
+    if(sending)return;const scope=activeChat.current;
+    try{
+      const result=await DocumentPicker.getDocumentAsync({multiple:false,copyToCacheDirectory:true});
+      const file=!result.canceled&&result.assets[0];
+      if(file&&activeChat.current===scope){
+        if(file.size&&file.size>25*1024*1024)throw Error("Choose a file up to 25 MB.");
+        setDraft({uri:file.uri,name:file.name,type:isImageFilename(file.name)?"image":"file",size:file.size});setError(null);
+      }
+    }catch(error){if(activeChat.current===scope)setError(error instanceof Error?error.message:"Couldn't choose this file.");}
   }
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
@@ -210,6 +235,10 @@ export default function ChatScreen() {
         ) : (
           <View style={{flex: 1}}><Decor/><FlatList
             ref={listRef}
+            testID="chat-message-list"
+            scrollEventThrottle={100}
+            onScroll={event=>{const {contentOffset,contentSize,layoutMeasurement}=event.nativeEvent;nearBottom.current=contentSize.height-layoutMeasurement.height-contentOffset.y<80;if(nearBottom.current)setNewMessages(false);}}
+            onContentSizeChange={()=>{if(nearBottom.current)listRef.current?.scrollToEnd({animated:false});}}
             data={messages}
             keyExtractor={(m) => m.id}
             contentContainerStyle={styles.msgList}
@@ -223,7 +252,7 @@ export default function ChatScreen() {
               } catch { setError("Could not load older messages"); }
             }}><Text style={{ color: c.primary, padding: 12 }}>Load older messages</Text></Pressable> : null}
             ListFooterComponent={<View>{pending.filter(p => !messages.some(m=>m.client_message_id===p.id)).map(p => <View key={p.id} style={{padding:12,alignSelf:"flex-end"}}>
-              <Text style={{color:c.text}}>{String(p.payload.text || "File waiting to send")}</Text>
+              <Text style={{color:c.text}}>{String(p.payload.text || (p.payload.emote_id?"Emote waiting to send":"File waiting to send"))}</Text>
               <Text style={{color:c.textSecondary}}>{p.state==="failed"?p.error:"Waiting to send…"}</Text>
               {p.state==="failed" ? <Pressable onPress={()=>user && retryMessage(user.id,p.id)}><Text style={{color:c.primary}}>Retry</Text></Pressable>:null}
               <Pressable onPress={()=>user && removePending(user.id,p.id)}><Text style={{color:c.textSecondary}}>Remove from queue</Text></Pressable>
@@ -236,14 +265,21 @@ export default function ChatScreen() {
           /></View>
         )}
 
+        {newMessages?<Pressable accessibilityRole="button" accessibilityLabel="Jump to new messages" onPress={jumpToLatest} style={{alignSelf:"center",flexDirection:"row",gap:8,paddingHorizontal:18,paddingVertical:12,borderRadius:24,backgroundColor:c.primary,marginBottom:8}}><Text style={{fontFamily:f.bodyBold,color:c.textInverse}}>New messages</Text><Ionicons name="arrow-down" size={18} color={c.textInverse}/></Pressable>:null}
+        {draft?<View testID="attachment-draft" style={{padding:16,gap:10,borderTopWidth:1,borderColor:c.border,backgroundColor:c.bg}}>
+          {draft.type==="image"?<Image source={{uri:draft.uri}} accessibilityLabel="Photo ready to send" testID="chat-attachment-preview" resizeMode="contain" style={{height:148,width:"100%",borderRadius:14}}/>:<View style={{flexDirection:"row",alignItems:"center",gap:10}}><Ionicons name="document-text-outline" size={24} color={c.primary}/><Text numberOfLines={2} style={{flex:1,fontFamily:f.bodyMedium,color:c.text}}>{draft.name}</Text></View>}
+          <View style={{flexDirection:"row",gap:12}}><Pressable accessibilityRole="button" accessibilityLabel="Cancel attachment" disabled={sending} onPress={()=>setDraft(null)} style={{flex:1,minHeight:44,alignItems:"center",justifyContent:"center",borderRadius:14,backgroundColor:c.surface}}><Text style={{color:c.text,fontFamily:f.bodyMedium}}>Cancel</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="Send attachment" disabled={sending} onPress={()=>void sendAttachment()} style={{flex:1,minHeight:44,alignItems:"center",justifyContent:"center",borderRadius:14,backgroundColor:c.primary}}>{sending?<ActivityIndicator color={c.textInverse}/>:<Text style={{color:c.textInverse,fontFamily:f.bodyBold}}>Send {draft.type==="image"?"photo":"file"}</Text>}</Pressable></View>
+        </View>:null}
+        {emotesOpen?<EmotePicker key={id+":"+user?.id} onClose={()=>setEmotesOpen(false)} onSend={emote_id=>send({chat_id:id,type:"emote",emote_id})}/>:null}
         {voiceOpen ? <VoiceComposer getChatId={async()=>id} onSent={()=>setVoiceOpen(false)} onClose={()=>setVoiceOpen(false)}/> : (
           <View style={styles.composer}>
-            <Pressable onPress={attachFile} style={styles.attachBtn} testID="attach-file">
+            <Pressable accessibilityRole="button" accessibilityLabel="Choose a file to share" disabled={sending} onPress={attachFile} style={styles.attachBtn} testID="attach-file">
               <Ionicons name="add" size={22} color={c.text} />
             </Pressable>
-            <Pressable onPress={attachImage} style={styles.attachBtn} testID="attach-image">
+            <Pressable accessibilityRole="button" accessibilityLabel="Choose a photo to share" disabled={sending} onPress={attachImage} style={styles.attachBtn} testID="attach-image">
               <Ionicons name="image-outline" size={20} color={c.text} />
             </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Open emotes" disabled={sending} onPress={()=>setEmotesOpen(true)} style={styles.attachBtn}><Ionicons name="happy-outline" size={21} color={c.text}/></Pressable>
             <TextInput
               value={text}
               onChangeText={setText}
@@ -251,6 +287,7 @@ export default function ChatScreen() {
               placeholderTextColor={c.textTertiary}
               style={styles.input}
               multiline
+              accessibilityLabel="Message"
               testID="message-input"
             />
             {text.trim().length > 0 ? (
@@ -264,6 +301,8 @@ export default function ChatScreen() {
               </Pressable>
             ) : (
               <Pressable
+                accessibilityRole="button" accessibilityLabel="Record a voice memo"
+                disabled={sending}
                 onPress={() => setVoiceOpen(true)}
                 style={styles.sendBtn}
                 testID="mic-button"
@@ -282,17 +321,19 @@ function MessageRow({ msg, mine }: { msg: Message; mine: boolean }) {
   const { c, f } = useTheme();
   const router = useRouter();
   const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
+  const emote=getEmote(msg.emote_id);
   const photo = msg.type === "image" || (msg.type === "file" && isImageFilename(msg.file_name));
   const bubbleStyle = [
     styles.bubble,
     mine
       ? { backgroundColor: c.surfaceElevated, borderBottomRightRadius: 4 }
       : { backgroundColor: c.surface, borderBottomLeftRadius: 4 },
-    photo && {paddingHorizontal:0,paddingVertical:0,backgroundColor:"transparent"},
+    (photo||msg.type==="emote") && {paddingHorizontal:0,paddingVertical:0,backgroundColor:"transparent"},
   ];
   return (
     <View style={[styles.msgRow, mine ? styles.msgRight : styles.msgLeft]}>
       <View style={bubbleStyle} testID={photo?"photo-message-"+msg.id:undefined}>
+        {msg.type === "emote" ? emote?<EmoteImage emote={emote} autoPlay/>:<Text style={styles.msgText}>Emote unavailable</Text>:null}
         {msg.type === "text" && (
           <Text style={styles.msgText}>{msg.text}</Text>
         )}
@@ -453,16 +494,17 @@ const makeStyles = (c: any, f: any) => StyleSheet.create({
     backgroundColor: c.bg,
   },
   attachBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 40,
+    height: 44,
+    borderRadius: 20,
     backgroundColor: c.surface,
     alignItems: "center",
     justifyContent: "center",
   },
   input: {
     flex: 1,
-    minHeight: 40,
+    minWidth:0,
+    minHeight: 44,
     maxHeight: 120,
     backgroundColor: c.surface,
     borderRadius: 20,

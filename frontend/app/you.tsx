@@ -36,6 +36,7 @@ export default function YouScreen() {
     { icon: "person-add-outline", label: "Invite someone", sub: "Share KUKU privately", onPress: () => router.push("/invite"), testID: "settings-invite" },
     { icon: "notifications-outline", label: "Notifications", sub: "Message alerts on this device", onPress: () => router.push("/notifications"), testID: "settings-notifications" },
     { icon: "lock-closed-outline", label: "Privacy", sub: "Blocked contacts and privacy", onPress: () => router.push("/privacy"), testID: "settings-privacy" },
+    { icon: "heart-outline", label: "Credits", sub: "The artists behind our emotes", onPress:()=>router.push("/credits"), testID:"settings-credits" },
     { icon: "sparkles-outline", label: "Spaces (soon)", sub: "Shared rooms in Phase 2", testID: "settings-spaces" },
   ];
 

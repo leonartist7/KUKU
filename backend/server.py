@@ -100,10 +100,12 @@ def serialize_user(user: dict) -> dict:
 
 
 # ---------- Models ----------
+EMOTE_IDS = frozenset("fluent:" + slug for slug in ("heart","hug","laugh","love","kiss","think","party","smile","sleep","wow","fire","confetti"))
 class MessageIn(BaseModel):
     chat_id: str
-    type: Literal["text", "voice", "image", "file", "space_invite"]
+    type: Literal["text", "voice", "image", "file", "space_invite", "emote"]
     text: Optional[str] = Field(default=None, max_length=10000)
+    emote_id: Optional[str] = Field(default=None, max_length=40)
     client_message_id: Optional[str] = Field(default=None, max_length=100)
     media: Optional[str] = Field(default=None, max_length=100)
     attachment_id: Optional[str] = Field(default=None, max_length=100)
@@ -236,9 +238,14 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
     if payload.client_message_id:
         previous = await db.messages.find_one({"chat_id": chat_id, "sender_id": current["id"], "client_message_id": payload.client_message_id}, {"_id": 0})
         if previous:
-            if previous.get("text") != payload.text or previous["type"] != payload.type or previous.get("attachment_id") != payload.attachment_id or previous.get("space_id") != payload.space_id:
+            if previous.get("text") != payload.text or previous["type"] != payload.type or previous.get("attachment_id") != payload.attachment_id or previous.get("space_id") != payload.space_id or previous.get("emote_id") != payload.emote_id:
                 raise HTTPException(409, "Message ID already used")
             return public_message(previous)
+    if payload.type == "emote":
+        if payload.emote_id not in EMOTE_IDS or any((payload.text, payload.media, payload.attachment_id, payload.space_id, payload.space_name, payload.duration_ms, payload.file_name, payload.file_size)):
+            raise HTTPException(400, "Choose an emote from the KUKU collection")
+    elif payload.emote_id is not None:
+        raise HTTPException(400, "Emotes must use an emote message")
     if payload.type == "text" and not (payload.text or "").strip():
         raise HTTPException(400, "Empty message")
     if payload.media:
@@ -264,6 +271,7 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
         "sender_id": current["id"],
         "sender_name": current["name"],
         "type": payload.type,
+        "emote_id": payload.emote_id,
         "text": payload.text,
         "media": payload.media,
         "attachment_id": payload.attachment_id,
@@ -281,7 +289,7 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
         await db.messages.insert_one(msg)
     except DuplicateKeyError:
         previous = await db.messages.find_one({"chat_id": chat_id, "sender_id": current["id"], "client_message_id": payload.client_message_id}, {"_id": 0})
-        if not previous or previous.get("text") != payload.text or previous["type"] != payload.type or previous.get("attachment_id") != payload.attachment_id or previous.get("space_id") != payload.space_id:
+        if not previous or previous.get("text") != payload.text or previous["type"] != payload.type or previous.get("attachment_id") != payload.attachment_id or previous.get("space_id") != payload.space_id or previous.get("emote_id") != payload.emote_id:
             raise HTTPException(409, "Message ID already used")
         return public_message(previous)
     await db.chats.update_one({"id": chat_id}, {"$set": {"updated_at": msg["created_at"]}})

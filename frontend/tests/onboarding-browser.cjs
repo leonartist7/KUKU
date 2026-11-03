@@ -9,7 +9,7 @@ const server=http.createServer((req,res)=>{
   let file=path.resolve(root,"."+pathname);
   if(!file.startsWith(root+path.sep)&&file!==root){res.writeHead(403);return res.end();}
   if(!fs.existsSync(file)||fs.statSync(file).isDirectory())file=path.join(root,"index.html");
-  const type={".html":"text/html",".js":"application/javascript",".json":"application/json",".png":"image/png",".woff":"font/woff",".ttf":"font/ttf",".css":"text/css"}[path.extname(file)]||"application/octet-stream";
+  const type={".html":"text/html",".js":"application/javascript",".json":"application/json",".webp":"image/webp",".txt":"text/plain",".png":"image/png",".woff":"font/woff",".ttf":"font/ttf",".css":"text/css"}[path.extname(file)]||"application/octet-stream";
   res.setHeader("content-type",type);fs.createReadStream(file).pipe(res);
 });
 (async()=>{
@@ -19,7 +19,7 @@ const server=http.createServer((req,res)=>{
   async function scenario(width,height){
     const context=await browser.newContext({viewport:{width,height},reducedMotion:"reduce",timezoneId:"UTC",permissions:["clipboard-read","clipboard-write","microphone"]});
     const page=await context.newPage();let voiceBytes=null;let user=null,sends=0,profiles=0,uploadedBytes=null,shared=null,inviteEmail="unset",photoSaves=0,uploadAttempts=0,statusChecks=0,fullPreviews=0;
-    const previewFormats=[];
+    const previewFormats=[];let attachmentUploads=0,history=null;
     const testWebp=await page.evaluate(base64=>new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>{const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);resolve(canvas.toDataURL('image/webp',0.75));};image.onerror=reject;image.src='data:image/jpeg;base64,'+base64;}),TEST_PHOTO);
     assert.ok(testWebp.startsWith('data:image/webp;base64,'));
     const message=()=>({...shared,id:"synthetic-message",file_name:shared?.attachment_id==="synthetic-photo"?"family-photo.jpg":"family.txt",file_size:18,sender_id:"qa-user",created_at:new Date().toISOString()});
@@ -27,6 +27,7 @@ const server=http.createServer((req,res)=>{
     await page.clock.setFixedTime(new Date("2026-10-29T12:00:00Z"));
     await page.route("**/api/**",async route=>{
       const req=route.request(),endpoint=new URL(req.url()).pathname,body=req.headers()["content-type"]?.includes("application/json") ? req.postDataJSON()||{} : {};
+      if(endpoint==="/api/chats/synthetic-chat/attachments"&&req.method()==="POST")attachmentUploads++;
       const respond=(status,data)=>route.fulfill({status,contentType:"application/json",headers:{"cache-control":"no-store","access-control-allow-origin":origin,"access-control-allow-headers":"authorization,content-type","access-control-allow-methods":"POST,GET,OPTIONS"},body:JSON.stringify(data)});
       if(endpoint==="/api/auth/register"){user={id:"qa-user",email:body.email,name:body.name,bio:"",email_verified:false,onboarding_complete:false};return respond(200,{token:"synthetic-test-access",user});}
       if(endpoint==="/api/auth/refresh")return user?respond(200,{token:"synthetic-test-access",user}):respond(401,{detail:"Sign in again"});
@@ -47,7 +48,7 @@ const server=http.createServer((req,res)=>{
       if(endpoint==="/api/attachments/synthetic-voice/download")return respond(200,{url:"https://voice-downloads.example.test/memo.webm",media_type:"audio/webm"});
       if(endpoint==="/api/chats/synthetic-chat/attachments"){if(req.method()==="OPTIONS")return respond(200,{});uploadedBytes=req.postDataBuffer();uploadAttempts++;if(uploadAttempts===1)return respond(503,{detail:"Your file couldn’t be saved. Please try again."});return respond(200,{id:"synthetic-attachment",file_name:"family.txt",file_size:uploadedBytes.length});}
       if(endpoint==="/api/attachments/synthetic-attachment/download")return respond(200,{url:"https://downloads.example.test/family.txt"});
-      if(endpoint==="/api/chats/synthetic-chat/messages"&&req.method()==="GET")return respond(200,shared?[message()]:[]);
+      if(endpoint==="/api/chats/synthetic-chat/messages"&&req.method()==="GET"){if(history){const after=new URL(req.url()).searchParams.get('after'),index=history.findIndex(m=>m.id===after);return respond(200,after&&index>=0?history.slice(index+1):history);}return respond(200,shared?[message()]:[]);}
       if(endpoint==="/api/chats/synthetic-chat/messages"&&req.method()==="POST"){shared=body;return respond(200,{...body,id:"synthetic-message",sender_id:"qa-user",created_at:new Date().toISOString()});}
       if(endpoint==="/api/chats/synthetic-chat")return respond(200,{id:"synthetic-chat",other:{id:"sister",name:"Sam"}});
       if(endpoint==="/api/auth/logout"){user=null;return respond(200,{ok:true});}
@@ -57,10 +58,10 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),width,"No horizontal overflow at "+width);
     await page.screenshot({path:path.join(shots,"login-"+width+".png"),fullPage:true});
     await page.route("https://voice-downloads.example.test/memo.webm",route=>route.fulfill({status:200,contentType:"audio/webm",headers:{"cache-control":"no-store","access-control-allow-origin":origin},body:voiceBytes}));
-    return {page,context,state:()=>({user,sends,profiles,uploadedBytes,shared,inviteEmail,photoSaves,voiceBytes,previewFormats})};
+    return {page,context,state:()=>({user,sends,profiles,uploadedBytes,shared,inviteEmail,photoSaves,voiceBytes,previewFormats,attachmentUploads}),receiveAsSister:()=>{user={...user,id:"sister",name:"Sam"};},setHistory:items=>{history=items;}};
   }
   try {
-    const {page,context,state}=await scenario(390,844);
+    const {page,context,state,receiveAsSister,setHistory}=await scenario(390,844);
     await page.getByTestId("auth-switch").click();
     await page.getByTestId("auth-submit").click();
     await page.getByRole("alert").filter({hasText:"complete email address"}).waitFor();
@@ -246,6 +247,70 @@ const server=http.createServer((req,res)=>{
     await page.getByRole("button",{name:"View family-photo.jpg",exact:true}).waitFor();
     assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),390);
     await page.screenshot({path:path.join(shots,"photo-files-390.png"),fullPage:true});
+    await page.goto(origin+"/chat/synthetic-chat");
+    await page.getByRole("button",{name:"Choose a photo to share",exact:true}).waitFor();
+    const uploadsBefore=state().attachmentUploads;
+    let pick=page.waitForEvent("filechooser");
+    await page.getByRole("button",{name:"Choose a photo to share",exact:true}).click();
+    await (await pick).setFiles({name:"family-photo.jpg",mimeType:"image/jpeg",buffer:Buffer.from(TEST_PHOTO,"base64")});
+    await page.getByTestId("chat-attachment-preview").waitFor();
+    assert.equal(state().attachmentUploads,uploadsBefore,"Choosing a photo must not upload or send it");
+    await page.getByRole("button",{name:"Cancel attachment",exact:true}).click();
+    assert.equal(await page.getByTestId("attachment-draft").count(),0);
+    assert.equal(state().attachmentUploads,uploadsBefore);
+    pick=page.waitForEvent("filechooser");
+    await page.getByRole("button",{name:"Choose a photo to share",exact:true}).click();
+    await (await pick).setFiles({name:"family-photo.jpg",mimeType:"image/jpeg",buffer:Buffer.from(TEST_PHOTO,"base64")});
+    await page.screenshot({path:path.join(shots,"chat-photo-draft-390.png"),fullPage:true});
+    const sentPhoto=page.waitForResponse(response=>response.request().method()==="POST"&&new URL(response.url()).pathname.endsWith("/messages"));
+    await page.getByRole("button",{name:"Send attachment",exact:true}).click();
+    await sentPhoto;
+    assert.equal(state().attachmentUploads,uploadsBefore+1);
+    await page.getByRole("button",{name:"Open emotes",exact:true}).click();
+    await page.getByRole("button",{name:"Choose Hug emote",exact:true}).click();
+    assert.notEqual(state().shared.type,"emote");
+    await page.getByRole("button",{name:"Cancel emote",exact:true}).click();
+    assert.notEqual(state().shared.type,"emote","Choosing/canceling an emote must not send it");
+    await page.getByRole("button",{name:"Open emotes",exact:true}).click();
+    await page.getByRole("button",{name:"Choose Hug emote",exact:true}).click();
+    await page.screenshot({path:path.join(shots,"emote-picker-390.png"),fullPage:true});
+    const sentEmote=page.waitForResponse(response=>response.request().method()==="POST"&&response.request().postDataJSON()?.type==="emote");
+    await page.getByRole("button",{name:"Send emote",exact:true}).click();
+    await sentEmote;
+    assert.equal(state().shared.emote_id,"fluent:hug");
+    await page.reload();
+    await page.getByTestId("emote-image-hug").waitFor();
+    await page.waitForFunction(()=>document.querySelector('[data-testid="emote-image-hug"] img')?.src.includes(".png"));
+    await page.screenshot({path:path.join(shots,"emote-reduced-motion-390.png"),fullPage:true});
+    await page.emulateMedia({reducedMotion:"no-preference"});
+    await page.waitForFunction(()=>{const image=document.querySelector('[data-testid="emote-image-hug"] img');return image?.src.includes(".webp")&&image.naturalWidth>0;});
+    const frame=()=>page.getByTestId("emote-image-hug").locator("img").evaluate(image=>{const canvas=document.createElement("canvas");canvas.width=64;canvas.height=64;canvas.getContext("2d").drawImage(image,0,0,64,64);return canvas.toDataURL();});
+    const firstFrame=await frame();
+    await page.waitForTimeout(240);
+    assert.notEqual(await frame(),firstFrame,"The downloaded emote must visibly animate");
+    await page.screenshot({path:path.join(shots,"emote-playing-390.png"),fullPage:true});
+    receiveAsSister();await page.reload();
+    await page.getByTestId("emote-image-hug").waitFor();
+    await page.getByRole("button",{name:/Hug emote/}).click();
+    await page.goto(origin+"/credits");
+    await page.getByText("Copyright (c) Microsoft Corporation.",{exact:false}).waitFor();
+    const history=Array.from({length:80},(_,i)=>({id:"history-"+i,chat_id:"synthetic-chat",type:"text",text:"History "+i,sender_id:"qa-user",created_at:new Date(Date.UTC(2026,9,29,12,0,i)).toISOString()}));
+    setHistory(history);await page.goto(origin+"/chat/synthetic-chat");
+    await page.getByText("History 79",{exact:true}).waitFor();
+    const scroller=page.getByTestId("chat-message-list");
+    await scroller.evaluate(node=>{node.scrollTop=0;node.dispatchEvent(new Event("scroll"));});
+    await page.waitForTimeout(250);
+    setHistory([...history,{id:"incoming-80",chat_id:"synthetic-chat",type:"text",text:"Arrived while reading",sender_id:"qa-user",created_at:"2026-10-30T12:00:00Z"}]);
+    await page.getByRole("button",{name:"Jump to new messages",exact:true}).waitFor({timeout:12000});
+    assert.ok(await scroller.evaluate(node=>node.scrollTop<80),"Incoming messages must preserve reading position");
+    await page.screenshot({path:path.join(shots,"new-messages-reading-390.png"),fullPage:true});
+    await page.getByRole("button",{name:"Jump to new messages",exact:true}).click();
+    await page.getByText("Arrived while reading",{exact:true}).waitFor();
+    await page.waitForTimeout(350);
+    assert.ok(await scroller.evaluate(node=>node.scrollTop>200));
+    await page.setViewportSize({width:320,height:844});
+    assert.equal(await page.locator("html").evaluate(node=>node.scrollWidth),320,"Chat composer must fit a small phone");
+
     await page.goto(origin+"/");
     await page.setViewportSize({width:320,height:844});
     await page.getByRole("button",{name:"Open quick actions",exact:true}).click();
