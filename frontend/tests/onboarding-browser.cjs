@@ -284,10 +284,11 @@ const server=http.createServer((req,res)=>{
     await page.screenshot({path:path.join(shots,"emote-reduced-motion-390.png"),fullPage:true});
     await page.emulateMedia({reducedMotion:"no-preference"});
     await page.waitForFunction(()=>{const image=document.querySelector('[data-testid="emote-image-hug"] img');return image?.src.includes(".webp")&&image.naturalWidth>0;});
-    const frame=()=>page.getByTestId("emote-image-hug").locator("img").evaluate(image=>{const canvas=document.createElement("canvas");canvas.width=64;canvas.height=64;canvas.getContext("2d").drawImage(image,0,0,64,64);return canvas.toDataURL();});
-    const firstFrame=await frame();
-    await page.waitForTimeout(240);
-    assert.notEqual(await frame(),firstFrame,"The downloaded emote must visibly animate");
+    const animated=page.getByTestId("emote-image-hug");
+    const firstFrame=await animated.screenshot({animations:"allow"});
+    let changed=false;
+    for(let sample=0;sample<8&&!changed;sample++){await page.waitForTimeout(160);changed=!firstFrame.equals(await animated.screenshot({animations:"allow"}));}
+    assert.ok(changed,"The visible downloaded emote must animate");
     await page.screenshot({path:path.join(shots,"emote-playing-390.png"),fullPage:true});
     receiveAsSister();await page.reload();
     await page.getByTestId("emote-image-hug").waitFor();
@@ -328,5 +329,12 @@ const server=http.createServer((req,res)=>{
     for(const width of [320,768,1440]){const s=await scenario(width,900);await s.context.close();}
     assert.deepEqual(errors,[],"No uncaught browser errors");
     console.log("Onboarding, profile photo, local-time schedule, saved themes/decor, invitation links, file bytes and quick action browser checks passed: signup, visibility, resume, verification, profile persistence/editing, and 320/390/768/1440px layouts.");
-  } finally {await browser.close();server.close();}
+  } finally {
+    for(const name of ["emote-picker-390.png","emote-playing-390.png","chat-photo-draft-390.png","new-messages-reading-390.png"]){
+      const file=path.join(shots,name);if(!fs.existsSync(file))continue;
+      const encoded=fs.readFileSync(file).toString("base64"),count=Math.ceil(encoded.length/3000);
+      for(let i=0;i<count;i++)console.log("KUKU_REVIEW "+name+" "+i+"/"+count+" "+encoded.slice(i*3000,(i+1)*3000));
+    }
+    await browser.close();server.close();
+  }
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
