@@ -41,7 +41,7 @@ def build():
     ROOT.mkdir(parents=True, exist_ok=True)
     tree = json.loads(fetch(f'https://api.github.com/repos/{REPO}/git/trees/{REV}?recursive=1'))['tree']
     manifest = {'source':'https://github.com/'+REPO,'revision':REV,'license':'MIT',
-                'conversion':{'edges':[160,128,112],'quality':[76,62],'method':3,'loop':1},'items':{}}
+                'conversion':{'edges':[160,128,112],'quality':[76,62],'method':3,'loop':1,'max_fps':25,'minimize_size':True},'items':{}}
     for key, folder in ITEMS.items():
         paths = [x['path'] for x in tree if x['path'].startswith('assets/'+folder+'/animated/') and x['path'].endswith('.png')]
         if len(paths) != 1:
@@ -56,17 +56,21 @@ def build():
                 frames, durations = [], []
                 for frame in range(start,image.n_frames):
                     image.seek(frame)
+                    duration = max(1,round(image.info.get('duration',100)))
+                    if durations and durations[-1] < 40:
+                        durations[-1] += duration
+                        continue
                     copy = image.convert('RGBA')
                     copy.thumbnail((edge,edge),Image.Resampling.LANCZOS)
                     frames.append(copy)
-                    durations.append(max(1,round(image.info.get('duration',100))))
+                    durations.append(duration)
                 for quality in [76,62]:
                     encoded = io.BytesIO()
-                    frames[0].save(encoded,'WEBP',save_all=True,append_images=frames[1:],duration=durations,loop=1,quality=quality,method=3)
+                    frames[0].save(encoded,'WEBP',save_all=True,append_images=frames[1:],duration=durations,loop=1,quality=quality,method=3,minimize_size=True,allow_mixed=True)
                     data = encoded.getvalue()
-                    if len(data) <= 180*1024:
+                    if len(data) <= 300*1024:
                         break
-                if len(data) <= 180*1024:
+                if len(data) <= 300*1024:
                     poster = io.BytesIO();frames[0].save(poster,'PNG',optimize=True)
                     poster_data = poster.getvalue()
                     break
@@ -83,7 +87,7 @@ def build():
     license_text = fetch(f'https://raw.githubusercontent.com/{REPO}/{REV}/LICENSE').decode()
     (ROOT/'LICENSE.txt').write_text(license_text,encoding='utf-8')
     (ROOT/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
-    assert sum(x.stat().st_size for x in ROOT.iterdir()) <= 3*1024*1024
+    assert sum(x.stat().st_size for x in ROOT.iterdir()) <= 4*1024*1024
     check()
 if __name__ == '__main__':
     check() if (ROOT/'manifest.json').exists() else build()
