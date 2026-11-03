@@ -1,0 +1,166 @@
+{
+  "source": "https://github.com/microsoft/fluentui-emoji-animated",
+  "revision": "daa0365c09795789ed2bc6e8b228c97736cb6669",
+  "license": "MIT",
+  "conversion": {
+    "edges": [
+      160,
+      128,
+      112
+    ],
+    "quality": [
+      76,
+      62
+    ],
+    "method": 3,
+    "loop": 1,
+    "max_fps": 25,
+    "minimize_size": true
+  },
+  "items": {
+    "heart": {
+      "name": "Beating heart",
+      "source": "https://media.githubusercontent.com/media/microsoft/fluentui-emoji-animated/daa0365c09795789ed2bc6e8b228c97736cb6669/assets/Beating%20heart/animated/beating_heart_animated.png",
+      "source_sha256": "dff68bb716586bcadded50269fbc57b53530cb4a2cb8a5c66d32cb3f94c0b5ea",
+      "webp_sha256": "aa73f3c29c36a12f7cbc4e9677f75640ab074d87301a6de1667c4e3cd105f79d",
+      "png_sha256": "754d12e0cc0cc5a4fa88feed32e0cf74faa863dc4c10fb2f1a36256345314ff5",
+      "bytes": 157692,
+      "edge": 160,
+      "quality": 76,
+      "frames": 35,
+      "duration_ms": 1470
+    },
+    "hug": {
+      "name": "Hugging face",
+      "source": "https://media.githubusercontent.com/media/microsoft/fluentui-emoji-animated/daa0365c09795789ed2bc6e8b228c97736cb6669/assets/Hugging%20face/animated/hugging_face_animated.png",
+      "source_sha256": "c43dd189c12bb6c25b0a747970be22b185de194b3b6cd818e7ff7368d188a3ed",
+      "webp_sha256": "73d784b7f0afcd047746249b353f99f8b700cc79590eb2f9710bb10c1910b754",
+      "png_sha256": "2efe0b796b01638c90b94aed18063fb9a01fe2e376f6f12e7f7cdf90f5461552",
+      "bytes": 282712,
+      "edge": 128,
+      "quality": 62,
+      "frames": 73,
+      "duration_ms": 3066
+    },
+    "laugh": {
+      "name": "Face with tears of joy",
+      "source": "https://media.githubusercontent.com/media/microsoft/fluentui-emoji-animated/daa0365c09795789ed2bc6e8b228c97736cb6669/assets/Face%20with%20tears%20of%20joy/animated/face_with_tears_of_joy_animated.png",
+      "source_sha256": "17d73757100a1ede76adbbc9d524a6b2073ad6db54238fec3cfb75e853d62481",
+      "webp_sha256": "1515acc8f9041601f49e4aa39c12949b6a35bec6005cde66710399abfce1e906",
+      "png_sha256": "2090170cc9318d6293338fc8ecc88b500198c4129a5220edcddbf8e65fc0e1e9",
+      "bytes": 247730,
+      "edge": 160,
+      "quality": 76,
+      "frames": 48,
+      "duration_ms": 2016
+    },
+    "love": {
+      "name": "Smiling face with hearts",
+      "source": "https://media.githubusercontent.com/media/microsoft/fluentui-emoji-animated/daa0365c09795789ed2bc6e8b228c97736cb6669/assets/Smiling%20face%20with%20hearts/animated/smiling_face_with_hearts_animated.png",
+      "source_sha256": "6fb423d07fa3f029b72ae91b77dd34fc0dd8f0cea4cd63c1312e6d2b996c06e8",
+      "webp_sha256": "be781f1df120bfe869b2048dd8c5e01e8af85e5d49631daa6919f139042f315d",
+      "png_sha256": "2c63b8b70b29b2d16f69faeaff616a8b26d3c874a3dfd86aba2924e80a1d2357",
+      "bytes": 288958,
+      "edge": 128,
+      "quality": 62,
+      "frames": 72,
+      "duration_ms": 3024
+    },
+    "kiss": {
+      "name": "Face blowing a kiss",
+      "source": "https://media.githubusercontent.com/media/microsoft/fluentui-emoji-animated/daa0365c09795789ed2bc6e8b228c97736cb6669/assets/Face%20blowing%20a%20kiss/animated/face_blowing_a_kiss_animated.png",
+      "source_sha256": "6ba34d9d459e6abf6800478213d25047e97f05d9a5842b67628c17bb4cc3f6d1",
+      "webp_sha256": "c99ca51b736b9e1fdee84bcb51e50a9d0965e04b246cd4dd966237e7bcb8bee3",
+      "png_sha256": "7142abc5333784c624ba2ea5548d5c5ce26101cd104309ad2f89f8d652badf2c",
+      "bytes": 283520,
+      "edge": 128,
+      "quality": 62,
+      "frames": 72,
+      "duration_ms": 3024
+    },
+    "think": {
+      "name": "Thinking face",
+      "source": "https://media.githubusercontent.com/media/microsoft/fluentui-emoji-animated/daa0365c09795789ed2bc6e8b228c97736cb6669/assets/Thinking%20face/animated/thinking_face_animated.png",
+      "source_sha256": "28feb13b9c2749d76f1f89b01c870c9e5687077eaf4a850e179a6d0d32c2b49a",
+      "webp_sha256": "2c5df3b6f24494e18eb8d9b216fd62c53f81eec045d29d3693b3a03e9d367075",
+      "png_sha256": "248695ed03b2862301e7dd0b71ba6b7da648df0b01f02fd8ae9738c390ab7b7e",
+      "bytes": 305554,
+      "edge": 128,
+      "quality": 76,
+      "frames": 73,
+      "duration_ms": 3066
+    },
+    "party": {
+      "name": "Partying face",
+      "source": "https://media.githubusercontent.com/media/microsoft/fluentui-emoji-animated/daa0365c09795789ed2bc6e8b228c97736cb6669/assets/Partying%20face/animated/partying_face_animated.png",
+      "source_sha256": "5c4e6367268d93243f16f72731ff46112ccf9ea4bcc239958366070683ac9213",
+      "webp_sha256": "5d8030e2106173930263d16aa9f593ef806f90fa2241c419c9897d154cb94f33",
+      "png_sha256": "6cc5fa36a3af25656b81e7f9ef915e2c3e5d1a54e05ff8894d9e35c040cf7e9b",
+      "bytes": 297638,
+      "edge": 128,
+      "quality": 62,
+      "frames": 73,
+      "duration_ms": 3066
+    },
+    "smile": {
+      "name": "Beaming face with smiling eyes",
+      "source": "https://media.githubusercontent.com/media/microsoft/fluentui-emoji-animated/daa0365c09795789ed2bc6e8b228c97736cb6669/assets/Beaming%20face%20with%20smiling%20eyes/animated/beaming_face_with_smiling_eyes_animated.png",
+      "source_sha256": "3bc3e1c3842391ad8722677bf21359f4e41df69408c446eadeca7f4174263dde",
+      "webp_sha256": "13e8fcdff9c05273fccba2ad7f9fe01bfb02016e9ae3c24839aba2480aaf92e7",
+      "png_sha256": "5f9cfc20728f592dcc64ce0bf7921330328dcb99ca31801d08bc301e77c8fc14",
+      "bytes": 280158,
+      "edge": 128,
+      "quality": 76,
+      "frames": 72,
+      "duration_ms": 3024
+    },
+    "sleep": {
+      "name": "Sleeping face",
+      "source": "https://media.githubusercontent.com/media/microsoft/fluentui-emoji-animated/daa0365c09795789ed2bc6e8b228c97736cb6669/assets/Sleeping%20face/animated/sleeping_face_animated.png",
+      "source_sha256": "e6330fd5ca1dd567fb9ef0565f3ef8dd184ba71c6d0686a27d557ec03a768622",
+      "webp_sha256": "6ac85cca9148e87c9bee075d7b8bb60de53609ce4963bd7459eed10b5569cca3",
+      "png_sha256": "0d5243f74772378068c3e935f98f4ad3f4d3642179754f35d105b82def61d226",
+      "bytes": 292666,
+      "edge": 128,
+      "quality": 62,
+      "frames": 73,
+      "duration_ms": 3066
+    },
+    "wow": {
+      "name": "Star-struck",
+      "source": "https://media.githubusercontent.com/media/microsoft/fluentui-emoji-animated/daa0365c09795789ed2bc6e8b228c97736cb6669/assets/Star-struck/animated/star-struck_animated.png",
+      "source_sha256": "207dd88eef8e7edc81d342fc6e2231d0e9204a303631e5804c92b8747d61fc17",
+      "webp_sha256": "64a60b0721481a02233f9942af9b5ac3db24a493e1e9640f4c1506a646027e95",
+      "png_sha256": "05773f36ce4fb942896064b437c016281b0ca86dd32921eb8855563e1ed624bb",
+      "bytes": 289420,
+      "edge": 112,
+      "quality": 76,
+      "frames": 71,
+      "duration_ms": 2982
+    },
+    "fire": {
+      "name": "Fire",
+      "source": "https://media.githubusercontent.com/media/microsoft/fluentui-emoji-animated/daa0365c09795789ed2bc6e8b228c97736cb6669/assets/Fire/animated/fire_animated.png",
+      "source_sha256": "102939d4b92503199005c497e25e972ddc29d6d8fbe2d90ea50ef8d02062e3b6",
+      "webp_sha256": "ef07cf9eaa892589038be65bcda757c67346087589d757bbb0093219d5db9022",
+      "png_sha256": "df55e94ea5f274ee94e725cc52f7c1a2535ae7c190d260c1d7da1e59c4415425",
+      "bytes": 181174,
+      "edge": 160,
+      "quality": 76,
+      "frames": 48,
+      "duration_ms": 2016
+    },
+    "confetti": {
+      "name": "Party popper",
+      "source": "https://media.githubusercontent.com/media/microsoft/fluentui-emoji-animated/daa0365c09795789ed2bc6e8b228c97736cb6669/assets/Party%20popper/animated/party_popper_animated.png",
+      "source_sha256": "cae04ae58b7e5aeb0b22d37095f91342f10b807b661e8b5c1ef4c919f2829e12",
+      "webp_sha256": "485613097363b1df392824ddc83cb97ad5c3d23ac6f8590bc747fc0b73fb5722",
+      "png_sha256": "7266480a97b9602a8f7b03598f31741dd660c238e803cb663fd3f75f12a2441c",
+      "bytes": 275102,
+      "edge": 128,
+      "quality": 76,
+      "frames": 61,
+      "duration_ms": 2562
+    }
+  }
+}
