@@ -114,7 +114,7 @@ async def test_host_departure_and_repeated_leave_create_one_session_memory(clien
 async def test_expired_presence_is_not_reported_and_stale_socket_cannot_remove_new_connection(client, rooms):
     a, b, _, sid = rooms
     person = await server.db.users.find_one({"id": a["user"]["id"]})
-    person["_session_id"] = jwt.decode(a["token"], server.settings.JWT_SECRET, algorithms=["HS256"])["sid"]
+    person["_session_id"] = jwt.decode(a["token"], server.settings.JWT_SECRET, algorithms=["HS256"], audience="kuku", issuer="kuku")["sid"]
     await server._touch_space_connection(sid, person, "same-tab", socket_id="old-socket")
     await server._touch_space_connection(sid, person, "same-tab", socket_id="new-socket")
     await server._remove_space_connection(sid, person, "same-tab", socket_id="old-socket")
@@ -394,7 +394,7 @@ async def test_audio_access_is_rechecked_after_private_provider_startup(client, 
     async def delayed_open(key):
         async with original(key) as chunks:
             if change == "logout":
-                session_id = jwt.decode(b["token"], server.settings.JWT_SECRET, algorithms=["HS256"])["sid"]
+                session_id = jwt.decode(b["token"], server.settings.JWT_SECRET, algorithms=["HS256"], audience="kuku", issuer="kuku")["sid"]
                 await server.auth.revoke(session_id)
             elif change == "unverified":
                 await server.db.users.update_one({"id": b["user"]["id"]}, {"$set": {"email_verified": False}})

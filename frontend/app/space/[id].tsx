@@ -116,7 +116,7 @@ export default function SpaceRoomScreen() {
     else void (async () => {
       try {
         const sentAt = timelineNow(), joined = await spacesApi.join(id, cid, uid);
-        if (!alive()) return;
+        if (!alive()) { if (getSessionUserId() === uid) void spacesApi.leave(id, cid, uid).catch(() => {}); return; }
         sample(joined.server_time || joined.state.server_time, sentAt); acceptSnapshot(joined); setDataScope(scope); setLoading(false);
         await connect();
       } catch (cause) { if (alive()) { setLoading(false); setError(messageFor(cause, "This room could not be opened. Try again.")); } }
@@ -221,6 +221,7 @@ export default function SpaceRoomScreen() {
       <Text style={styles.secondary}>Hosting controls the shared song or video. Your own volume stays yours.</Text>
       {space.member_users.map(person => { const here = space.active_members.includes(person.id), hosting = space.state.host_id === person.id; return <View key={person.id} style={styles.memberRow}><Avatar name={person.name} seed={person.id} photo={person.avatar} size={42} /><View style={{ flex: 1 }}><Text style={styles.body}>{person.name}{person.id === uid ? " (you)" : ""}</Text><Text style={styles.small}>{hosting ? "Host · " : ""}{here ? "Here now" : "Invited"}</Text></View>{(isHost || space.creator_id === uid) && here && !hosting ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => void action(() => spacesApi.handoff(id, person.id, uid))} style={styles.textButton}><Text style={styles.link}>{person.id === uid ? "Host" : "Pass host"}</Text></Pressable> : null}</View>; })}
       {!isHost && space.creator_id !== uid ? <Text style={styles.small}>Ask your host in the room conversation if you'd like a turn.</Text> : null}
+      {actionError ? <Text accessibilityRole="alert" style={styles.error}>{actionError}</Text> : null}
     </RoomSheet>
     <ContentSheet key={scope} visible={panel === "content"} uid={uid} onClose={() => setPanel(null)} onChoose={chooseContent} busy={busy} actionError={actionError} />
     <ChatSheet key={scope + ":chat"} visible={panel === "chat"} onClose={() => setPanel(null)} spaceId={id} uid={uid} messages={messages} onSent={message => setMessages(current => mergeSpaceMessages(current, [message]))} onHistory={older => setMessages(current => mergeSpaceMessages(current, older))} />

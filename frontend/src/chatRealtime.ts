@@ -48,7 +48,7 @@ export function createChatConnection(uid: string, onStatus: (status: ChatConnect
       cursor = frame.cursor;
       emit(uid, {...frame, live: fallbackLive || frame.live}); return;
     }
-    emit(uid, frame);
+    if (frame.type === "refresh") emit(uid, {type: "refresh", cursor: frame.cursor});
   }
   async function poll() {
     if (!current() || fallbackBusy || socket?.readyState === 1) return;

@@ -248,12 +248,21 @@ async def test_space_membership_does_not_auto_admit(client):
     assert (await client.post("/api/auth/ws-ticket",headers=headers(c),json={"scope":"space:"+sid})).status_code==404
 
 @pytest.mark.asyncio
-async def test_space_cannot_publish_someone_elses_audio(client):
+async def test_space_cannot_publish_someone_elses_audio(client, private_files):
     a,b,c,cid=await pair(client)
     sid=(await client.post("/api/spaces",headers=headers(a),json={"member_ids":[b["user"]["id"]]})).json()["id"]
-    upload=(await client.post("/api/audio/uploads",headers=headers(c),json={"title":"Private","data_url":"data:audio/wav;base64,AAAA"})).json()
+    joined=await client.post(f"/api/spaces/{sid}/join",headers=headers(a),json={"connection_id":"owner-audio-test"})
+    assert joined.status_code==200
+    response=await client.post("/api/audio/uploads/binary?name=private.mp3&title=Private",headers=headers(c),content=b"ID3private-outsider-audio")
+    assert response.status_code==200,response.text
+    upload=response.json()
+    assert await server.db.audio_uploads.find_one({"id":upload["id"],"uploader_id":c["user"]["id"]})
     r=await client.post(f"/api/spaces/{sid}/content",headers=headers(a),json={"type":"audio","upload_id":upload["id"]})
+    # The valid host cannot publish an outsider's private file; hide its existence.
     assert r.status_code==404
+    assert (await client.post(f"/api/spaces/{sid}/content",headers=headers(b),json={"type":"audio","upload_id":upload["id"]})).status_code==403
+    assert (await client.post(f"/api/spaces/{sid}/content",headers=headers(c),json={"type":"audio","upload_id":upload["id"]})).status_code==404
+    assert (await client.get(f"/api/spaces/{sid}",headers=headers(a))).json()["content"] is None
 
 @pytest.mark.asyncio
 async def test_socket_ticket_single_use_and_scope(client):
