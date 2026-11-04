@@ -69,7 +69,7 @@ test("EmotePicker disables its modal transition for reduced motion and retains f
   const modules = {
     react: {default: react, ...react},
     "react-native": Object.fromEntries(["ActivityIndicator", "Modal", "Pressable", "ScrollView", "Text", "View"].map(name => [name, name])),
-    "react-native-safe-area-context": {SafeAreaView: "SafeAreaView"}, "@expo/vector-icons": {Ionicons: "Ionicons"},
+    "react-native-safe-area-context": {SafeAreaView: "SafeAreaView"}, "@expo/vector-icons/Ionicons": {default: "Ionicons"},
     "./emotes": {EMOTES: []}, "./EmoteImage": {default: "EmoteImage"},
     "./ThemeContext": {useTheme: () => ({c: {}, f: {}})}, "./useReducedMotion": {useReducedMotion: () => reduced},
   };
