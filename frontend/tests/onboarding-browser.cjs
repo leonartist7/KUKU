@@ -48,6 +48,7 @@ const server=http.createServer((req,res)=>{
       if(endpoint==="/api/attachments/synthetic-voice/download")return respond(200,{url:"https://voice-downloads.example.test/memo.webm",media_type:"audio/webm"});
       if(endpoint==="/api/chats/synthetic-chat/attachments"){if(req.method()==="OPTIONS")return respond(200,{});uploadedBytes=req.postDataBuffer();uploadAttempts++;if(uploadAttempts===1)return respond(503,{detail:"Your file couldn’t be saved. Please try again."});return respond(200,{id:"synthetic-attachment",file_name:"family.txt",file_size:uploadedBytes.length});}
       if(endpoint==="/api/attachments/synthetic-attachment/download")return respond(200,{url:"https://downloads.example.test/family.txt"});
+      if(endpoint==="/api/chats/synthetic-chat/messages/resolve"&&req.method()==="POST"){const rows=history||(shared?[message()]:[]);return respond(200,rows.filter(item=>(body.message_ids||[]).includes(item.id)));}
       if(endpoint==="/api/chats/synthetic-chat/messages"&&req.method()==="GET"){if(history){const after=new URL(req.url()).searchParams.get('after'),index=history.findIndex(m=>m.id===after);return respond(200,after&&index>=0?history.slice(index+1):history);}return respond(200,shared?[message()]:[]);}
       if(endpoint==="/api/chats/synthetic-chat/messages"&&req.method()==="POST"){shared=body;return respond(200,{...body,id:"synthetic-message",sender_id:"qa-user",created_at:new Date().toISOString()});}
       if(endpoint==="/api/chats/synthetic-chat")return respond(200,{id:"synthetic-chat",other:{id:"sister",name:"Sam"}});
@@ -285,6 +286,7 @@ const server=http.createServer((req,res)=>{
     assert.notEqual(state().shared.type,"emote","Choosing/canceling an emote must not send it");
     await page.getByRole("button",{name:"Open emotes",exact:true}).click();
     await page.getByRole("button",{name:"Choose Hug emote",exact:true}).click();
+    await page.waitForFunction(()=>{const p=document.querySelector('[data-testid="emote-selected-preview"]'),f=p?.querySelector('[data-testid="emote-image-hug"]'),i=f?.querySelector('img');return !!(f&&i&&i.complete&&i.naturalWidth>0&&i.naturalHeight>0&&i.src.split('?')[0].endsWith('/emotes/hug.png')&&getComputedStyle(f).opacity==='1'&&f.getBoundingClientRect().width>=140&&!p.querySelector('[data-testid="emote-fallback-hug"]'));});
     await page.screenshot({path:path.join(shots,"emote-picker-390.png"),fullPage:true});
     const sentEmote=page.waitForResponse(response=>response.request().method()==="POST"&&response.request().postDataJSON()?.type==="emote");
     await page.getByRole("button",{name:"Send emote",exact:true}).click();

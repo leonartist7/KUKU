@@ -38,7 +38,7 @@ export default function MessageSoundListener() {
       if (event.type !== "chat_changed" || seen.has(event.message_id)) return;
       seen.add(event.message_id);
       if (seen.size > 2_000) seen.delete(seen.values().next().value!);
-      if (event.live && event.sender_id !== uid && audible()) void play().catch(() => {});
+      if (event.change !== "updated" && event.live && event.sender_id !== uid && audible()) void play().catch(() => {});
     });
     const visibility = () => { track = incomingSoundTracker(uid); if (document.hidden) stopMessageSound(); };
     document.addEventListener("visibilitychange", visibility);

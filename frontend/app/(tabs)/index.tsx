@@ -22,6 +22,7 @@ function timeAgo(iso?: string) {
 function previewText(chat: Chat) {
   const message = chat.last_message;
   if (!message) return "Start a conversation";
+  if (message.deleted_at) return "Message removed";
   if (message.type === "text") return message.text || "";
   if (message.type === "emote") return (getEmote(message.emote_id)?.label || "A little feeling") + " emote";
   if (message.type === "voice") return "Voice message";

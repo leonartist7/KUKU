@@ -6,12 +6,20 @@ const REFRESH_KEY = "kuku_refresh";
 export const API_BASE = Platform.OS === "web" && !__DEV__ ? "/api" : API_ORIGIN + "/api";
 let accessToken: string | null = null;
 let sessionUserId: string | null = null;
+// A cached profile can constrain which account may restore, but is never a
+// credential and never populates sessionUserId or grants request access.
+let expectedRestoredUser: string | null = null;
 let sessionEpoch = 0;
 let refreshFlight: Promise<string | null> | null = null;
 const REQUEST_TIMEOUT_MS = 95_000;
 let secureWrites: Promise<unknown> = Promise.resolve();
 export const getSessionUserId = () => sessionUserId;
 export const getSessionEpoch = () => sessionEpoch;
+export function setExpectedRestoredUser(uid: string | null, expectedEpoch: number): boolean {
+  if (sessionEpoch !== expectedEpoch) return false;
+  expectedRestoredUser = uid;
+  return true;
+}
 const expiredListeners = new Set<() => void>();
 export function onSessionExpired(listener: () => void) {
   expiredListeners.add(listener);
@@ -42,11 +50,12 @@ function storeRefresh(value: string | null) {
 }
 export async function setToken(value: string | null) {
   accessToken = value;
-  if (!value) { sessionUserId = null; sessionEpoch++; refreshFlight = null; }
+  if (!value) { sessionUserId = null; expectedRestoredUser = null; sessionEpoch++; refreshFlight = null; }
   if (!value && Platform.OS !== "web") await storeRefresh(null);
 }
 export async function acceptSession(data: { token: string; refresh_token?: string; user: {id:string} }) {
   sessionEpoch++;
+  expectedRestoredUser = null;
   accessToken = data.token;
   sessionUserId = data.user.id;
   if (Platform.OS !== "web" && data.refresh_token) {
@@ -67,6 +76,7 @@ async function parse(response: Response) {
 export async function refreshSession(): Promise<string | null> {
   if (refreshFlight) return refreshFlight;
   const epoch = sessionEpoch;
+  const expectedUser = expectedRestoredUser || sessionUserId;
   const flight = (async () => {
     const refresh_token = Platform.OS === "web" ? undefined : await SecureStore.getItemAsync(REFRESH_KEY);
     if (Platform.OS !== "web" && !refresh_token) return null;
@@ -78,7 +88,9 @@ export async function refreshSession(): Promise<string | null> {
     if (sessionEpoch !== epoch) return accessToken;
     // A refresh rotates credentials in the same session; it does not invalidate
     // unrelated in-flight reads for that account.
-    if (sessionUserId && data.user.id !== sessionUserId) throw new ApiError("Your account changed. Please sign in again.", 401);
+    if ((expectedUser && data.user.id !== expectedUser) ||
+        (expectedRestoredUser && data.user.id !== expectedRestoredUser) ||
+        (sessionUserId && data.user.id !== sessionUserId)) throw new ApiError("Your account changed. Please sign in again.", 401);
     accessToken = data.token;
     sessionUserId = data.user.id;
     if (Platform.OS !== "web" && data.refresh_token) await storeRefresh(data.refresh_token);
@@ -98,12 +110,16 @@ export async function refreshSession(): Promise<string | null> {
   } finally { if (refreshFlight === flight) refreshFlight = null; }
 }
 export async function getToken(): Promise<string | null> {
-  return accessToken || refreshSession();
+  if (accessToken) {
+    if (expectedRestoredUser && sessionUserId !== expectedRestoredUser) throw new ApiError("Your account changed. Please sign in again.", 401);
+    return accessToken;
+  }
+  return refreshSession();
 }
 async function request<T>(path: string, options: RequestInit = {}, retried = false, expectedUser?: string): Promise<T> {
   const anonymous = ["/auth/login", "/auth/register", "/auth/forgot-password", "/auth/reset-password"].includes(path);
   const startedEpoch = sessionEpoch;
-  const startedUser = expectedUser || sessionUserId;
+  const startedUser = expectedUser || expectedRestoredUser || sessionUserId;
   const token = anonymous ? null : await getToken();
   const assertCurrent = () => {
     if (!anonymous && (sessionEpoch !== startedEpoch || (startedUser && sessionUserId !== startedUser))) throw new ApiError("Account changed", 401);
@@ -143,6 +159,9 @@ export type Message = {
   id: string; chat_id: string; sender_id: string; sender_name: string;
   type: "text" | "voice" | "image" | "file" | "space_invite" | "emote";
   emote_id?: string | null;
+  revision?: number; edited_at?: string | null; deleted_at?: string | null;
+  reply_to_id?: string | null; pinned?: boolean;
+  reactions?: {emoji: string; user_ids: string[]}[];
   text?: string | null; media?: string | null; file_name?: string | null; file_size?: number | null;
   duration_ms?: number | null; space_id?: string | null; space_name?: string | null;
   created_at: string; client_message_id?: string; attachment_id?: string; attachment_deleted?: boolean;

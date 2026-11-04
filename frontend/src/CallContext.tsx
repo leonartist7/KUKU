@@ -53,9 +53,9 @@ function initialSession(uid: string, other: User, direction: CallSession["direct
 }
 
 export function CallProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, restoring } = useAuth();
   const reducedMotion=useReducedMotion();
-  const uid = user?.email_verified ? user.id : null;
+  const uid = !restoring && user?.email_verified ? user.id : null;
   const uidRef = useRef(uid); uidRef.current = uid;
   const router = useRouter();
   const [incoming, setIncoming] = useState<IncomingCall | null>(null);

@@ -33,6 +33,9 @@ import PrivateImageCard from "../../src/PrivateImageCard";
 import {isImageFilename} from "../../src/imagePreview";
 import {subscribeChatEvents} from "../../src/chatRealtime";
 import {useChatConnection} from "../../src/ChatRealtimeProvider";
+import {mergeChatMessages,messageRemoved,replyFields} from "../../src/chatTools";
+import {useChatTools} from "../../src/useChatTools";
+import {ChatFindSheet,MessageActionSheet,MessageFocusSheet,ReactionChips,ReplyPreview} from "../../src/MessageTools";
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -77,6 +80,11 @@ function ChatConversation({id}: {id: string}) {
   activeChat.current = id+":"+(user?.id||"");
 
   const listRef = useRef<FlatList<Message>>(null);
+  const inputRef = useRef<TextInput>(null);
+  const tools=useChatTools({chatId:id,userId:user?.id,scopeRef:activeChat,messages,messagesRef,setMessages,setError});
+  const {updated,reconcile,mutate,openActions,openOriginal}=tools;
+  const reactTo=useCallback((messageId:string,emoji:string|null)=>{void mutate(messageId,"reaction",{emoji});},[mutate]);
+  useEffect(()=>{if(tools.replyToId&&!voiceOpen)inputRef.current?.focus();},[tools.replyToId,voiceOpen]);
 
   const load = useCallback(async (): Promise<void> => {
     if (!id || !user || (Platform.OS==="web" && document.hidden)) return;
@@ -103,7 +111,7 @@ function ChatConversation({id}: {id: string}) {
       ]);
       if (activeChat.current !== scope) return;
       setChatInfo(info);
-      const merged = Array.from(new Map([...messagesRef.current, ...msgs].map(m => [m.id, m])).values()).sort((a,b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+      const merged = mergeChatMessages(id,messagesRef.current,msgs);
       messagesRef.current = merged; setMessages(merged);
       setError(null);
     } catch (failure) {
@@ -147,12 +155,15 @@ function ChatConversation({id}: {id: string}) {
   useFocusEffect(
     useCallback(() => {
       focused.current = true;
-      void load();
+      void load();void reconcile();
       const stop = user ? subscribeChatEvents(user.id, event => {
-        if (event.type !== "chat_changed" || event.chat_id === id) void load();
+        if(event.type==="chat_changed"){
+          if(event.chat_id!==id)return;
+          if(event.change==="updated")updated(event.message_id);else void load();
+        }else{void load();void reconcile();}
       }) : () => {};
       return () => { focused.current = false; stop(); };
-    }, [load, user?.id, id]),
+    }, [load, user?.id, id, updated, reconcile]),
   );
 
   function jumpToLatest(){nearBottom.current=true;setNewMessages(false);listRef.current?.scrollToEnd({animated:true});}
@@ -169,9 +180,11 @@ function ChatConversation({id}: {id: string}) {
 
   async function send(payload: Record<string,unknown>): Promise<boolean> {
     if (!user || sendFlight.current) return false;
+    const replyAtSend=tools.replyToId;
+    if(replyAtSend&&(!tools.replyMessage||messageRemoved(tools.replyMessage))){setError("The original message is unavailable. Cancel this reply to send your draft. Your text is kept.");return false;}
     sendFlight.current = true;
     const scope=id+":"+user.id;setSending(true);
-    try { await queueMessage(user.id,payload); if(activeChat.current===scope){nearBottom.current=true;setNewMessages(false);}return activeChat.current===scope; }
+    try { await queueMessage(user.id,{...payload,...replyFields(replyAtSend)}); if(activeChat.current===scope){nearBottom.current=true;setNewMessages(false);tools.setReplyToId(current=>current===replyAtSend?null:current);}return activeChat.current===scope; }
     catch(e) { if(activeChat.current===scope)setError(e instanceof Error ? e.message : "Could not save this message for sending");return false; }
     finally {if(activeChat.current===scope){sendFlight.current = false;setSending(false);}}
   }
@@ -225,7 +238,7 @@ function ChatConversation({id}: {id: string}) {
     try {
       const older = await api.getAs<Message[]>(user.id,"/chats/" + id + "/messages?before=" + encodeURIComponent(messagesRef.current[0].id));
       if (activeChat.current !== scope) return;
-      const merged = Array.from(new Map([...older, ...messagesRef.current].map(message => [message.id, message])).values());
+      const merged = mergeChatMessages(id,messagesRef.current,older);
       messagesRef.current = merged; setMessages(merged); setHasOlder(older.length === 50);
     } catch (failure) {
       if (activeChat.current === scope) setError(failure instanceof Error ? failure.message : "Could not load older messages");
@@ -276,7 +289,7 @@ function ChatConversation({id}: {id: string}) {
         </Pressable>}
       </View>
 
-      {/* Phase 2 — Start a shared space */}
+      <View style={styles.toolsBar}>
       <Pressable
         style={styles.spacesPill}
         accessibilityRole="button" accessibilityLabel="Start a shared space" disabled={creatingSpace || !chatInfo?.other}
@@ -284,9 +297,12 @@ function ChatConversation({id}: {id: string}) {
         testID="shared-space-pill"
       >
         <Ionicons name="sparkles-outline" size={14} color={c.textSecondary} />
-        <Text style={styles.spacesText}>{creatingSpace ? "Creating your space…" : "Start a shared space"}</Text>
+        <Text numberOfLines={1} style={styles.spacesText}>{creatingSpace ? "Creating…" : "Shared space"}</Text>
         <Ionicons name="arrow-forward" size={12} color={c.primary} />
       </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Search conversation" testID="chat-search-button" onPress={()=>tools.setFindMode("search")} style={styles.iconBtn}><Ionicons name="search-outline" size={21} color={c.textSecondary}/></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Pinned messages" testID="chat-pins-button" onPress={()=>tools.setFindMode("pins")} style={styles.iconBtn}><Ionicons name="pin-outline" size={21} color={c.textSecondary}/></Pressable>
+      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -323,7 +339,7 @@ function ChatConversation({id}: {id: string}) {
             renderItem={({ item, index }) => <View>
               {index === 0 || new Date(messages[index - 1].created_at).toLocaleDateString() !== new Date(item.created_at).toLocaleDateString()
                 ? <Text style={styles.dateLabel}>{new Date(item.created_at).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}</Text> : null}
-              <MessageRow msg={item} mine={item.sender_id === user?.id} />
+              <MessageRow msg={item} mine={item.sender_id === user?.id} userId={user?.id||""} busy={tools.busy} replyMessage={item.reply_to_id?tools.lookup(item.reply_to_id):null} onActions={openActions} onOriginal={openOriginal} onReact={reactTo}/>
             </View>}
             ListHeaderComponent={hasOlder ? <Pressable accessibilityRole="button" accessibilityLabel="Load older messages" disabled={loadingOlder} onPress={()=>void loadOlder()}><Text style={{color:c.primary,padding:16,textAlign:"center",fontFamily:f.bodyMedium}}>{loadingOlder ? "Loading earlier messages…" : "Load older messages"}</Text></Pressable> : null}
             ListFooterComponent={<View>{pending.filter(p => !messages.some(m=>m.client_message_id===p.id)).map(p => <View key={p.id} style={{padding:12,alignSelf:"flex-end"}}>
@@ -341,6 +357,7 @@ function ChatConversation({id}: {id: string}) {
         )}
 
         {newMessages?<Pressable accessibilityRole="button" accessibilityLabel="Jump to new messages" onPress={jumpToLatest} style={{alignSelf:"center",flexDirection:"row",gap:8,paddingHorizontal:18,paddingVertical:12,borderRadius:24,backgroundColor:c.primary,marginBottom:8}}><Text style={{fontFamily:f.bodyBold,color:c.textInverse}}>New messages</Text><Ionicons name="arrow-down" size={18} color={c.textInverse}/></Pressable>:null}
+        {tools.replyToId?<View style={styles.replyDraft}><ReplyPreview draft message={tools.replyMessage} onOpen={()=>void tools.openOriginal(tools.replyToId!)} onCancel={()=>tools.setReplyToId(null)}/></View>:null}
         {draft?<View testID="attachment-draft" style={{padding:16,gap:10,borderTopWidth:1,borderColor:c.border,backgroundColor:c.bg}}>
           {draft.type==="image"?<Image source={{uri:draft.uri}} accessibilityLabel="Photo ready to send" testID="chat-attachment-preview" resizeMode="contain" style={{height:148,width:"100%",borderRadius:14}}/>:<View style={{flexDirection:"row",alignItems:"center",gap:10}}><Ionicons name="document-text-outline" size={24} color={c.primary}/><Text numberOfLines={2} style={{flex:1,fontFamily:f.bodyMedium,color:c.text}}>{draft.name}</Text></View>}
           <View style={{flexDirection:"row",gap:12}}><Pressable accessibilityRole="button" accessibilityLabel="Cancel attachment" disabled={sending} onPress={()=>setDraft(null)} style={{flex:1,minHeight:44,alignItems:"center",justifyContent:"center",borderRadius:14,backgroundColor:c.surface}}><Text style={{color:c.text,fontFamily:f.bodyMedium}}>Cancel</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="Send attachment" disabled={sending} onPress={()=>void sendAttachment()} style={{flex:1,minHeight:44,alignItems:"center",justifyContent:"center",borderRadius:14,backgroundColor:c.primary}}>{sending?<ActivityIndicator color={c.textInverse}/>:<Text style={{color:c.textInverse,fontFamily:f.bodyBold}}>Send {draft.type==="image"?"photo":"file"}</Text>}</Pressable></View>
@@ -351,13 +368,14 @@ function ChatConversation({id}: {id: string}) {
           <Pressable accessibilityRole="button" accessibilityLabel="Choose a file to share" disabled={sending} onPress={attachFile} style={styles.attachmentChoice} testID="attach-file"><Ionicons name="document-outline" size={23} color={c.primary}/><Text style={styles.attachmentLabel}>File</Text></Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Record a voice memo" disabled={sending} onPress={()=>{setAttachmentsOpen(false);setVoiceOpen(true);}} style={styles.attachmentChoice}><Ionicons name="mic-outline" size={23} color={c.primary}/><Text style={styles.attachmentLabel}>Voice memo</Text></Pressable>
         </View> : null}
-        {voiceOpen ? <VoiceComposer getChatId={async()=>id} onSent={()=>setVoiceOpen(false)} onClose={()=>setVoiceOpen(false)}/> : (
+        {voiceOpen ? <VoiceComposer getChatId={async()=>id} replyToId={tools.replyToId} onSent={(_,sentReply)=>{setVoiceOpen(false);tools.setReplyToId(current=>current===(sentReply||null)?null:current);}} onClose={()=>setVoiceOpen(false)}/> : (
           <View style={styles.composer}>
             <Pressable accessibilityRole="button" accessibilityLabel={attachmentsOpen ? "Close attachment options" : "Add an attachment"} accessibilityState={{expanded:attachmentsOpen}} disabled={sending} onPress={()=>{setAttachmentsOpen(value=>!value);setEmotesOpen(false);}} style={styles.attachBtn} testID="attachment-menu-button">
               <Ionicons name={attachmentsOpen ? "close" : "add"} size={23} color={c.text} />
             </Pressable>
             <View style={styles.inputWrap}>
             <TextInput
+              ref={inputRef}
               value={text}
               onChangeText={setText}
               placeholder="Message"
@@ -394,11 +412,22 @@ function ChatConversation({id}: {id: string}) {
           </View>
         )}
       </KeyboardAvoidingView>
+      <MessageActionSheet message={tools.actionMessage} userId={user?.id||""} busy={tools.busy} error={tools.actionError} onClose={tools.closeActions} onClearError={()=>tools.setActionError(null)}
+        onReply={()=>{if(tools.actionMessage)tools.reply(tools.actionMessage.id);}}
+        onReact={emoji=>{if(tools.actionMessage)reactTo(tools.actionMessage.id,emoji);}}
+        onEdit={(text,revision)=>{if(tools.actionMessage)void mutate(tools.actionMessage.id,"edit",{text,expected_revision:revision});}}
+        onRemove={revision=>{if(tools.actionMessage)void mutate(tools.actionMessage.id,"remove",{expected_revision:revision});}}
+        onPin={pinned=>{if(tools.actionMessage)void mutate(tools.actionMessage.id,"pin",{pinned});}}/>
+      <ChatFindSheet mode={tools.findMode} chatId={id} userId={user?.id||""} refreshVersion={tools.refreshVersion} onClose={()=>tools.setFindMode(null)} onOpen={messageId=>void openOriginal(messageId)}/>
+      <MessageFocusSheet message={tools.focusMessage} loading={tools.focusLoading} onClose={tools.closeFocus} onReply={()=>{if(tools.focusMessage)tools.reply(tools.focusMessage.id);}} onActions={()=>{if(tools.focusMessage)openActions(tools.focusMessage);}}/>
     </SafeAreaView>
   );
 }
 
-const MessageRow = React.memo(function MessageRow({ msg, mine }: { msg: Message; mine: boolean }) {
+const MessageRow = React.memo(function MessageRow({msg,mine,userId,busy,replyMessage,onActions,onOriginal,onReact}:{
+  msg:Message;mine:boolean;userId:string;busy:boolean;replyMessage:Message|null;
+  onActions:(message:Message)=>void;onOriginal:(messageId:string)=>void;onReact:(messageId:string,emoji:string|null)=>void;
+}) {
   const { c, f } = useTheme();
   const router = useRouter();
   const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
@@ -413,10 +442,13 @@ const MessageRow = React.memo(function MessageRow({ msg, mine }: { msg: Message;
   ];
   return (
     <View style={[styles.msgRow, mine ? styles.msgRight : styles.msgLeft]}>
+      {mine&&!msg.deleted_at?<Pressable accessibilityRole="button" accessibilityLabel="Message actions" testID={"message-actions-"+msg.id} disabled={busy} onPress={()=>onActions(msg)} style={styles.messageAction}><Ionicons name="ellipsis-horizontal" size={17} color={c.textTertiary}/></Pressable>:null}
       <View style={bubbleStyle} testID={photo?"photo-message-"+msg.id:undefined}>
+        {msg.reply_to_id&&!msg.deleted_at?<ReplyPreview message={replyMessage} onOpen={()=>onOriginal(msg.reply_to_id!)}/>:null}
+        {msg.deleted_at?<Text style={[styles.msgText,{color:c.textSecondary,fontStyle:"italic"}]}>Message removed</Text>:<>
         {msg.type === "emote" ? emote?<EmoteImage emote={emote} autoPlay/>:<Text style={styles.msgText}>Emote unavailable</Text>:null}
         {msg.type === "text" && (
-          <Text style={styles.msgText}>{msg.text}</Text>
+          <Text onLongPress={()=>onActions(msg)} style={styles.msgText}>{msg.text}</Text>
         )}
         {msg.type === "voice" && (
           <VoiceMessageBubble durationMs={msg.duration_ms || 0} outgoing={mine} media={msg.media} attachmentId={msg.attachment_id} unavailable={msg.attachment_deleted} />
@@ -470,10 +502,13 @@ const MessageRow = React.memo(function MessageRow({ msg, mine }: { msg: Message;
             <Ionicons name="arrow-forward" size={16} color={c.primary} />
           </Pressable>
         )}
+        </>}
         <Text style={styles.msgTime}>
-          {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          {msg.pinned?"Pinned · ":""}{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{msg.edited_at&&!msg.deleted_at?" · edited":""}
         </Text>
+        <ReactionChips message={msg} userId={userId} disabled={busy} onReact={emoji=>onReact(msg.id,emoji)}/>
       </View>
+      {!mine&&!msg.deleted_at?<Pressable accessibilityRole="button" accessibilityLabel="Message actions" testID={"message-actions-"+msg.id} disabled={busy} onPress={()=>onActions(msg)} style={styles.messageAction}><Ionicons name="ellipsis-horizontal" size={17} color={c.textTertiary}/></Pressable>:null}
     </View>
   );
 });
@@ -505,7 +540,11 @@ const makeStyles = (c: any, f: any) => StyleSheet.create({
     justifyContent: "center",
     backgroundColor: c.surface,
   },
+  toolsBar:{width:"100%",maxWidth:960,alignSelf:"center",flexDirection:"row",alignItems:"center",gap:8,paddingHorizontal:spacing.md,paddingVertical:8},
+  messageAction:{width:44,height:44,alignItems:"center",justifyContent:"center",alignSelf:"flex-end"},
+  replyDraft:{width:"100%",maxWidth:960,alignSelf:"center",paddingHorizontal:spacing.md,paddingTop:8},
   spacesPill: {
+    flex:1,minWidth:0,minHeight:44,
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "center",
@@ -516,9 +555,9 @@ const makeStyles = (c: any, f: any) => StyleSheet.create({
     borderWidth: 1,
     borderColor: c.border,
     borderStyle: "dashed",
-    marginVertical: spacing.sm,
+    marginVertical: 0,
   },
-  spacesText: { fontFamily: f.bodyMedium, fontSize: 13, color: c.textSecondary },
+  spacesText: { flex:1, fontFamily: f.bodyMedium, fontSize: 13, color: c.textSecondary },
   spacesSoon: {
     fontFamily: f.bodyMedium,
     fontSize: 10,

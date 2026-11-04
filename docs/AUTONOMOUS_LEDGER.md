@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-04T15:42:10.272Z
+Updated: 2026-11-04T15:58:11.129Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -70,9 +70,9 @@ An enabled continuation task was created on 4 November 2026: every four hours fo
 
 ## Active controller lease
 Controller: root initial implementation.
-Lease recorded at: 2026-11-04T15:26:53.339Z
-Lease expires at: 2026-11-04T16:56:53.339Z
-State: ACTIVE; integrating reduced-motion, browser acceptance and cloud Android build.
+Lease recorded at: 2026-11-04T15:58:11.129Z
+Lease expires at: 2026-11-04T17:28:11.129Z
+State: ACTIVE; integrating restored-session safety, chat tools, push cancellation and browser acceptance.
 
 ## Verified implementation checkpoint
 - Source 71b67c2a1e378a88e6982b2193f96ae49639e118: TypeScript, 65 frontend unit tests, web export and complete synthetic onboarding/chat/files/voice/emote/browser walkthrough pass. Backend suite: 88 tests pass against isolated MongoDB7.
@@ -90,3 +90,21 @@ State: ACTIVE; integrating reduced-motion, browser acceptance and cloud Android 
 - The release branch disables automatic Vercel frontend deployment. This intentionally preserves the current alias until the matching Render API is LIVE and verified; the implementation branch still builds previews. Assign the existing beta alias manually after backend readiness. Do not accidentally deploy frontend ahead of API.
 - M03/M04 source packages and tests are preserved as Git blobs, not integrated yet. Initial cached-shell restoration is being hardened with an explicit non-authoritative account constraint and server-proof gate.
 
+
+## Chat tools and startup integration checkpoint
+- Source 20d4cd79d1453c934b1a9f4b0e32fd99482d3c9f passes backend and frontend jobs in run 41861144619; Android native compilation is still in progress.
+- Incoming package adds replies by message ID, bounded reactions, owner text edits with conflict review, text/emote tombstones, conversation search and shared pins. Durable revision hints refresh older loaded messages and remain silent for updates. Original send retries use keyed immutable fingerprints.
+- Cached verified/onboarded profiles paint a shell before restore completes. Cached identity remains display-only: an expected-account API constraint rejects a different cookie account before adopting its token, and calls/realtime/outbox/notification setup wait for server proof. Validated sessions survive background refresh failures. Local agent evidence: 15 restoration/race cases and its 92-test frontend suite pass; integrated cloud TypeScript/browser evidence is still required.
+- Push attempts now carry fenced leases. Deleted messages cannot be requeued or overwrite cancelled/replacement attempts. Nine isolated race cases pass locally; integrated backend verification is pending. Already submitted external notifications cannot be recalled.
+- A separate synthetic chat-tools browser journey covers reply cancellation/send, reactions, edit conflicts, search/pin scope, older-message invalidations, removal/quote redaction, account/navigation races and 320/390/768px layouts.
+- docs/BACKUP_RESTORE.md records Atlas control-plane observations and a safe synthetic rehearsal. There is no verified live backup/restore, media-byte recovery or physical erasure claim.
+- Integrator verified unchanged server/chat_events/CallContext base blobs before overlay and spliced only the Message type additions into the newer API runtime. Original local worktrees may be stale; remote refs and the latest accepted commit remain authoritative.
+
+## Next bounded work
+1. Run the combined cloud backend, frontend, three browser journeys and Android preview checks; repair observed failures before claiming acceptance.
+2. Once the web gates pass, follow docs/RELEASE_RUNBOOK.md for an API-first update of the existing beta. Keep release-branch automatic Vercel deployment disabled; never move main or weaken access protection.
+3. Finish standalone Android compilation/provenance. A test-signed APK does not prove physical Android microphone/playback, notification delivery or production signing.
+4. Continue independently useful dependency maintenance and a synthetic backup/restore rehearsal. Real provider/device acceptance and billing choices remain external gates.
+
+- Emote previews now have a visible loading poster and correct PNG/WebP failure recovery, including six component-handler tests. Browser screenshots wait for the selected preview to decode.
+- Missing or removed reply originals preserve text and memo drafts; voice replies revalidate their captured target before queueing. A separate 404-original browser regression is included.

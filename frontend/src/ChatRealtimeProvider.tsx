@@ -6,10 +6,10 @@ import {createChatConnection, ChatConnectionStatus} from "./chatRealtime";
 const ConnectionContext = createContext<ChatConnectionStatus>("idle");
 export const useChatConnection = () => useContext(ConnectionContext);
 export default function ChatRealtimeProvider({children}: {children: React.ReactNode}) {
-  const {user} = useAuth();
+  const {user, restoring} = useAuth();
   const [status, setStatus] = useState<ChatConnectionStatus>("idle");
   useEffect(() => {
-    if (!user?.email_verified) { setStatus("idle"); return; }
+    if (restoring || !user?.email_verified) { setStatus(restoring && user ? "connecting" : "idle"); return; }
     const connection = createChatConnection(user.id, setStatus);
     let appActive = AppState.currentState !== "background" && AppState.currentState !== "inactive";
     const resume = () => {
@@ -32,7 +32,7 @@ export default function ChatRealtimeProvider({children}: {children: React.ReactN
         window.removeEventListener("offline", resume);
       }
     };
-  }, [user?.id, user?.email_verified]);
+  }, [user?.id, user?.email_verified, restoring]);
   return <ConnectionContext.Provider value={status}>{children}</ConnectionContext.Provider>;
 }
 

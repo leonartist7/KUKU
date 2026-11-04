@@ -3,12 +3,12 @@ import {View, Text, Pressable, Platform, ActivityIndicator} from "react-native";
 import {Ionicons} from "@expo/vector-icons";
 import {useTheme} from "./ThemeContext";
 import {useAuth} from "./AuthContext";
-import {api, uploadAttachment} from "./api";
+import {api, ApiError, uploadAttachment} from "./api";
 import {queueMessage} from "./outbox";
 import {VoiceMessageBubble} from "./MessageParts";
 
-export default function VoiceComposer({getChatId, onSent, onClose}: {
-  getChatId: () => Promise<string>; onSent: (chatId: string) => void; onClose?: () => void;
+export default function VoiceComposer({getChatId, onSent, onClose, replyToId}: {
+  getChatId: () => Promise<string>; onSent: (chatId: string, sentReplyToId?: string | null) => void; onClose?: () => void; replyToId?: string | null;
 }) {
   const {c, f} = useTheme(); const {user} = useAuth();
   const [phase, setPhase] = useState<"idle"|"requesting"|"recording"|"preview"|"sending">("idle");
@@ -111,14 +111,22 @@ export default function VoiceComposer({getChatId, onSent, onClose}: {
   }
   async function send() {
     if(!memo || !user || phase !== "preview")return;
-    const account = user.id; setPhase("sending");setError("");
+    const account = user.id, replyAtSend = replyToId || null; setPhase("sending");setError("");
     try {
       const chatId = uploaded.current?.chatId || await getChatId();
       if(uid.current !== account)throw new Error("Your account changed. Please sign in again.");
       if(!uploaded.current){const file=await uploadAttachment(chatId,memo.uri,memo.name,account,"voice");uploaded.current={id:file.id,chatId};}
       if(uid.current !== account)throw new Error("Your account changed. Please sign in again.");
-      await queueMessage(account,{chat_id:chatId,type:"voice",attachment_id:uploaded.current.id,duration_ms:memo.duration});
-      uploaded.current=null;onSent(chatId);
+      if(replyAtSend){
+        const original=await api.getAs<{id:string;chat_id:string;deleted_at?:string|null}>(account,"/chats/"+encodeURIComponent(chatId)+"/messages/"+encodeURIComponent(replyAtSend)).catch(failure=>{
+          if(failure instanceof ApiError&&failure.status===404)throw new Error("The original message is unavailable. Cancel the reply to send your memo. Your recording is kept.");
+          throw failure;
+        });
+        if(uid.current!==account)throw new Error("Your account changed. Please sign in again.");
+        if(original?.id!==replyAtSend||original.chat_id!==chatId||original.deleted_at)throw new Error("The original message is unavailable. Cancel the reply to send your memo. Your recording is kept.");
+      }
+      await queueMessage(account,{chat_id:chatId,type:"voice",attachment_id:uploaded.current.id,duration_ms:memo.duration,...(replyAtSend?{reply_to_id:replyAtSend}:{})});
+      uploaded.current=null;onSent(chatId,replyAtSend);
     }catch(e){if(alive.current){setPhase("preview");setError(e instanceof Error?e.message:"Your memo is kept. Try sending again.");}}
   }
   const button = {minHeight:44,minWidth:44,padding:12,borderRadius:16,alignItems:"center" as const,justifyContent:"center" as const};

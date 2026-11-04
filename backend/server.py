@@ -24,6 +24,7 @@ from auth_service import AuthService, hash_password, verify_password, profile
 from auth_service import digest
 from space_audio import space_audio_router
 from chat_events import ChatEvents
+from chat_actions import ChatActions, public_message as chat_message_view, request_fingerprint, same_send
 from account_privacy import account_privacy_router, account_privacy_indexes
 import settings
 from safety import safety_router, allow_direct
@@ -52,6 +53,7 @@ client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 auth = AuthService(db)
 chat_events = ChatEvents(lambda: db, auth)
+chat_actions = ChatActions(lambda: db, auth, chat_events)
 get_current_user = auth.verified
 
 
@@ -60,6 +62,7 @@ async def lifespan(app: FastAPI):
     await db.command("ping")
     await auth.indexes()
     await chat_events.indexes()
+    await chat_actions.indexes()
     await account_privacy_indexes(db)
     await db.calls.create_index([("status", 1), ("expires_at", 1)])
     await db.calls.create_index("id", unique=True)
@@ -109,6 +112,7 @@ api.include_router(recovery_router(lambda: db, auth))
 api.include_router(attachment_router(lambda: db, auth))
 api.include_router(space_audio_router(lambda: db, auth))
 api.include_router(chat_events.router)
+api.include_router(chat_actions.router)
 api.include_router(account_privacy_router(lambda: db, auth))
 
 
@@ -130,8 +134,8 @@ async def private_responses(request: Request, call_next):
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-def public_message(message):
-    return {k: v for k, v in message.items() if not k.startswith(("_", "push_", "sync_"))} if message else None
+def public_message(message, chat=None):
+    return chat_message_view(message, chat)
 
 def serialize_user(user: dict) -> dict:
     return profile(user)
@@ -152,6 +156,7 @@ class MessageIn(BaseModel):
     duration_ms: Optional[int] = None  # for voice
     space_id: Optional[str] = None  # for space_invite
     space_name: Optional[str] = None
+    reply_to_id: Optional[str] = Field(default=None, min_length=1, max_length=100)
 
 
 class ChatCreateIn(BaseModel):
@@ -201,7 +206,7 @@ async def list_chats(current=Depends(get_current_user)):
                 "id": c["id"],
                 "type": c.get("type", "dm"),
                 "other": serialize_user(other) if other else None,
-                "last_message": public_message(last_msg),
+                "last_message": public_message(last_msg, c),
                 "updated_at": c.get("updated_at", c.get("created_at")),
             }
         )
@@ -268,7 +273,7 @@ async def list_messages(chat_id: str, before: Optional[str] = None, after: Optio
             {"created_at": anchor["created_at"], "id": {op: anchor["id"]}}]
     direction = 1 if after else -1
     msgs = await db.messages.find(query, {"_id": 0}).sort([("created_at", direction), ("id", direction)]).limit(limit).to_list(limit)
-    return [public_message(m) for m in (msgs if after else list(reversed(msgs)))]
+    return [public_message(m, chat) for m in (msgs if after else list(reversed(msgs)))]
 
 
 @api.post("/chats/{chat_id}/messages")
@@ -284,10 +289,10 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
     if payload.client_message_id:
         previous = await db.messages.find_one({"chat_id": chat_id, "sender_id": current["id"], "client_message_id": payload.client_message_id}, {"_id": 0})
         if previous:
-            if previous.get("text") != payload.text or previous["type"] != payload.type or previous.get("attachment_id") != payload.attachment_id or previous.get("space_id") != payload.space_id or previous.get("emote_id") != payload.emote_id:
+            if not same_send(previous, payload):
                 raise HTTPException(409, "Message ID already used")
             await chat_events.publish_message(chat, previous)
-            return public_message(previous)
+            return public_message(previous, chat)
     if payload.type == "emote":
         if payload.emote_id not in EMOTE_IDS or any((payload.text, payload.media, payload.attachment_id, payload.space_id, payload.space_name, payload.duration_ms, payload.file_name, payload.file_size)):
             raise HTTPException(400, "Choose an emote from the KUKU collection")
@@ -297,6 +302,11 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
         raise HTTPException(400, "Empty message")
     if payload.media:
         raise HTTPException(400, "Upload files through the attachments endpoint")
+    if payload.reply_to_id:
+        original = await db.messages.find_one({"id": payload.reply_to_id, "chat_id": chat_id,
+                                               "deleted_at": {"$exists": False}})
+        if not original:
+            raise HTTPException(400, "Reply to an existing message in this conversation")
     attachment = None
     if payload.type in ("file", "image", "voice"):
         attachment = await db.attachments.find_one({"id": payload.attachment_id, "chat_id": chat_id, "owner_id": current["id"]})
@@ -315,6 +325,8 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
         "id": str(uuid.uuid4()),
         "chat_id": chat_id,
         "sync_pending": True,
+        "revision": 0,
+        "_request_fingerprint": request_fingerprint(payload),
         **({"client_message_id": payload.client_message_id} if payload.client_message_id else {}),
         "sender_id": current["id"],
         "sender_name": current["name"],
@@ -328,6 +340,7 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
         "duration_ms": payload.duration_ms,
         "space_id": payload.space_id,
         "space_name": payload.space_name,
+        "reply_to_id": payload.reply_to_id,
         "created_at": now_iso(),
     }
     if settings.PUSH_ENABLED or web_push_configured():
@@ -337,13 +350,13 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
         await db.messages.insert_one(msg)
     except DuplicateKeyError:
         previous = await db.messages.find_one({"chat_id": chat_id, "sender_id": current["id"], "client_message_id": payload.client_message_id}, {"_id": 0})
-        if not previous or previous.get("text") != payload.text or previous["type"] != payload.type or previous.get("attachment_id") != payload.attachment_id or previous.get("space_id") != payload.space_id or previous.get("emote_id") != payload.emote_id:
+        if not previous or not same_send(previous, payload):
             raise HTTPException(409, "Message ID already used")
         await chat_events.publish_message(chat, previous)
-        return public_message(previous)
+        return public_message(previous, chat)
     await db.chats.update_one({"id": chat_id}, {"$set": {"updated_at": msg["created_at"]}})
     await chat_events.publish_message(chat, msg)
-    return public_message(msg)
+    return public_message(msg, chat)
 
 
 # ---------- Files Hub ----------

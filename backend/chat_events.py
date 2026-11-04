@@ -27,6 +27,7 @@ class ChatEvents:
         self.router = APIRouter()
         self._publish_locks = weakref.WeakKeyDictionary()
         self._waiters = {}
+        self.repair_hooks = []
 
         async def sync(
             after: Optional[int] = Query(None, ge=0, le=MAX_CURSOR),
@@ -58,9 +59,12 @@ class ChatEvents:
     async def publish_message(self, chat, message):
         db = self.get_db()
         notified = set()
+        revision = message.get("revision", 0)
+        change = "created" if revision == 0 else "updated"
+        privacy_removal = bool(message.get("deleted_at")) or message.get("_privacy_removal_revision") == revision
         async with self._lock():
             for uid in set(chat.get("members", [])):
-                event_id = uid + ":" + message["id"]
+                event_id = uid + ":" + message["id"] + (":revision:" + str(revision) if revision else "")
                 if await db.chat_events.find_one({"_id": event_id}):
                     continue
                 counter = await db.event_counters.find_one_and_update(
@@ -73,13 +77,16 @@ class ChatEvents:
                         "_id": event_id, "user_id": uid, "seq": counter["seq"],
                         "chat_id": chat["id"], "message_id": message["id"],
                         "sender_id": message["sender_id"], "created_at": created,
+                        "revision": revision, "change": change, "privacy_removal": privacy_removal,
                         "expires_at": created + timedelta(days=7),
                     })
                 except DuplicateKeyError:
                     # A retried send repairs missing recipients without duplicate events.
                     continue
                 notified.add(uid)
-            await db.messages.update_one({"id": message["id"]}, {"$unset": {"sync_pending": ""}})
+            await db.messages.update_one({"id": message["id"], "chat_id": chat["id"], "$or": [
+                {"revision": revision}, *([{"revision": {"$exists": False}}] if revision == 0 else [])]},
+                {"$unset": {"sync_pending": ""}})
         for uid in notified:
             for event in tuple(self._waiters.get(uid, ())):
                 event.set()
@@ -88,13 +95,18 @@ class ChatEvents:
         # The marker is committed with the message. A caller disappearing after a
         # partial publication cannot permanently strand the recipient's refresh.
         db = self.get_db()
+        for repair in self.repair_hooks:
+            await repair()
         pending = await db.messages.find({"sync_pending": True}).sort("created_at", 1).limit(PAGE_SIZE).to_list(PAGE_SIZE)
         for message in pending:
             chat = await db.chats.find_one({"id": message["chat_id"]})
             if chat:
                 await self.publish_message(chat, message)
             else:
-                await db.messages.update_one({"id": message["id"]}, {"$unset": {"sync_pending": ""}})
+                revision = message.get("revision", 0)
+                await db.messages.update_one({"id": message["id"], "$or": [
+                    {"revision": revision}, *([{"revision": {"$exists": False}}] if revision == 0 else [])]},
+                    {"$unset": {"sync_pending": ""}})
 
     async def read(self, uid, after=None, through=None):
         if after is None:
@@ -120,11 +132,13 @@ class ChatEvents:
         ]}).to_list(2 * PAGE_SIZE) if peers else []
         blocked = {row["target_id"] if row["owner_id"] == uid else row["owner_id"] for row in blocks}
         allowed = {chat["id"] for chat in chats if not blocked.intersection(set(chat["members"]) - {uid})}
+        memberships = {chat["id"] for chat in chats}
         events = [{
             "type": "chat_changed", "chat_id": row["chat_id"],
             "message_id": row["message_id"], "sender_id": row["sender_id"],
+            "change": row.get("change", "created"), "revision": row.get("revision", 0),
             "cursor": row["seq"], "live": False,
-        } for row in rows if row["chat_id"] in allowed]
+        } for row in rows if row["chat_id"] in allowed or (row.get("privacy_removal") and row["chat_id"] in memberships)]
         return {
             "events": events, "cursor": int(rows[-1]["seq"]) if rows else after,
             "reset": False, "more": len(rows) == PAGE_SIZE,

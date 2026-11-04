@@ -1,7 +1,12 @@
-"""Durable push delivery state lives in each message, atomically with its content."""
+"""Durable message push state with fenced attempt leases.
+
+Cancellation stops future attempts; a generic notification already submitted to an
+external provider cannot be recalled and is not proof of device display.
+"""
 import asyncio
 import logging
 import os
+import uuid
 from datetime import timedelta
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -48,13 +53,22 @@ class ExpoGateway:
 gateway = ExpoGateway()
 
 async def deliver_one(db):
+    lease = uuid.uuid4().hex
     message = await db.messages.find_one_and_update({
+        "deleted_at": {"$exists": False},
         "push_state": {"$in": ["pending", "retry", "sending"]},
         "push_due": {"$lte": now()}, "push_attempts": {"$lt": 6},
-    }, {"$set": {"push_state": "sending", "push_due": now() + timedelta(minutes=2)}, "$inc": {"push_attempts": 1}},
+    }, {"$set": {"push_state": "sending", "push_lease": lease,
+                 "push_due": now() + timedelta(minutes=2)}, "$inc": {"push_attempts": 1}},
         return_document=ReturnDocument.AFTER)
     if not message:
         return False
+    # Every completion/retry is fenced by this attempt and the current live state.
+    # A tombstone or a replacement worker can invalidate the lease while I/O awaits.
+    owned = {"id": message["id"], "push_state": "sending", "push_lease": lease,
+             "deleted_at": {"$exists": False}}
+    async def still_owned():
+        return bool(await db.messages.find_one(owned, {"id": 1}))
     try:
         chat = await db.chats.find_one({"id": message["chat_id"]})
         recipients = [uid for uid in (chat or {}).get("members", []) if uid != message["sender_id"]]
@@ -66,14 +80,20 @@ async def deliver_one(db):
             user = await db.users.find_one({"id": device["user_id"], "disabled": {"$ne": True}})
             if session and user and user.get("email_verified") and not await blocked(db, message["sender_id"], device["user_id"]):
                 if "subscription" in device:
+                    if not await still_owned():
+                        return True
                     await send_browser(db, device, message)
                 else:
                     devices.append(device)
         if devices:
+            if not await still_owned():
+                return True
             notifications = [{"to": d["_id"], "title": "KUKU", "body": "You have a new message.",
                 "sound": "default", "channelId": "messages", "collapseId": message["id"], "tag": message["id"],
                 "data": {"chatId": message["chat_id"], "messageId": message["id"]}} for d in devices]
             tickets = await gateway.send(notifications)
+            if not await still_owned():
+                return True
             if len(tickets) != len(devices):
                 raise RuntimeError("Invalid push ticket response")
             retry = False
@@ -88,13 +108,31 @@ async def deliver_one(db):
                     retry = True
             if retry:
                 raise RuntimeError("Push ticket needs retry")
-        await db.messages.update_one({"id": message["id"]}, {"$set": {"push_state": "sent"}})
+        await db.messages.update_one(owned,
+            {"$set": {"push_state": "sent"}, "$unset": {"push_lease": ""}})
     except Exception:
         state = "failed" if message["push_attempts"] >= 6 else "retry"
-        await db.messages.update_one({"id": message["id"]}, {"$set": {"push_state": state,
-            "push_due": now() + timedelta(seconds=min(3600, 10 * 2 ** message["push_attempts"]))}})
-        log.warning("Push delivery deferred; state=%s", state)
+        updated = await db.messages.update_one(owned, {
+            "$set": {"push_state": state,
+                     "push_due": now() + timedelta(seconds=min(3600, 10 * 2 ** message["push_attempts"]))},
+            "$unset": {"push_lease": ""}})
+        if updated.matched_count:
+            log.warning("Push delivery deferred; state=%s", state)
     return True
+
+
+async def recover_delivery_states(db):
+    # Also clean legacy tombstones whose creator did not set cancelled explicitly.
+    await db.messages.update_many({
+        "deleted_at": {"$exists": True}, "$or": [
+            {"push_state": {"$in": ["pending", "retry", "sending"]}},
+            {"push_state": "cancelled", "push_lease": {"$exists": True}}]},
+        {"$set": {"push_state": "cancelled"}, "$unset": {"push_lease": ""}})
+    await db.messages.update_many({
+        "deleted_at": {"$exists": False}, "push_state": "sending",
+        "push_due": {"$lte": now()}, "push_attempts": {"$gte": 6}},
+        {"$set": {"push_state": "failed"}, "$unset": {"push_lease": ""}})
+
 
 async def check_receipts(db):
     entries = await db.push_receipts.find({"due": {"$lte": now()}}).limit(100).to_list(100)
@@ -115,8 +153,7 @@ async def run_worker(db):
     while True:
         try:
             # Recover messages whose last attempt was interrupted before marking failure.
-            await db.messages.update_many({"push_state":"sending","push_due":{"$lte":now()},"push_attempts":{"$gte":6}},
-                {"$set":{"push_state":"failed"}})
+            await recover_delivery_states(db)
             for _ in range(20):
                 if not await deliver_one(db): break
             if settings.PUSH_ENABLED:
