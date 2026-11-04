@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-04T18:33:29.223Z
+Updated: 2026-11-04T22:22:24.616Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: IDLE after B01 synthetic recovery checkpoint, 4 November 2026.
+Current controller: root P01 measurement checkpoint, 4 November 2026.
 Current source workspace is an isolated git worktree; never assume this local path exists in future runs.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -98,9 +98,9 @@ An enabled continuation task was created on 4 November 2026: every four hours fo
 
 ## Active controller lease
 Controller: root B01 continuation.
-Lease recorded at: 2026-11-04T18:20:42.123Z
-Lease expires at: 2026-11-04T18:33:29.223Z
-State: IDLE; B01 synthetic archive/restore and restored ASGI checks verified; next controller may acquire a lease.
+Lease recorded at: 2026-11-04T22:22:24.616Z
+Lease expires at: 2026-11-04T23:52:24.616Z
+State: ACTIVE; P01 controlled browser and bundle measurement checkpoint.
 
 ## Verified implementation checkpoint
 - Source 71b67c2a1e378a88e6982b2193f96ae49639e118: TypeScript, 65 frontend unit tests, web export and complete synthetic onboarding/chat/files/voice/emote/browser walkthrough pass. Backend suite: 88 tests pass against isolated MongoDB7.
