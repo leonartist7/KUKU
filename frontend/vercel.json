@@ -47,7 +47,8 @@
   },
   "git": {
     "deploymentEnabled": {
-      "codex/kuku-release-20261027": false
+      "codex/kuku-release-20261027": false,
+      "codex/verify-kuku-beta-20261104-1619": false
     }
   }
 }

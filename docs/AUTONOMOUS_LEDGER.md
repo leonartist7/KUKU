@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-04T16:11:06.898Z
+Updated: 2026-11-04T16:24:18.082Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -70,8 +70,8 @@ An enabled continuation task was created on 4 November 2026: every four hours fo
 
 ## Active controller lease
 Controller: root initial implementation.
-Lease recorded at: 2026-11-04T15:58:11.129Z
-Lease expires at: 2026-11-04T17:28:11.129Z
+Lease recorded at: 2026-11-04T16:24:18.082Z
+Lease expires at: 2026-11-04T17:54:18.082Z
 State: ACTIVE; integrating restored-session safety, chat tools, push cancellation and browser acceptance.
 
 ## Verified implementation checkpoint
@@ -115,3 +115,12 @@ State: ACTIVE; integrating restored-session safety, chat tools, push cancellatio
 - The first standalone Android build (source 20d4cd79, run 41861144619) completed successfully in the cloud: arm64 preview identity/signature/non-debuggable/Hermes checks pass. Test artifact 13341935322, approximately 42 MB, expires 11 November. This is a test-signed preview, not physical-device or native-push acceptance. A newer APK will follow after the combined web gates pass.
 - Workflow status summaries can lag behind completed logs/artifacts. Do not assume queued metadata means a job has not run: inspect step logs, terminal results and artifact provenance. Do not trigger duplicate runs to work around stale summaries.
 - Local executor disconnected again. All source packages are committed remotely; review/deploy work continues through connected APIs and cloud builds.
+
+## Verified beta rollout
+- Accepted runtime source: d3366883fb0b2f8ae67236f4e17014447d923bb0. Run 41864811206 passes 119 backend tests, TypeScript, 110 frontend unit tests, web export and all three complete browser journeys. Browser artifact 13342290598 includes responsive chat-tools screenshots.
+- Release review branch was fast-forwarded with an expected-SHA lease; main is unchanged. PR #2 was automatically marked merged into the review release branch.
+- Render deploy dep-dbllk5m1egvs73autn6g is LIVE on that exact source, with application startup complete at 16:16:44Z. No paid plan or service-settings change was made.
+- Credential-free cloud probe job 126701303450 in run 41866319345 passes: /health/live and /health/ready 200/ok; private account/chats 401/no-store; approved beta origin; public sign-in 200 and existing proxy 401/no-store. This is a bounded release check, not a keepalive schedule.
+- Existing beta alias was reassigned to READY dpl_H7HjvPoZUGah3LYAVDDBMABSumvC (d3366883, fra1). Alias UID stayed the same; project protection and app authentication were preserved. A fresh post-switch probe is still required before the rollout is called fully verified.
+- Draft PR #3 adds the cloud HTTP check because the local executor is unavailable. Its branch skips unnecessary Vercel preview builds; runtime remains the accepted source. Never publish a failed operations-branch preview as the beta.
+- Latest Android preview for the accepted runtime is still compiling in run 41864811206; the earlier 20d4cd79 test-signed build passed. Do not claim physical Android or native notification acceptance.
