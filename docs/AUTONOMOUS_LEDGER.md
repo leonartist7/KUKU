@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-04T16:24:18.082Z
+Updated: 2026-11-04T16:30:30.436Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,11 +29,11 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: root active implementation session, 4 November 2026.
+Current controller: IDLE after verified beta checkpoint, 4 November 2026.
 Current source workspace is an isolated git worktree; never assume this local path exists in future runs.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
-Path owners in this active session:
+Initial package owners (all returned; no agent has an outstanding write):
 - backend_rooms_calls: server.py, Space/call backend modules/tests.
 - design_foundations: theme/tokens/ThemeContext, WelcomeUI, tab shell/inbox/files/You.
 - spaces_frontend: Space routes/client/players/timing tests.
@@ -44,12 +44,28 @@ Path owners in this active session:
 ## Phase state
 | Phase | State | Required evidence |
 |---|---|---|
-| 1 Reliability | IN PROGRESS | Session/account isolation, bounded startup and reconnect |
-| 2 Design and interaction | IN PROGRESS | Responsive themes, spacing, focus/touch and settings |
-| 3 Chat/performance | IN PROGRESS | Shared realtime, durable replay and idempotent sends |
-| 4 Spaces | IN PROGRESS | Roles, private audio, playback/reconnect and lifecycle |
-| 5 Calls | IN PROGRESS; RELEASE GATED | Media subscription/state and real two-phone acceptance |
-| 6 Android/release | NOT COMPLETE | Signed APK/FCM/native calling, export/delete, restore/rollback |
+| 1 Reliability | FOUNDATIONS DEPLOYED | Account-bound restore/reconnect pass; cold-device and always-on gates open |
+| 2 Design and interaction | FOUNDATIONS DEPLOYED | Responsive browser/theme checks pass; physical accessibility review open |
+| 3 Chat/performance | CHAT TOOLS DEPLOYED | Realtime/replies/reactions/search/pins/edit/remove pass; performance traces open |
+| 4 Spaces | BETA DEPLOYED; DEVICE SYNC OPEN | Roles/private audio/reconnect checks pass; real drift walkthrough open |
+| 5 Calls | AUDIO FOUNDATION IMPLEMENTED; OFF | Provider and audible two-device checks required; native/video incomplete |
+| 6 Android/release | TEST APK BUILT; PRODUCTION GATED | Physical install/push/signing, full erasure and restore still open |
+
+
+## Current authoritative checkpoint
+This section supersedes historical pending statements below.
+- User-facing beta: https://kuku-git-codex-kuku-release-20261027-lionovart.vercel.app/login
+- Deployed runtime: d3366883fb0b2f8ae67236f4e17014447d923bb0. Backend LIVE dep-dbllk5m1egvs73autn6g; frontend READY/assigned dpl_H7HjvPoZUGah3LYAVDDBMABSumvC in fra1.
+- Accepted runtime run 41864811206: 119 backend tests, 110 frontend unit tests, TypeScript, web export and complete onboarding/media, Spaces and chat-tools browser journeys pass. Screenshots: artifact 13342290598.
+- Matching standalone Android preview built successfully in run 41864811206, job 126697439095 (BUILD SUCCESSFUL, 11m10s). Package/signature/non-debuggable/embedded Hermes checks pass. Artifact 13341234880: kuku-android-preview-test-signed-42-1, 42,460,897 archive bytes, expires 11 November. ZIP digest sha256:340d126bc9560fabecc69bb673f75bb9f841fe51f95f9c6a090d1dac27fc9498. The APK has its own SHA256SUMS.txt inside the archive; do not confuse the ZIP digest with the APK digest.
+- Android download: https://github.com/leonartist7/KUKU/actions/runs/41864811206/artifacts/13341234880
+- APK is arm64, separate .preview identity and PUBLIC TEST signing. Calls and native push are disabled; physical install, microphone/background behavior and production signing are not accepted.
+- Pre-switch HTTP probes pass in run 41866319345/job126701303450. Post-switch HTTP probes pass in run 41866907565/job126703318885: live/ready 200/ok, private routes 401/no-store, approved beta origin, public login 200, proxy 401/no-store.
+- Operations commit 0692c4a949bb2de5411a14044662f8021d4795bd adds the cloud probes and skips an unnecessary Vercel build for their branch. Its runtime is unchanged. Run 41866909171 repeats 119/110 tests, TypeScript, export and all three browser journeys successfully; Android is intentionally skipped on the operations branch.
+- Recent Render app ERROR-level check from 16:16:45 to 16:27:56Z returned no records. This is a bounded observation, not a guarantee of no future failure.
+- npm runtime audit is diagnostic and reports known findings. See docs/DEPENDENCY_REVIEW.md; no forced ESM decoder or unverified dependency override was applied.
+- Main, billing, DNS and project protection remain unchanged. No live personal messages/invitations or destructive data tests were sent. Source, checks and deployment evidence are remote; local Windows worktrees may be stale or unavailable.
+- Continuation is enabled every four hours for 42 passes (seven days), starting around 19:23 Europe/Paris on 4 November. Environment inheritance is recorded but does not guarantee a future computer is online. Use connected APIs/cloud CI when the executor is unavailable.
 
 ## Known external gates
 - Render service is currently free and healthCheckPath is unset in live configuration.
@@ -71,8 +87,8 @@ An enabled continuation task was created on 4 November 2026: every four hours fo
 ## Active controller lease
 Controller: root initial implementation.
 Lease recorded at: 2026-11-04T16:24:18.082Z
-Lease expires at: 2026-11-04T17:54:18.082Z
-State: ACTIVE; integrating restored-session safety, chat tools, push cancellation and browser acceptance.
+Lease expires at: 2026-11-04T16:30:30.436Z
+State: IDLE; verified beta and matching test APK completed. Next authorized scheduled pass may acquire a new lease.
 
 ## Verified implementation checkpoint
 - Source 71b67c2a1e378a88e6982b2193f96ae49639e118: TypeScript, 65 frontend unit tests, web export and complete synthetic onboarding/chat/files/voice/emote/browser walkthrough pass. Backend suite: 88 tests pass against isolated MongoDB7.
@@ -124,3 +140,11 @@ State: ACTIVE; integrating restored-session safety, chat tools, push cancellatio
 - Existing beta alias was reassigned to READY dpl_H7HjvPoZUGah3LYAVDDBMABSumvC (d3366883, fra1). Alias UID stayed the same; project protection and app authentication were preserved. A fresh post-switch probe is still required before the rollout is called fully verified.
 - Draft PR #3 adds the cloud HTTP check because the local executor is unavailable. Its branch skips unnecessary Vercel preview builds; runtime remains the accepted source. Never publish a failed operations-branch preview as the beta.
 - Latest Android preview for the accepted runtime is still compiling in run 41864811206; the earlier 20d4cd79 test-signed build passed. Do not claim physical Android or native notification acceptance.
+
+## Next controller handoff
+1. Fetch fresh remote implementation and release refs and this ledger. The final bookkeeping checkpoint descends from accepted d3366883 plus verified cloud-probe configuration; app runtime remains d3366883. Acquire a lease before writes. Original PR #2 is merged and PR #3 will be integrated into the beta review branch; open a new incremental draft PR for future code so pull-request CI runs.
+2. Continue B01 with a synthetic cloud-only dump/restore rehearsal (isolated data/media), then P01 with measured browser startup/bundle/list/media traces and a clear before/after report. These remain independently executable. Do not treat prepared runbooks as completed restore evidence.
+3. Apply only compatibility-verified dependency repairs described in DEPENDENCY_REVIEW, regenerating the lockfile in cloud and checking Expo/web/native compatibility; preserve the CommonJS decoder boundary.
+4. N01/C03/A01 need real Android phones and provider/signing configuration. Calls stay false until actual two-party audio and cleanup pass; C04 video depends on C03. Do not invent device evidence or repeatedly report unchanged blockers.
+5. R02 always-on hosting and live readiness settings require a billing/configuration decision; current free service can sleep. B01 full physical erasure, live backups/media restore and retention policy also remain explicit gates. Continue other authorized work without charging or destructive live operations.
+6. Use RELEASE_RUNBOOK for future compatible beta rollouts. The manual beta alias is authoritative; release branch auto-build stays disabled. A metadata/docs-only checkpoint does not require another API deploy. Avoid duplicate deployments and keepalive schedules.

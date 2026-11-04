@@ -1,6 +1,10 @@
 # Android standalone preview build
 
-Status: cloud build pipeline prepared; a successful Actions run and APK artifact are required before claiming a build exists. Physical-device acceptance remains open.
+Status: successful cloud build verified on 4 November 2026 for runtime d3366883fb0b2f8ae67236f4e17014447d923bb0. Physical-device acceptance remains open.
+
+[Download the preview ZIP](https://github.com/leonartist7/KUKU/actions/runs/41864811206/artifacts/13341234880) from run 41864811206. It contains KUKU-Preview-arm64-TEST-SIGNED.apk, SHA256SUMS.txt and build/signature evidence. Archive size: approximately 42 MB; retained until 11 November.
+
+Extract the APK, install KUKU Preview on an arm64 Android phone and use your existing KUKU account. This separate test app can be evaluated alongside the web beta. Calls and native push remain disabled. A successful build is not proof of physical microphone, playback, notifications or locked-screen behavior.
 
 ## What the preview is
 
@@ -27,7 +31,7 @@ No Expo account, EAS credential, private signing secret, Google Play account or 
 
 ## Pipeline integration
 
-The job fragment is in docs/ci/android-preview-job.yml. Append its android_preview entry under jobs in .github/workflows/release.yml, after reviewing the current workflow. The fragment is documentation, not a second independent workflow.
+The android_preview job is integrated in .github/workflows/release.yml. docs/ci/android-preview-job.yml is the reference fragment, not a second independent workflow.
 
 The job needs both backend and frontend checks to succeed. It runs for same-repository pull requests whose branch begins codex/kuku-. Pull-request triggers work on the review branch without requiring a workflow_dispatch file to exist on main.
 

@@ -1,6 +1,6 @@
 # KUKU chat tools — phase 3
 
-Status: implementation package awaiting integrated cloud checks and browser verification.
+Status: deployed to the invited beta on 4 November 2026, runtime d3366883. Integrated cloud run 41864811206 passes 119 backend tests, 110 frontend unit tests, TypeScript, web export and the full synthetic chat-tools browser journey. Physical-device and provider-delivery gates remain separate.
 This phase preserves the existing private-chat, Space and call transport foundations.
 
 ## Product behavior
@@ -75,7 +75,7 @@ Existing chat/time indexes remain. Added indexes: unique chats.id and sparse cha
 
 The server constructs ChatActions(lambda:db,auth,chat_events), includes its router and awaits indexes at startup. ChatEvents exposes repair_hooks; the existing room lifecycle worker calls repair_pending, which runs pin repairs before message repairs.
 
-Add tests/test_chat_actions.py to the backend pytest configuration. The package supplies regression coverage for replies and batch scope, owner/window/conflict edits, original-send replay after changes, emote/attachment removal boundaries, reaction races/allowlists, blocking cleanup, literal search/cursors, pin-cap races, interrupted pin repair and late-publication marker safety.
+tests/test_chat_actions.py is included in the backend pytest configuration. The package supplies regression coverage for replies and batch scope, owner/window/conflict edits, original-send replay after changes, emote/attachment removal boundaries, reaction races/allowlists, blocking cleanup, literal search/cursors, pin-cap races, interrupted pin repair and late-publication marker safety.
 
 Run the integrated backend suite against MongoDB 7 and the frontend type/unit/browser checks. Browser acceptance must include older-message edits after reconnect, deleted reply targets, narrow composer/tools layouts, keyboard navigation and quiet updated hints. No test or visual result is claimed until that run passes.
 
