@@ -29,7 +29,7 @@ const server=http.createServer(async(req,res)=>{
    if(preview){previewRequests.push({id:preview[1],size:url.searchParams.get("size"),format:url.searchParams.get("format")});return json({image:"data:image/jpeg;base64,"+PHOTO,width:16,height:16});}
    return json([]);
   }
-  let file=path.resolve(root,"."+p);if(!file.startsWith(root+path.sep)){res.writeHead(403);return res.end();}
+  let file=path.resolve(root,"."+p);if(file!==root&&!file.startsWith(root+path.sep)){res.writeHead(403);return res.end();}
   if(!fs.existsSync(file)||fs.statSync(file).isDirectory())file=path.join(root,"index.html");
   let item=cache.get(file);if(!item){const raw=fs.readFileSync(file);item={raw,gz:zlib.gzipSync(raw)};cache.set(file,item);}
   const ext=path.extname(file),type={".html":"text/html",".js":"application/javascript",".json":"application/json",".css":"text/css",".ttf":"font/ttf",".woff":"font/woff",".woff2":"font/woff2",".png":"image/png",".webp":"image/webp",".svg":"image/svg+xml"}[ext]||"application/octet-stream";
