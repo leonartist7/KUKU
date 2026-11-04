@@ -1,5 +1,5 @@
 """Synthetic logical recovery rehearsal. Never accepts a live URL or database."""
-import asyncio, hashlib, json, os, pathlib, re, subprocess, sys, tempfile, time
+import asyncio, hashlib, json, os, pathlib, platform, re, subprocess, sys, tempfile, time
 from datetime import datetime, timezone
 
 def require(condition, message):
@@ -76,6 +76,14 @@ async def main():
         await admin[target_name].command("createUser", "restore_fixture", pwd="fixture-only",
                                         roles=[{"role": "readWrite", "db": target_name}])
         target = AsyncIOMotorClient(target_uri, tz_aware=True)
+        from pymongo.errors import OperationFailure
+        try:
+            await target["kuku_restore_forbidden_fixture_" + suffix].probe.insert_one({"fixture": True})
+        except OperationFailure as denied:
+            require(denied.code == 13, "Unexpected namespace-denial error")
+        else:
+            raise RuntimeError("Target identity can write outside its restricted namespace")
+        passed("restore identity cannot write outside the generated target database")
         db = src[source_name]; bind(db)
         await server.auth.indexes()
         await db.chats.create_index("key", unique=True)
@@ -124,6 +132,8 @@ async def main():
             restore_ms = round((time.perf_counter() - restore_started) * 1000)
             restored = target[target_name]
             require(await manifest(restored) == before, "Restored document/index/validator manifest differs")
+            restored_media = await restored.attachments.find_one({"id": "fixture-media"})
+            require(restored_media["sha256"] == media_hash and restored_media["size"] == len(media), "Restored media metadata mismatch")
             passed("documents, counts, indexes and collection validators match")
             # Copy known bytes into a distinct temporary store; never reuse a live object namespace.
             with tempfile.TemporaryDirectory(prefix="kuku-fixture-media-") as temp:
@@ -176,7 +186,7 @@ async def main():
             passed("actual restored API: sign-in, session revocation, membership, retry, Space and closed-account denial")
             report = {"scope": "SYNTHETIC ONLY; no live database or media recovery claim",
                 "source_sha": os.environ.get("KUKU_SOURCE_SHA"), "checked_at": datetime.now(timezone.utc).isoformat(),
-                "mongo_source": (await src.server_info())["version"], "mongo_target": (await target.server_info())["version"],
+                "runner_kernel": platform.release(), "mongo_source": (await src.server_info())["version"], "mongo_target": (await target.server_info())["version"],
                 "dump_tool": dump_version, "restore_tool": restore_version, "archive_bytes": len(archive),
                 "archive_sha256": hashlib.sha256(archive).hexdigest(), "dump_ms": dump_ms, "restore_ms": restore_ms,
                 "elapsed_ms": round((time.perf_counter() - began) * 1000), "collection_counts": {k: v["count"] for k,v in before.items()},
