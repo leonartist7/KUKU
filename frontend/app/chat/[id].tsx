@@ -182,6 +182,7 @@ function ChatConversation({id}: {id: string}) {
     if (!user || sendFlight.current) return false;
     const replyAtSend=tools.replyToId;
     if(replyAtSend&&(!tools.replyMessage||messageRemoved(tools.replyMessage))){setError("The original message is unavailable. Cancel this reply to send your draft. Your text is kept.");return false;}
+    setError(null);
     sendFlight.current = true;
     const scope=id+":"+user.id;setSending(true);
     try { await queueMessage(user.id,{...payload,...replyFields(replyAtSend)}); if(activeChat.current===scope){nearBottom.current=true;setNewMessages(false);tools.setReplyToId(current=>current===replyAtSend?null:current);}return activeChat.current===scope; }
@@ -357,7 +358,7 @@ function ChatConversation({id}: {id: string}) {
         )}
 
         {newMessages?<Pressable accessibilityRole="button" accessibilityLabel="Jump to new messages" onPress={jumpToLatest} style={{alignSelf:"center",flexDirection:"row",gap:8,paddingHorizontal:18,paddingVertical:12,borderRadius:24,backgroundColor:c.primary,marginBottom:8}}><Text style={{fontFamily:f.bodyBold,color:c.textInverse}}>New messages</Text><Ionicons name="arrow-down" size={18} color={c.textInverse}/></Pressable>:null}
-        {tools.replyToId?<View style={styles.replyDraft}><ReplyPreview draft message={tools.replyMessage} onOpen={()=>void tools.openOriginal(tools.replyToId!)} onCancel={()=>tools.setReplyToId(null)}/></View>:null}
+        {tools.replyToId?<View style={styles.replyDraft}><ReplyPreview draft message={tools.replyMessage} onOpen={()=>void tools.openOriginal(tools.replyToId!)} onCancel={()=>{tools.setReplyToId(null);setError(null);}}/></View>:null}
         {draft?<View testID="attachment-draft" style={{padding:16,gap:10,borderTopWidth:1,borderColor:c.border,backgroundColor:c.bg}}>
           {draft.type==="image"?<Image source={{uri:draft.uri}} accessibilityLabel="Photo ready to send" testID="chat-attachment-preview" resizeMode="contain" style={{height:148,width:"100%",borderRadius:14}}/>:<View style={{flexDirection:"row",alignItems:"center",gap:10}}><Ionicons name="document-text-outline" size={24} color={c.primary}/><Text numberOfLines={2} style={{flex:1,fontFamily:f.bodyMedium,color:c.text}}>{draft.name}</Text></View>}
           <View style={{flexDirection:"row",gap:12}}><Pressable accessibilityRole="button" accessibilityLabel="Cancel attachment" disabled={sending} onPress={()=>setDraft(null)} style={{flex:1,minHeight:44,alignItems:"center",justifyContent:"center",borderRadius:14,backgroundColor:c.surface}}><Text style={{color:c.text,fontFamily:f.bodyMedium}}>Cancel</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="Send attachment" disabled={sending} onPress={()=>void sendAttachment()} style={{flex:1,minHeight:44,alignItems:"center",justifyContent:"center",borderRadius:14,backgroundColor:c.primary}}>{sending?<ActivityIndicator color={c.textInverse}/>:<Text style={{color:c.textInverse,fontFamily:f.bodyBold}}>Send {draft.type==="image"?"photo":"file"}</Text>}</Pressable></View>

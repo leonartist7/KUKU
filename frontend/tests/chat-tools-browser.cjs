@@ -223,10 +223,12 @@ const server=http.createServer((req,res)=>{
     assert.equal(await main().getByTestId("reply-draft").getByText("A temporary source for a draft.",{exact:true}).count(),0);
     const sendsBeforeMissingOriginal=sends.length;
     await main().getByTestId("send-button").click();
-    await main().getByTestId("chat-error").getByText("The original message is unavailable. Cancel this reply to send your draft. Your text is kept.",{exact:true}).waitFor();
+    await main().getByTestId("chat-error").getByText(/^The original message is unavailable\. Cancel this reply to send your draft\. Your text is kept\.(?:\s*·\s*Tap to retry)?$/).waitFor();
     assert.equal(await main().getByTestId("message-input").inputValue(),preservedDraft);
     assert.equal(sends.length,sendsBeforeMissingOriginal,"An unavailable reply original cannot queue a send");
     await page.getByRole("button",{name:"Cancel reply",exact:true}).click();
+    await main().getByTestId("chat-error").waitFor({state:"hidden"});
+    assert.equal(await main().getByTestId("message-input").inputValue(),preservedDraft);
     const ordinarySend=page.waitForResponse(response=>response.request().method()==="POST"&&new URL(response.url()).pathname==="/api/chats/chat-main/messages");
     await main().getByTestId("send-button").click();await ordinarySend;
     assert.equal(sends[sends.length-1].text,preservedDraft);assert.equal(sends[sends.length-1].reply_to_id,undefined,"Cancel reply preserves the text for an ordinary send");

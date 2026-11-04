@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-04T15:58:11.129Z
+Updated: 2026-11-04T16:11:06.898Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -108,3 +108,10 @@ State: ACTIVE; integrating restored-session safety, chat tools, push cancellatio
 
 - Emote previews now have a visible loading poster and correct PNG/WebP failure recovery, including six component-handler tests. Browser screenshots wait for the selected preview to decode.
 - Missing or removed reply originals preserve text and memo drafts; voice replies revalidate their captured target before queueing. A separate 404-original browser regression is included.
+
+## Integrated cloud evidence and narrow recovery fixes
+- Run 41863462822 on 642177430d915eb01551d5a54b2f9f663e88b940: all 119 backend tests against isolated MongoDB 7 pass; TypeScript, all 110 frontend unit tests and web export pass. Spaces browser journey passes.
+- Two browser failures are addressed in this checkpoint: the old recipient fixture changed the server account while retaining another cached profile (correctly rejected by the new identity guard); it now explicitly sets up the recipient's matching saved profile. The missing-original assertion now accepts the actual retry suffix while still requiring retained text and zero send requests. Cancel reply and valid send clear stale guidance; the browser explicitly checks error dismissal and retained draft.
+- The first standalone Android build (source 20d4cd79, run 41861144619) completed successfully in the cloud: arm64 preview identity/signature/non-debuggable/Hermes checks pass. Test artifact 13341935322, approximately 42 MB, expires 11 November. This is a test-signed preview, not physical-device or native-push acceptance. A newer APK will follow after the combined web gates pass.
+- Workflow status summaries can lag behind completed logs/artifacts. Do not assume queued metadata means a job has not run: inspect step logs, terminal results and artifact provenance. Do not trigger duplicate runs to work around stale summaries.
+- Local executor disconnected again. All source packages are committed remotely; review/deploy work continues through connected APIs and cloud builds.

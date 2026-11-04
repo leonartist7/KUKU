@@ -60,7 +60,7 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),width,"No horizontal overflow at "+width);
     await page.screenshot({path:path.join(shots,"login-"+width+".png"),fullPage:true});
     await page.route("https://voice-downloads.example.test/memo.webm",route=>route.fulfill({status:200,contentType:"audio/webm",headers:{"cache-control":"no-store","access-control-allow-origin":origin},body:voiceBytes}));
-    return {page,context,state:()=>({user,sends,profiles,uploadedBytes,shared,inviteEmail,photoSaves,voiceBytes,previewFormats,attachmentUploads}),receiveAsSister:()=>{user={...user,id:"sister",name:"Sam"};},setHistory:items=>{history=items;}};
+    return {page,context,state:()=>({user,sends,profiles,uploadedBytes,shared,inviteEmail,photoSaves,voiceBytes,previewFormats,attachmentUploads}),receiveAsSister:async()=>{user={...user,id:"sister",name:"Sam",email:"sister-qa@example.com"};/* Fixture setup for a separately saved recipient account; never adopt a mismatched cookie. */await page.evaluate(profile=>localStorage.setItem("kuku_profile",JSON.stringify(profile)),user);},setHistory:items=>{history=items;}};
   }
   try {
     const {page,context,state,receiveAsSister,setHistory}=await scenario(390,844);
@@ -304,7 +304,7 @@ const server=http.createServer((req,res)=>{
     for(let sample=0;sample<8&&!changed;sample++){await page.waitForTimeout(160);changed=!firstFrame.equals(await animated.screenshot({animations:"allow"}));}
     assert.ok(changed,"The visible downloaded emote must animate");
     await page.screenshot({path:path.join(shots,"emote-playing-390.png"),fullPage:true});
-    receiveAsSister();await page.reload();
+    await receiveAsSister();await page.reload();
     await page.getByTestId("emote-image-hug").waitFor();
     await page.getByRole("button",{name:/Hug emote/}).click();
     await page.goto(origin+"/credits");
