@@ -2,7 +2,7 @@ import React, {useCallback, useMemo, useRef, useState} from "react";
 import {View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator, ScrollView, Alert} from "react-native";
 import {SafeAreaView} from "react-native-safe-area-context";
 import {useFocusEffect, useRouter} from "expo-router";
-import {Ionicons} from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import {api, Message, User} from "../../src/api";
 import {layout, radius, spacing, typography} from "../../src/theme";
 import {useTheme} from "../../src/ThemeContext";

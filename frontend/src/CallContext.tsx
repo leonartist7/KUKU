@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, Modal, Platform } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { CALLS_ENABLED } from "./config";
 import { useAuth } from "./AuthContext";

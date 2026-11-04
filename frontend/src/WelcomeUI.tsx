@@ -2,7 +2,7 @@ import Decor from "./Decor";
 import React, {useEffect, useRef, useState} from "react";
 import {AccessibilityInfo, ActivityIndicator, Animated, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TextInputProps, useWindowDimensions, View} from "react-native";
 import {SafeAreaView} from "react-native-safe-area-context";
-import {Ionicons} from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import {useTheme} from "./ThemeContext";
 import {layout, motion} from "./theme";
 

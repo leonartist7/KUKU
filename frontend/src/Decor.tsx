@@ -1,6 +1,6 @@
 import React from "react";
 import {View, StyleSheet} from "react-native";
-import {Ionicons} from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import {useTheme} from "./ThemeContext";
 export default function Decor() {
   const {c, decor} = useTheme();

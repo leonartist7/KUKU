@@ -1,7 +1,7 @@
 import React, {useCallback, useState} from "react";
 import {View, Text, Pressable, ActivityIndicator} from "react-native";
 import {useFocusEffect} from "expo-router";
-import {Ionicons} from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import {api} from "./api";
 import {useTheme} from "./ThemeContext";
 import {useAuth} from "./AuthContext";

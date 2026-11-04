@@ -2,7 +2,7 @@ import React, { useCallback, useRef, useState } from "react";
 import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { radius, spacing } from "../../src/theme";
 import { useTheme } from "../../src/ThemeContext";
 import { useAuth } from "../../src/AuthContext";

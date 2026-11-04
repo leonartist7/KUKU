@@ -1,7 +1,7 @@
 import {openPrivateDownload} from "./downloads";
 import { api } from "./api";
 import { View, Text, StyleSheet, Pressable, Linking, Alert, Platform } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { createAudioPlayer } from "expo-audio";
 import { useRef, useState, useEffect } from "react";
 import { useTheme } from "./ThemeContext";

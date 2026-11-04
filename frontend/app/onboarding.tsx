@@ -2,7 +2,7 @@ import ProfilePhoto from "../src/ProfilePhoto";
 import React, {useRef, useState} from "react";
 import {Pressable, Text, View} from "react-native";
 import {Redirect, useLocalSearchParams, useRouter} from "expo-router";
-import {Ionicons} from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import {useAuth} from "../src/AuthContext";
 import {useTheme} from "../src/ThemeContext";
 import {palettes, ThemeName} from "../src/theme";

@@ -3,7 +3,7 @@ import React, {useState} from "react";
 import {Tabs, useRouter} from "expo-router";
 import {View, Text, Pressable, StyleSheet, Platform} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
-import {Ionicons} from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import {useTheme} from "../../src/ThemeContext";
 import {layout, Palette, radius} from "../../src/theme";

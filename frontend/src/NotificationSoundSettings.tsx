@@ -1,6 +1,6 @@
 import React,{useEffect,useRef,useState} from "react";
 import {View,Text,Pressable,Platform} from "react-native";
-import {Ionicons} from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import {useAuth} from "./AuthContext";
 import {useTheme} from "./ThemeContext";
 import {DEFAULT_SOUND,SOUND_CHOICES,SoundId,SoundSettings,readSound,saveSound,playMessageSound,stopMessageSound} from "./messageSounds";

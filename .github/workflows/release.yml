@@ -74,6 +74,7 @@ jobs:
         env:
           KUKU_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           KUKU_EXPECT_GOOGLE_FONT_FACES: '5'
+          KUKU_EXPECT_ICON_FAMILIES: 'Ionicons'
         run: node tests/performance-browser.cjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()

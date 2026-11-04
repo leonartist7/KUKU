@@ -1,6 +1,6 @@
 import React, {useCallback, useRef, useState} from "react";
 import {View, Text, Pressable, ScrollView, ActivityIndicator, Platform, AppState} from "react-native";
-import {Ionicons} from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import {SafeAreaView} from "react-native-safe-area-context";
 import {useRouter, useFocusEffect} from "expo-router";
 import {useAuth} from "../src/AuthContext";
