@@ -162,9 +162,9 @@ async def main():
                 "closed_at": closure["requested_at"], "name": "Former member", "avatar": None, "bio": "",
                 "deletion_status": "awaiting_operator_cleanup"}})
             await restored.sessions.update_many({}, {"$set": {"revoked": True}})
-            for name in ("devices", "web_devices", "ws_tickets", "file_tickets", "call_leases", "room_presence"):
+            for name in ("devices", "web_devices", "ws_tickets", "file_tickets"):
                 await restored[name].delete_many({})
-            passed("newer closure reconciled and old sessions/ephemeral credentials invalidated")
+            passed("newer closure reconciled and old sessions revoked")
             bind(restored)
             require((await client.get("/api/auth/me", headers=headers(alice))).status_code == 401, "Old session survived")
             live_alice, live_outsider = await login(client, "alice"), await login(client, "carol")
@@ -190,9 +190,11 @@ async def main():
                 "dump_tool": dump_version, "restore_tool": restore_version, "archive_bytes": len(archive),
                 "archive_sha256": hashlib.sha256(archive).hexdigest(), "dump_ms": dump_ms, "restore_ms": restore_ms,
                 "elapsed_ms": round((time.perf_counter() - began) * 1000), "collection_counts": {k: v["count"] for k,v in before.items()},
-                "checks": checks, "provider_attempts": len(outbound), "live_restore_verified": False,
+                "checks": checks, "intercepted_async_httpx_attempts": len(outbound), "live_restore_verified": False,
                 "limits": ["fixture filesystem is not a real Blob/R2 restore", "no FCV/PIT consistency or RPO/RTO guarantee",
-                           "no physical erasure proof", "no actual HTTP server startup/lifespan or device test"]}
+                           "no physical erasure proof", "no actual HTTP server startup/lifespan or device test",
+                           "nonempty device/ticket cleanup and active Space/call recovery not exercised",
+                           "only async HTTPX outbound sends instrumented; other network clients not instrumented"]}
             out = pathlib.Path("test-results/restore-rehearsal.json")
             out.parent.mkdir(exist_ok=True)
             out.write_text(json.dumps(report, indent=2) + "\n")
@@ -200,11 +202,15 @@ async def main():
             print("Synthetic restore rehearsal passed")
     finally:
         # Destroy only these generated namespaces on the two literal fixture hosts.
-        await src.drop_database(source_name)
-        await admin.drop_database(target_name)
-        src.close(); admin.close()
-        if target: target.close()
-        httpx.AsyncClient.send = original_send
+        try:
+            await src.drop_database(source_name)
+        finally:
+            try:
+                await admin.drop_database(target_name)
+            finally:
+                src.close(); admin.close()
+                if target: target.close()
+                httpx.AsyncClient.send = original_send
 
 if __name__ == "__main__":
     asyncio.run(main())
