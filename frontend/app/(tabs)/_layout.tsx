@@ -1,221 +1,86 @@
-import { CALLS_ENABLED } from "../../src/config";
-import React, { useRef, useState } from "react";
-import { Tabs } from "expo-router";
-import {
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  Platform,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import {CALLS_ENABLED} from "../../src/config";
+import React, {useState} from "react";
+import {Tabs, useRouter} from "expo-router";
+import {View, Text, Pressable, StyleSheet, Platform} from "react-native";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
+import {Ionicons} from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
-import { useTheme } from "../../src/ThemeContext";
-import { Palette, radius } from "../../src/theme";
-import RadialMenu, { RadialAction } from "../../src/RadialMenu";
+import {useTheme} from "../../src/ThemeContext";
+import {layout, Palette, radius} from "../../src/theme";
+import RadialMenu, {RadialAction} from "../../src/RadialMenu";
 
 type TabDef = {
-  name: "index" | "files" | "calls" | "spaces";
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  testID: string;
+  name: "index" | "spaces" | "files" | "you"; label: string;
+  icon: keyof typeof Ionicons.glyphMap; activeIcon: keyof typeof Ionicons.glyphMap; testID: string;
 };
-
-const LEFT: TabDef[] = [
-  { name: "index", label: "Home", icon: "chatbubble-ellipses-outline", testID: "tab-home" },
-  { name: "files", label: "Files", icon: "folder-outline", testID: "tab-files" },
-];
-const RIGHT: TabDef[] = [
-  { name: "calls", label: "Calls", icon: "call-outline", testID: "tab-calls" },
-  { name: "spaces", label: "Spaces", icon: "planet-outline", testID: "tab-spaces" },
+const TABS: TabDef[] = [
+  {name: "index", label: "Chats", icon: "chatbubble-ellipses-outline", activeIcon: "chatbubble-ellipses", testID: "tab-home"},
+  {name: "spaces", label: "Spaces", icon: "planet-outline", activeIcon: "planet", testID: "tab-spaces"},
+  {name: "files", label: "Files", icon: "folder-outline", activeIcon: "folder", testID: "tab-files"},
+  {name: "you", label: "You", icon: "person-outline", activeIcon: "person", testID: "tab-you"},
 ];
 
 export default function TabsLayout() {
-  const { c } = useTheme();
-  return (
-    <Tabs
-      screenOptions={{ headerShown: false }}
-      tabBar={(props) => <CustomTabBar {...props} />}
-    >
-      <Tabs.Screen name="index" options={{ title: "Home" }} />
-      <Tabs.Screen name="files" options={{ title: "Files" }} />
-      <Tabs.Screen name="calls" options={{ title: "Calls" }} />
-      <Tabs.Screen name="spaces" options={{ title: "Spaces" }} />
-    </Tabs>
-  );
+  return <Tabs screenOptions={{headerShown: false, tabBarHideOnKeyboard: true}} tabBar={props => <CustomTabBar {...props}/>}>
+    <Tabs.Screen name="index" options={{title: "Chats"}}/>
+    <Tabs.Screen name="spaces" options={{title: "Spaces"}}/>
+    <Tabs.Screen name="files" options={{title: "Files"}}/>
+    <Tabs.Screen name="you" options={{title: "You"}}/>
+    <Tabs.Screen name="calls" options={{title: "Calls", href: null}}/>
+  </Tabs>;
 }
 
-function CustomTabBar({ state, navigation }: any) {
-  const { c, f } = useTheme();
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const styles = makeStyles(c);
-
+function CustomTabBar({state, navigation}: any) {
+  const {c, f} = useTheme(); const insets = useSafeAreaInsets(); const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false); const [focused, setFocused] = useState<string | null>(null);
+  const styles = React.useMemo(() => makeStyles(c), [c]);
   const currentRoute = state.routes[state.index].name;
-
   function nav(name: string) {
-    const target = state.routes.find((r: any) => r.name === name);
-    if (target) {
-      const event = navigation.emit({
-        type: "tabPress",
-        target: target.key,
-        canPreventDefault: true,
-      });
-      if (!event.defaultPrevented) {
-        navigation.navigate(name);
-      }
-    }
+    const target = state.routes.find((route: any) => route.name === name);
+    if (!target) return;
+    const event = navigation.emit({type: "tabPress", target: target.key, canPreventDefault: true});
+    if (!event.defaultPrevented) navigation.navigate(name);
   }
-
   const radialActions: RadialAction[] = [
-    {
-      key: "new-message",
-      label: "New message",
-      icon: "chatbubble-ellipses-outline",
-      onPress: () => router.push("/new-message"),
-    },
-    {
-      key: "share-file",
-      label: "Upload a file",
-      icon: "document-attach-outline",
-      onPress: () => router.push("/new-message?mode=file"),
-    },
+    {key: "new-message", label: "New message", icon: "chatbubble-ellipses-outline", onPress: () => router.push("/new-message")},
+    {key: "share-file", label: "Upload a file", icon: "document-attach-outline", onPress: () => router.push("/new-message?mode=file")},
     {key: "share-photo", label: "Share a photo", icon: "image-outline", onPress: () => router.push("/new-message?mode=photo")},
     {key: "share-voice", label: "Voice memo", icon: "mic-outline", onPress: () => router.push("/new-message?mode=voice")},
     {key: "invite", label: "Invite someone", icon: "person-add-outline", onPress: () => router.push("/invite")},
-    {
-      key: "shared-space",
-      label: "Shared space",
-      icon: "sparkles-outline",
-      onPress: () => router.push("/(tabs)/spaces"),
-    },
+    {key: "shared-space", label: "Shared space", icon: "sparkles-outline", onPress: () => nav("spaces")},
   ];
-
-  const renderTab = (t: TabDef) => {
-    const active = currentRoute === t.name;
-    return (
-      <Pressable
-        key={t.name}
-        onPress={() => nav(t.name)}
-        style={styles.tab}
-        testID={t.testID}
-      >
-        <Ionicons
-          name={t.icon}
-          size={22}
-          color={active ? c.primary : c.textSecondary}
-        />
-        <Text
-          style={[
-            styles.tabLabel,
-            { color: active ? c.primary : c.textSecondary, fontFamily: f.bodyMedium },
-          ]}
-        >
-          {t.label}
-        </Text>
-        {active ? <View style={[styles.dot, { backgroundColor: c.primary }]} /> : <View style={styles.dotHidden} />}
-      </Pressable>
-    );
+  if (CALLS_ENABLED) radialActions.push({key: "calls", label: "Call history", icon: "call-outline", onPress: () => router.push("/(tabs)/calls")});
+  const renderTab = (tab: TabDef) => {
+    const active = currentRoute === tab.name;
+    return <Pressable key={tab.name} accessibilityRole="tab" accessibilityLabel={tab.label}
+      accessibilityState={{selected: active}} testID={tab.testID} onPress={() => nav(tab.name)}
+      onFocus={() => setFocused(tab.name)} onBlur={() => setFocused(null)}
+      style={({pressed}) => [styles.tab, {backgroundColor: active || pressed ? c.primaryBgSubtle : "transparent", borderColor: focused === tab.name ? c.primaryDark : "transparent"}]}>
+      <Ionicons name={active ? tab.activeIcon : tab.icon} size={22} color={active ? c.primaryDark : c.textSecondary}/>
+      <Text style={{fontFamily: active ? f.bodyBold : f.bodyMedium, color: active ? c.text : c.textSecondary, fontSize: 12, lineHeight: 17, textAlign: "center"}}>{tab.label}</Text>
+    </Pressable>;
   };
-
-  return (
-    <>
-      <View
-        style={[
-          styles.bar,
-          { paddingBottom: Math.max(insets.bottom, 10) },
-        ]}
-      >
-        {LEFT.map(renderTab)}
-
-        {/* Center + FAB */}
-        <View style={styles.centerWrap}>
-          <Pressable
-            accessibilityRole="button" accessibilityLabel="Open quick actions"
-            onPress={() => setMenuOpen(true)}
-            onLongPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-              setMenuOpen(true);
-            }}
-            delayLongPress={220}
-            style={({ pressed }) => [
-              styles.fab,
-              { backgroundColor: c.primary },
-              pressed && { transform: [{ scale: 0.95 }] },
-            ]}
-            testID="quick-action-button"
-          >
-            <Ionicons name="add" size={28} color={c.textInverse} />
-          </Pressable>
-        </View>
-
-        {RIGHT.filter(t => t.name !== "calls" || CALLS_ENABLED).map(renderTab)}
+  return <>
+    <View style={[styles.bar, {paddingBottom: Math.max(insets.bottom, 8)}]}><View style={styles.barInner}>
+      {TABS.slice(0, 2).map(renderTab)}
+      <View style={styles.createWrap}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Open quick actions" accessibilityState={{expanded: menuOpen}}
+          onFocus={() => setFocused("actions")} onBlur={() => setFocused(null)} onPress={() => setMenuOpen(true)}
+          onLongPress={() => {if (Platform.OS !== "web") void Haptics.selectionAsync().catch(() => {}); setMenuOpen(true);}}
+          delayLongPress={220} testID="quick-action-button"
+          style={({pressed}) => [styles.create, {backgroundColor: c.text, opacity: pressed ? 0.8 : 1, borderColor: focused === "actions" ? c.primary : c.text}]}>
+          <Ionicons name="add" size={27} color={c.bg}/>
+        </Pressable>
       </View>
-
-      <RadialMenu
-        visible={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        actions={radialActions}
-        anchor={undefined}
-      />
-    </>
-  );
+      {TABS.slice(2).map(renderTab)}
+    </View></View>
+    <RadialMenu visible={menuOpen} onClose={() => setMenuOpen(false)} actions={radialActions} anchor={undefined}/>
+  </>;
 }
-
-const makeStyles = (c: Palette) =>
-  StyleSheet.create({
-    bar: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      backgroundColor: c.surface,
-      paddingTop: 10,
-      paddingHorizontal: 8,
-      borderTopWidth: c.isDark ? 0 : 0,
-      shadowColor: c.text,
-      shadowOpacity: 0.05,
-      shadowOffset: { width: 0, height: -4 },
-      shadowRadius: 12,
-      elevation: 8,
-    },
-    tab: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "flex-start",
-      paddingTop: 6,
-      gap: 2,
-    },
-    tabLabel: {
-      fontSize: 11,
-      letterSpacing: 0.3,
-    },
-    dot: {
-      marginTop: 4,
-      width: 4,
-      height: 4,
-      borderRadius: 2,
-    },
-    dotHidden: { marginTop: 4, width: 4, height: 4 },
-    centerWrap: {
-      width: 72,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    fab: {
-      width: 58,
-      height: 58,
-      borderRadius: 29,
-      alignItems: "center",
-      justifyContent: "center",
-      marginTop: Platform.OS === "ios" ? -18 : -22,
-      shadowColor: "#3C352D",
-      shadowOpacity: 0.2,
-      shadowOffset: { width: 0, height: 6 },
-      shadowRadius: 14,
-      elevation: 8,
-      borderWidth: 3,
-      borderColor: c.bg,
-    },
-  });
+const makeStyles = (c: Palette) => StyleSheet.create({
+  bar: {backgroundColor: c.bg, paddingTop: 8, paddingHorizontal: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border},
+  barInner: {width: "100%", maxWidth: layout.contentMaxWidth, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 2},
+  tab: {flex: 1, minWidth: layout.touchTarget, minHeight: 58, paddingHorizontal: 2, paddingVertical: 6, alignItems: "center", justifyContent: "center", borderRadius: radius.md, borderWidth: 2, gap: 3},
+  createWrap: {width: 56, alignItems: "center", justifyContent: "center"},
+  create: {width: layout.touchTarget, height: layout.touchTarget, borderRadius: 18, alignItems: "center", justifyContent: "center", borderWidth: 2},
+});

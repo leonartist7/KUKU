@@ -79,7 +79,7 @@ test("late refresh cannot restore a signed-out session or dispatch another accou
   const ts=require("typescript");
   const source=ts.transpileModule(fs.readFileSync("src/api.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   let resolveFetch;let calls=0;const exports={};
-  vm.runInNewContext(source,{exports,__DEV__:false,Response,Set,Promise,Error,
+  vm.runInNewContext(source,{exports,__DEV__:false,Response,Set,Promise,Error,AbortController,setTimeout,clearTimeout,
     require:name=>name==="react-native"?{Platform:{OS:"web"}}:name==="./config"?{API_ORIGIN:"https://api.example"}:{},
     fetch:()=>{calls++;return new Promise(resolve=>{resolveFetch=resolve;});}});
   const pending=exports.refreshSession();

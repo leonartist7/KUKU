@@ -1,5 +1,7 @@
 import NotificationListener from "../src/NotificationListener";
 import MessageSoundListener from "../src/MessageSoundListener";
+import ChatRealtimeProvider from "../src/ChatRealtimeProvider";
+import OngoingCallBanner from "../src/OngoingCallBanner";
 import OutboxRunner from "../src/OutboxRunner";
 import React, {useEffect, useState} from "react";
 import { Stack } from "expo-router";
@@ -42,10 +44,12 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
         <AuthProvider>
+          <ChatRealtimeProvider>
           <OutboxRunner />
           <NotificationListener />
           <MessageSoundListener />
           <ThemedStack />
+          </ChatRealtimeProvider>
         </AuthProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
@@ -76,7 +80,7 @@ function ThemedStack() {
             <Stack.Screen name="chat/[id]" options={{animation: "slide_from_right"}} />
             <Stack.Screen name="call/[id]" options={{presentation: "fullScreenModal", animation: "fade"}} />
             <Stack.Screen name="new-message" options={{presentation: "transparentModal", animation: "slide_from_bottom"}} />
-            <Stack.Screen name="you" options={{animation: "slide_from_right"}} />
+            <Stack.Screen name="account" options={{animation: "slide_from_right"}} />
             <Stack.Screen name="appearance" options={{animation: "slide_from_right"}} />
             <Stack.Screen name="invite" />
             <Stack.Screen name="notifications" />
@@ -87,6 +91,7 @@ function ThemedStack() {
           </Stack.Protected>
         </Stack.Protected>
       </Stack>
+      <OngoingCallBanner />
     </CallProvider>
   );
 }

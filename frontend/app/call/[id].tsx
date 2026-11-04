@@ -1,413 +1,154 @@
-import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, {
-  useSharedValue,
-  withRepeat,
-  withTiming,
-  useAnimatedStyle,
-  Easing,
-} from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
-import { Room } from "livekit-client";
-import { api, User } from "../../src/api";
-import { callsApi } from "../../src/calls";
 import { useCall } from "../../src/CallContext";
+import { callDuration, callPhaseLabel } from "../../src/callState";
+import { CALLS_ENABLED } from "../../src/config";
 import Avatar from "../../src/Avatar";
 import { useTheme } from "../../src/ThemeContext";
 import { Palette, spacing } from "../../src/theme";
 
-type Phase = "setup" | "ringing" | "connected" | "ended";
-
 export default function CallScreen() {
-  const { id, callId } = useLocalSearchParams<{ id: string; callId?: string }>();
+  const params = useLocalSearchParams<{ id: string; callId?: string }>();
+  const id = typeof params.id === "string" ? params.id : "";
+  const callId = typeof params.callId === "string" ? params.callId : undefined;
   const router = useRouter();
   const { c, f } = useTheme();
-  const { subscribe } = useCall();
-  const styles = makeStyles(c, f);
-  const [other, setOther] = useState<User | null>(null);
-  const [phase, setPhase] = useState<Phase>("setup");
-  const [reason, setReason] = useState("");
-  const [seconds, setSeconds] = useState(0);
-  const [muted, setMuted] = useState(false);
-  const [speaker, setSpeaker] = useState(false);
-  const [audioState, setAudioState] = useState<"off" | "connecting" | "live" | "error">("off");
-  const callIdRef = useRef<string | null>(callId ?? null);
-  const roomRef = useRef<Room | null>(null);
-  const backTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
+  const { supported, session, start, join, hangUp, dismiss, toggleMute, resumeAudio, loadOutputs, selectOutput } = useCall();
+  const [now, setNow] = useState(Date.now());
+  const [showOutputs, setShowOutputs] = useState(false);
 
-  function disconnectRoom() {
-    const room = roomRef.current;
-    roomRef.current = null;
-    if (room) {
-      try {
-        room.disconnect();
-      } catch {}
-    }
-  }
-
-  async function connectLiveKit() {
-    const callId = callIdRef.current;
-    if (!callId) return;
-    setAudioState("connecting");
-    try {
-      const join = await callsApi.token(callId);
-      const room = new Room();
-      roomRef.current = room;
-      await room.connect(join.url, join.token, { autoSubscribe: true });
-      if (roomRef.current !== room) {
-        try {
-          room.disconnect();
-        } catch {}
-        return;
-      }
-      await room.localParticipant.setMicrophoneEnabled(true);
-      try {
-        room.startAudio();
-      } catch {}
-      if (roomRef.current !== room) {
-        try {
-          room.disconnect();
-        } catch {}
-        return;
-      }
-      setAudioState("live");
-    } catch {
-      disconnectRoom();
-      setAudioState("error");
-    }
-  }
-
-  function toggleMute() {
-    const next = !muted;
-    setMuted(next);
-    Haptics.selectionAsync().catch(() => {});
-    if (roomRef.current) {
-      roomRef.current.localParticipant.setMicrophoneEnabled(!next).catch(() => {});
-    }
-  }
-
-  function finish(msg: string) {
-    setPhase("ended");
-    setReason(msg);
-    backTimer.current = setTimeout(() => router.back(), 1300);
-  }
-
-  // Load the other user's info
   useEffect(() => {
-    api
-      .get<User[]>("/users")
-      .then((list) => setOther(list.find((x) => x.id === id) || null))
-      .catch(() => {});
-  }, [id]);
+    if (!supported || !id) return;
+    if (callId) void join(id, callId);
+    else void start(id);
+    // The provider owns media; leaving this screen minimizes rather than hangs up.
+  }, [callId, id, join, start, supported]);
 
-  // Start or join the call
   useEffect(() => {
-    if (callId) {
-      setPhase("connected");
-      return;
-    }
-    let mounted = true;
-    (async () => {
-      try {
-        const call = await callsApi.start(id);
-        if (!mounted) return;
-        callIdRef.current = call.id;
-        setPhase("ringing");
-      } catch (e: any) {
-        if (!mounted) return;
-        setPhase("ended");
-        setReason(e?.message === "User is busy" ? "Busy" : e?.message || "Call failed");
-        backTimer.current = setTimeout(() => router.back(), 1300);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [id, callId, router]);
+    if (session?.startedAt === null || !session || session.phase === "ended") return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [session?.callId, session?.phase, session?.startedAt]);
 
-  // Connect LiveKit media once the call is active
-  useEffect(() => {
-    if (phase !== "connected") return;
-    connectLiveKit();
-    return () => disconnectRoom();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  const back = () => {
+    if (session?.phase === "ended") dismiss();
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)");
+  };
+  if (!supported) return <SafeAreaView style={styles.safe}>
+    <View style={styles.unavailable}>
+      <View style={styles.symbol}><Ionicons name="call-outline" size={30} color={c.primary} /></View>
+      <Text style={styles.name}>A little closer, soon</Text>
+      <Text style={styles.explanation}>{CALLS_ENABLED ? "Audio calls are available in the browser while the installed app is being prepared." : "Calls are being prepared for this beta. You can keep chatting and sharing voice messages."}</Text>
+      <Pressable accessibilityRole="button" onPress={back} style={styles.primary}><Text style={styles.primaryText}>Back to KUKU</Text></Pressable>
+    </View>
+  </SafeAreaView>;
+  const phase = session?.phase || "preparing";
+  const canControl = phase === "connected" || phase === "reconnecting" || phase === "connecting";
+  const canOutput = typeof HTMLMediaElement !== "undefined" && "setSinkId" in HTMLMediaElement.prototype;
 
-  // Listen for signaling events for this call
-  useEffect(() => {
-    return subscribe((msg: any) => {
-      if (!msg?.call_id || msg.call_id !== callIdRef.current) return;
-      if (msg.type === "call_accepted") {
-        setPhase("connected");
-      } else if (msg.type === "call_declined") {
-        disconnectRoom();
-        finish("Declined");
-      } else if (msg.type === "call_missed") {
-        disconnectRoom();
-        finish("No answer");
-      } else if (msg.type === "call_ended") {
-        disconnectRoom();
-        finish("Call ended");
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subscribe]);
-
-  // Ringing timeout → cancel after 45s
-  useEffect(() => {
-    if (phase !== "ringing") return;
-    const t = setTimeout(() => {
-      if (callIdRef.current) callsApi.cancel(callIdRef.current).catch(() => {});
-      finish("No answer");
-    }, 45000);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
-
-  // Call timer
-  useEffect(() => {
-    if (phase !== "connected") return;
-    const t = setInterval(() => setSeconds((s) => s + 1), 1000);
-    return () => clearInterval(t);
-  }, [phase]);
-
-  useEffect(() => () => {
-    if (backTimer.current) clearTimeout(backTimer.current);
-  }, []);
-
-  async function endCall() {
-    disconnectRoom();
-    if (callIdRef.current) {
-      try {
-        await callsApi.end(callIdRef.current);
-      } catch {}
-    }
-    finish("Call ended");
-  }
-
-  async function cancelCall() {
-    disconnectRoom();
-    if (callIdRef.current) {
-      try {
-        await callsApi.cancel(callIdRef.current);
-      } catch {}
-    }
-    finish("");
-  }
-
-  const ringScale1 = useSharedValue(1);
-  const ringScale2 = useSharedValue(1);
-  useEffect(() => {
-    ringScale1.value = withRepeat(
-      withTiming(1.4, { duration: 1800, easing: Easing.out(Easing.ease) }),
-      -1,
-      false,
-    );
-    ringScale2.value = withRepeat(
-      withTiming(1.7, { duration: 2400, easing: Easing.out(Easing.ease) }),
-      -1,
-      false,
-    );
-  }, [ringScale1, ringScale2]);
-
-  const ring1Style = useAnimatedStyle(() => ({
-    transform: [{ scale: ringScale1.value }],
-    opacity: 1 - (ringScale1.value - 1) / 0.4,
-  }));
-  const ring2Style = useAnimatedStyle(() => ({
-    transform: [{ scale: ringScale2.value }],
-    opacity: 1 - (ringScale2.value - 1) / 0.7,
-  }));
-
-  const timerLabel = `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, "0")}`;
-  const kicker =
-    phase === "setup"
-      ? "Connecting…"
-      : phase === "ringing"
-        ? "Calling…"
-        : phase === "connected"
-          ? "On call"
-          : "Call ended";
-
-  return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <View style={styles.top}>
-        <Text style={styles.kicker}>{kicker}</Text>
-        <Text style={styles.name}>{other?.name || "…"}</Text>
-        <Text style={styles.timer}>
-          {phase === "connected"
-            ? timerLabel
-            : phase === "ringing"
-              ? "ringing softly"
-              : phase === "setup"
-                ? ""
-                : reason || "goodbye"}
-        </Text>
-        {phase === "connected" && audioState === "connecting" ? (
-          <Text style={styles.audioStatus}>connecting audio…</Text>
-        ) : null}
-        {phase === "connected" && audioState === "live" ? (
-          <View style={styles.liveRow}>
-            <View style={styles.liveDot} />
-            <Text style={styles.audioStatus}>audio live</Text>
-          </View>
-        ) : null}
-        {phase === "connected" && audioState === "error" ? (
-          <Text style={styles.audioErr}>audio unavailable</Text>
-        ) : null}
+  return <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <View style={styles.header}>
+      <Pressable accessibilityRole="button" accessibilityLabel={phase === "ended" ? "Close call" : "Minimize call"} onPress={back} style={styles.headerButton} testID="minimize-call">
+        <Ionicons name={phase === "ended" ? "close" : "chevron-down"} size={24} color={c.text} />
+      </Pressable>
+      <Text style={styles.brand}>KUKU</Text>
+      <View style={styles.headerButton} />
+    </View>
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <Text style={styles.kicker}>{callPhaseLabel(phase)}</Text>
+      <View style={styles.avatarWrap}>
+        <View style={styles.halo} />
+        <Avatar name={session?.other.name} seed={session?.other.id || id} photo={session?.other.avatar} size={140} />
       </View>
-
-      <View style={styles.center}>
-        {phase === "setup" ? (
-          <ActivityIndicator color={c.primary} />
-        ) : (
-          <View style={styles.avatarWrap}>
-            {(phase === "ringing" || phase === "connected") && (
-              <>
-                <Animated.View style={[styles.ring, ring2Style]} />
-                <Animated.View style={[styles.ring, ring1Style]} />
-              </>
-            )}
-            <Avatar name={other?.name} seed={other?.id} photo={other?.avatar} size={140} />
-          </View>
-        )}
-        {other?.bio && phase !== "ended" ? <Text style={styles.bio}>{other.bio}</Text> : null}
+      <Text style={styles.name}>{session?.other.name || "Your contact"}</Text>
+      <Text style={styles.status} accessibilityLiveRegion="polite" testID="call-status">
+        {phase === "connected" ? callDuration(session?.startedAt ?? null, now) : session?.reason || (phase === "ringing" ? "Waiting for an answer." : phase === "preparing" ? "Checking your microphone." : "Waiting for both microphones.")}
+      </Text>
+      {phase === "connected" ? <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.liveText}>Audio connected</Text></View> : null}
+      {["preparing", "connecting", "reconnecting"].includes(phase) ? <ActivityIndicator color={c.primary} style={{ marginTop: 16 }} /> : null}
+      {session?.poorConnection && phase !== "ended" ? <Text style={styles.note}>The connection is weak. Audio may take a moment.</Text> : null}
+      {session?.audioBlocked ? <Pressable accessibilityRole="button" onPress={() => { void resumeAudio(); }} style={styles.audioRecovery} testID="call-enable-audio">
+        <Ionicons name="volume-high-outline" size={20} color={c.primaryDark} /><Text style={styles.recoveryText}>Tap to hear the call</Text>
+      </Pressable> : null}
+      {session?.controlError ? <Text accessibilityRole="alert" style={styles.error}>{session.controlError}</Text> : null}
+      {canControl && !canOutput ? <Text style={styles.note}>Your device manages the speaker and headphones.</Text> : null}
+      {showOutputs && canControl && session?.outputs.length ? <View style={styles.outputs}>
+        <Text style={styles.outputHeading}>Audio output</Text>
+        {session.outputs.map((output) => <Pressable key={output.id} accessibilityRole="button" accessibilityLabel={"Use " + output.label} accessibilityState={{ selected: session.outputId === output.id, disabled: session.controlPending }} disabled={session.controlPending} onPress={() => { void selectOutput(output.id); }} style={[styles.outputRow, session.outputId === output.id && { backgroundColor: c.primaryBgSubtle }]}>
+          <Ionicons name={session.outputId === output.id ? "checkmark-circle" : "headset-outline"} size={20} color={c.primaryDark} />
+          <Text style={styles.outputLabel}>{output.label}</Text>
+        </Pressable>)}
+      </View> : null}
+    </ScrollView>
+    {phase === "ended" ? <View style={styles.endActions}>
+      <Pressable accessibilityRole="button" onPress={back} style={styles.primary} testID="close-call"><Text style={styles.primaryText}>Back to KUKU</Text></Pressable>
+      <Pressable accessibilityRole="button" onPress={() => { setShowOutputs(false); void start(id); }} style={styles.callAgain}><Text style={styles.callAgainText}>Call again</Text></Pressable>
+    </View> : <View style={styles.bottom}>
+      <View style={styles.controls}>
+        {canControl ? <Control icon={session?.muted ? "mic-off-outline" : "mic-outline"} label={session?.muted ? "Unmute" : "Mute"} active={!!session?.muted} disabled={!!session?.controlPending} onPress={() => { void toggleMute(); }} /> : <View style={styles.controlSlot} />}
+        <View style={styles.controlSlot}>
+          <Pressable accessibilityRole="button" accessibilityLabel={phase === "ringing" || phase === "preparing" ? "Cancel call" : "Hang up"} onPress={() => { void hangUp(); }} style={styles.hangUp} testID={phase === "ringing" || phase === "preparing" ? "cancel-call" : "end-call"}>
+            <Ionicons name="call" size={28} color={c.textInverse} style={{ transform: [{ rotate: "135deg" }] }} />
+          </Pressable><Text style={styles.controlLabel}>{phase === "ringing" || phase === "preparing" ? "Cancel" : "Hang up"}</Text>
+        </View>
+        {canControl && canOutput ? <Control icon="headset-outline" label="Audio output" disabled={!!session?.controlPending} onPress={() => { setShowOutputs((value) => !value); void loadOutputs(); }} /> : <View style={styles.controlSlot} />}
       </View>
-
-      {phase === "ringing" ? (
-        <View style={styles.controls}>
-          <View style={{ width: 56 }} />
-          <Pressable onPress={cancelCall} style={[styles.btn, styles.endBtn]} testID="cancel-call">
-            <Ionicons name="call" size={26} color={c.textInverse} style={{ transform: [{ rotate: "135deg" }] }} />
-          </Pressable>
-          <View style={{ width: 56 }} />
-        </View>
-      ) : phase === "connected" ? (
-        <View style={styles.controls}>
-          <RoundBtn
-            icon={muted ? "mic-off-outline" : "mic-outline"}
-            label="Mute"
-            active={muted}
-            onPress={toggleMute}
-          />
-          <RoundBtn
-            icon={speaker ? "volume-high" : "volume-high-outline"}
-            label="Speaker"
-            active={speaker}
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
-              setSpeaker((s) => !s);
-            }}
-          />
-          <Pressable onPress={endCall} style={[styles.btn, styles.endBtn]} testID="end-call">
-            <Ionicons name="call" size={26} color={c.textInverse} style={{ transform: [{ rotate: "135deg" }] }} />
-          </Pressable>
-          <RoundBtn icon="videocam-outline" label="Video" />
-          <RoundBtn icon="ellipsis-horizontal" label="More" />
-        </View>
-      ) : null}
-    </SafeAreaView>
-  );
+      <Text style={styles.footnote}>You can minimize this call and keep chatting.</Text>
+    </View>}
+  </SafeAreaView>;
 }
 
-function RoundBtn({
-  icon,
-  label,
-  active = false,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  active?: boolean;
-  onPress?: () => void;
-}) {
+function Control({ icon, label, active, disabled, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; active?: boolean; disabled?: boolean; onPress: () => void }) {
   const { c, f } = useTheme();
   const styles = makeStyles(c, f);
-  return (
-    <View style={{ alignItems: "center", gap: 6 }}>
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [
-          styles.btn,
-          active && { backgroundColor: c.primaryBgSubtle, borderWidth: 1.5, borderColor: c.primary },
-          pressed && { transform: [{ scale: 0.94 }] },
-        ]}
-      >
-        <Ionicons name={icon} size={22} color={active ? c.primary : c.text} />
-      </Pressable>
-      <Text style={styles.btnLabel}>{label}</Text>
-    </View>
-  );
+  return <View style={styles.controlSlot}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: !!active, disabled: !!disabled }} disabled={disabled} onPress={onPress} style={[styles.control, active && { backgroundColor: c.primaryBgSubtle, borderColor: c.primaryDark }, disabled && { opacity: 0.5 }]}>
+      <Ionicons name={icon} size={24} color={active ? c.primaryDark : c.text} />
+    </Pressable>
+    <Text style={styles.controlLabel}>{label}</Text>
+  </View>;
 }
-
-const makeStyles = (c: Palette, f: any) =>
-  StyleSheet.create({
-    safe: { flex: 1, backgroundColor: c.surface },
-    top: {
-      paddingTop: spacing.lg,
-      alignItems: "center",
-    },
-    kicker: {
-      fontFamily: f.bodyMedium,
-      fontSize: 12,
-      letterSpacing: 1.4,
-      textTransform: "uppercase",
-      color: c.textTertiary,
-      marginBottom: 6,
-    },
-    name: { fontFamily: f.heading, fontSize: 32, color: c.text, letterSpacing: -0.5 },
-    timer: { fontFamily: f.body, fontSize: 14, color: c.textSecondary, marginTop: 4 },
-    liveRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
-    liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: c.success },
-    audioStatus: {
-      fontFamily: f.bodyMedium,
-      fontSize: 12,
-      color: c.success,
-      marginTop: 6,
-      textTransform: "lowercase",
-    },
-    audioErr: {
-      fontFamily: f.bodyMedium,
-      fontSize: 12,
-      color: c.error,
-      marginTop: 6,
-    },
-    center: { flex: 1, alignItems: "center", justifyContent: "center" },
-    avatarWrap: { width: 220, height: 220, alignItems: "center", justifyContent: "center" },
-    ring: {
-      position: "absolute",
-      width: 140,
-      height: 140,
-      borderRadius: 70,
-      borderWidth: 1.5,
-      borderColor: c.primaryLight,
-    },
-    bio: {
-      marginTop: spacing.lg,
-      fontFamily: f.body,
-      color: c.textSecondary,
-      fontSize: 14,
-      paddingHorizontal: spacing.xl,
-      textAlign: "center",
-    },
-    controls: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.lg,
-    },
-    btn: {
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: c.bg,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    endBtn: { backgroundColor: c.error, width: 64, height: 64, borderRadius: 32 },
-    btnLabel: { fontFamily: f.body, fontSize: 11, color: c.textSecondary },
-  });
+const makeStyles = (c: Palette, f: any) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: c.bg },
+  header: { paddingHorizontal: 16, paddingTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  headerButton: { width: 48, height: 48, alignItems: "center", justifyContent: "center", borderRadius: 24 },
+  brand: { fontFamily: f.bodyMedium, fontSize: 15, letterSpacing: 3, color: c.textSecondary },
+  content: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 32, minHeight: 360 },
+  kicker: { fontFamily: f.bodyMedium, fontSize: 14, color: c.textSecondary, marginBottom: 28 },
+  avatarWrap: { width: 192, height: 192, alignItems: "center", justifyContent: "center", marginBottom: 20 },
+  halo: { position: "absolute", width: 190, height: 190, borderRadius: 95, backgroundColor: c.primaryBgSubtle, borderWidth: 1, borderColor: c.border },
+  name: { fontFamily: f.heading, fontSize: 32, lineHeight: 40, color: c.text, textAlign: "center", maxWidth: 520 },
+  status: { fontFamily: f.body, fontSize: 16, lineHeight: 24, color: c.textSecondary, marginTop: 8, textAlign: "center", maxWidth: 380 },
+  liveRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 12 },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: c.success },
+  liveText: { fontFamily: f.bodyMedium, fontSize: 13, color: c.textSecondary },
+  note: { fontFamily: f.body, fontSize: 13, lineHeight: 20, color: c.textSecondary, marginTop: 14, textAlign: "center", maxWidth: 360 },
+  error: { fontFamily: f.body, fontSize: 14, lineHeight: 22, color: c.error, marginTop: 16, textAlign: "center", maxWidth: 380 },
+  audioRecovery: { minHeight: 48, paddingVertical: 12, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 24, backgroundColor: c.primaryBgSubtle, marginTop: 20 },
+  recoveryText: { fontFamily: f.bodyMedium, fontSize: 15, color: c.primaryDark },
+  outputs: { width: "100%", maxWidth: 360, borderRadius: 20, padding: 12, marginTop: 20, backgroundColor: c.surface },
+  outputHeading: { fontFamily: f.bodyMedium, fontSize: 14, color: c.textSecondary, padding: 10 },
+  outputRow: { minHeight: 48, padding: 12, flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 12 },
+  outputLabel: { fontFamily: f.body, fontSize: 14, color: c.text, flexShrink: 1 },
+  bottom: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 20 },
+  controls: { width: "100%", maxWidth: 420, alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "space-around", gap: 8 },
+  controlSlot: { width: 88, minHeight: 96, alignItems: "center", justifyContent: "flex-start", gap: 10 },
+  control: { width: 60, height: 60, borderRadius: 30, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, alignItems: "center", justifyContent: "center" },
+  hangUp: { width: 64, height: 64, borderRadius: 32, backgroundColor: c.error, alignItems: "center", justifyContent: "center" },
+  controlLabel: { fontFamily: f.bodyMedium, fontSize: 13, color: c.text, textAlign: "center" },
+  footnote: { fontFamily: f.body, fontSize: 12, lineHeight: 18, color: c.textSecondary, textAlign: "center", marginTop: 10 },
+  endActions: { padding: 24, width: "100%", maxWidth: 420, alignSelf: "center" },
+  primary: { backgroundColor: c.text, paddingHorizontal: 24, paddingVertical: 16, minHeight: 52, borderRadius: 28, alignItems: "center" },
+  primaryText: { fontFamily: f.bodyMedium, color: c.bg, fontSize: 16 },
+  callAgain: { minHeight: 48, alignItems: "center", justifyContent: "center", marginTop: 6 },
+  callAgainText: { fontFamily: f.bodyMedium, color: c.primaryDark, fontSize: 15 },
+  unavailable: { flex: 1, alignItems: "center", justifyContent: "center", padding: 28, gap: 20, width: "100%", maxWidth: 520, alignSelf: "center" },
+  symbol: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", backgroundColor: c.primaryBgSubtle },
+  explanation: { fontFamily: f.body, fontSize: 16, lineHeight: 25, color: c.textSecondary, textAlign: "center", marginBottom: spacing.md },
+});

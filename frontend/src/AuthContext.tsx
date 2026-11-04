@@ -13,6 +13,8 @@ type AuthState = {
   refresh: () => Promise<void>;
   updatePhoto: (image_base64: string | null) => Promise<void>;
   updateProfile: (name: string, bio: string) => Promise<void>;
+  connectionNotice: string | null;
+  finishClosedAccount: (expectedUserId: string) => Promise<void>;
 };
 const AuthContext = createContext<AuthState>({} as AuthState);
 const PROFILE_KEY = "kuku_profile";
@@ -20,54 +22,98 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null | undefined>();
   const [error, setError] = useState<string | null>(null);
   const currentUser = useRef(user);
+  const intent = useRef(0);
+  const profileWrites = useRef<Promise<unknown>>(Promise.resolve());
   currentUser.current = user;
-  const remember = useCallback(async (next: User | null) => {
-    if (next) await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(next));
-    else await AsyncStorage.removeItem(PROFILE_KEY);
+  const remember = useCallback(async (next: User | null, expectedIntent = intent.current) => {
+    if (intent.current !== expectedIntent) return;
+    profileWrites.current = profileWrites.current.catch(() => {}).then(async () => {
+      if (intent.current !== expectedIntent) return;
+      if (next) await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(next));
+      else await AsyncStorage.removeItem(PROFILE_KEY);
+    });
+    await profileWrites.current;
+    if (intent.current !== expectedIntent) return;
+    currentUser.current = next;
     setUser(next);
   }, []);
   const refresh = useCallback(async () => {
+    const refreshIntent = ++intent.current;
     setError(null);
     // Remove legacy plaintext access tokens; existing sessions sign in once again.
     await AsyncStorage.removeItem("connect_token");
+    if (intent.current !== refreshIntent) return;
     // Fresh web visitors can open sign-in without waking the API first.
     // HttpOnly cookies remain server-validated when restoring a saved account.
     if (Platform.OS === "web" && currentUser.current === undefined && !await AsyncStorage.getItem(PROFILE_KEY)) {
-      await remember(null);
+      await remember(null, refreshIntent);
       return;
     }
     try {
       const token = await getToken();
-      if (!token) { await remember(null); return; }
-      await remember(await api.get<User>("/auth/me"));
+      if (intent.current !== refreshIntent) return;
+      if (!token) { await remember(null, refreshIntent); return; }
+      const next = await api.get<User>("/auth/me");
+      await remember(next, refreshIntent);
     } catch (failure) {
+      if (intent.current !== refreshIntent) return;
       if (failure instanceof ApiError && failure.status === 401) {
-        await setToken(null); await remember(null);
+        await setToken(null); await remember(null, refreshIntent);
       } else {
         const cached = await AsyncStorage.getItem(PROFILE_KEY);
+        if (intent.current !== refreshIntent) return;
         if (cached) {
-          try { setUser(JSON.parse(cached)); return; } catch { /* invalid local profile */ }
+          try {
+            const saved = JSON.parse(cached);
+            if (typeof saved?.id === "string" && typeof saved?.name === "string") {
+              currentUser.current = saved; setUser(saved);
+              setError("You're offline. Your session and queued messages have been kept.");
+              return;
+            }
+          } catch { /* invalid local profile */ }
         }
         setError("KUKU couldn't connect. Your session has been kept. Please try again.");
       }
     }
   }, [remember]);
-  useEffect(() => { void refresh(); return onSessionExpired(() => { void remember(null); }); }, [refresh, remember]);
+  useEffect(() => {
+    void refresh();
+    const stop = onSessionExpired(() => { const next = ++intent.current; void remember(null, next); });
+    return () => { intent.current++; stop(); };
+  }, [refresh, remember]);
   const signIn = useCallback(async (email: string, password: string) => {
+    const loginIntent = ++intent.current;
+    setError(null);
     const data = await api.post("/auth/login", { email, password });
-    await acceptSession(data); await remember(data.user);
+    if (intent.current !== loginIntent) return;
+    await acceptSession(data); await remember(data.user, loginIntent);
   }, [remember]);
   const signUp = useCallback(async (email: string, password: string, name: string, invite_token?: string) => {
+    const signupIntent = ++intent.current;
+    setError(null);
     const data = await api.post("/auth/register", { email, password, name, invite_token });
-    await acceptSession(data); await remember(data.user);
+    if (intent.current !== signupIntent) return;
+    await acceptSession(data); await remember(data.user, signupIntent);
+  }, [remember]);
+  // Use only after the server has confirmed logout/account closure.
+  const clearLocalSession = useCallback(async (expectedUserId: string) => {
+    if (currentUser.current?.id !== expectedUserId) throw new Error("Your account changed. Please try again.");
+    const clearedIntent = ++intent.current;
+    await setToken(null);
+    const cleared = remember(null, clearedIntent);
+    if (Platform.OS === "web") await setBrowserPushAccount(null).catch(() => {});
+    await clearOutbox(expectedUserId);
+    await cleared;
   }, [remember]);
   const signOut = useCallback(async () => {
+    const logoutIntent = ++intent.current;
+    const id = currentUser.current?.id;
+    if (!id) return;
     // Do not claim a server logout succeeded while offline.
-    await api.post("/auth/logout");
-    if(Platform.OS==="web")await setBrowserPushAccount(null).catch(()=>{});
-    if (user) await clearOutbox(user.id);
-    await setToken(null); await remember(null);
-  }, [remember, user]);
+    await api.postAs(id, "/auth/logout", {});
+    if (intent.current !== logoutIntent) return;
+    await clearLocalSession(id);
+  }, [clearLocalSession]);
   const updateProfile = useCallback(async (name: string, bio: string) => {
     const id = currentUser.current?.id;
     if (!id) throw new Error("Please sign in again.");
@@ -88,6 +134,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       <Pressable accessibilityRole="button" onPress={() => void refresh()} style={{ paddingVertical: 20 }}><Text>Try again</Text></Pressable>
     </View>
   );
-  return <AuthContext.Provider value={{ user, signIn, signUp, signOut, refresh, updateProfile, updatePhoto }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, signIn, signUp, signOut, refresh, updateProfile, updatePhoto, connectionNotice: error, finishClosedAccount: clearLocalSession }}>{children}</AuthContext.Provider>;
 }
 export const useAuth = () => useContext(AuthContext);

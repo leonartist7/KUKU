@@ -10,6 +10,8 @@ async def blocked(db, a, b):
         {'owner_id': a, 'target_id': b}, {'owner_id': b, 'target_id': a}]}))
 
 async def allow_direct(db, a, b):
+    if await db.users.find_one({'id': {'$in': [a, b]}, 'disabled': True}, {'id': 1}):
+        raise HTTPException(403, 'This contact is no longer available')
     if await blocked(db, a, b):
         raise HTTPException(403, 'Direct contact is blocked')
 

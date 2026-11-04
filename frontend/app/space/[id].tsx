@@ -1,1284 +1,350 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ActivityIndicator,
-  TextInput,
-  Modal,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Dimensions,
-} from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, AppState, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { WebView } from "react-native-webview";
-import Animated, {
-  useSharedValue,
-  withTiming,
-  withSequence,
-  useAnimatedStyle,
-  Easing,
-  withDelay,
-  runOnJS,
-} from "react-native-reanimated";
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from "expo-audio";
-import {
-  spacesApi,
-  Space,
-  SpaceMessage,
-  AudioTrack,
-  AudioUpload,
-  openSpaceSocket,
-} from "../../src/spaces";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
+import { ApiError, getSessionUserId } from "../../src/api";
 import { useTheme } from "../../src/ThemeContext";
 import { useAuth } from "../../src/AuthContext";
-import { Palette, radius, spacing } from "../../src/theme";
+import { type Palette, radius } from "../../src/theme";
 import Avatar from "../../src/Avatar";
+import { spacesApi, openSpaceSocket, uploadSpaceAudio, type Space, type SpaceMessage, type AudioTrack, type AudioUpload, type SpaceState } from "../../src/spaces";
+import { acceptsPlayback, formatPlayback, mergeSpaceMessages, playbackPosition, reconnectDelay, sampleServerClock, timelineNow, type ClockSample } from "../../src/spacePlayback";
+import SpaceAudio from "../../src/SpaceAudio";
+import SpaceYouTube from "../../src/SpaceYouTube";
 
-const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
-const REACTIONS = ["❤️", "😂", "🔥", "👏", "🌙", "✨"];
+const REACTIONS = ["❤️", "👏", "✨", "😂", "🥰", "🎶"];
+function connectionId() {
+  return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+}
+function messageFor(cause: unknown, fallback: string) {
+  if (cause instanceof ApiError && [401, 403, 404].includes(cause.status)) return cause.status === 404 ? "This room is no longer available." : "Your access to this room has ended. Return to Spaces to continue.";
+  return cause instanceof Error ? cause.message : fallback;
+}
 
 export default function SpaceRoomScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
-  const { c, f } = useTheme();
-  const { user } = useAuth();
-  const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
+  const params = useLocalSearchParams<{ id: string }>(), id = typeof params.id === "string" ? params.id : "";
+  const router = useRouter(), { c, f } = useTheme(), { user } = useAuth(), uid = user?.id || "";
+  const styles = useMemo(() => makeStyles(c, f), [c, f]);
+  const [space, setSpace] = useState<Space | null>(null), [messages, setMessages] = useState<SpaceMessage[]>([]);
+  const [dataScope, setDataScope] = useState("");
+  const messagesRef = useRef(messages); messagesRef.current = messages;
+  const [loading, setLoading] = useState(true), [error, setError] = useState(""), [actionError, setActionError] = useState("");
+  const [connection, setConnection] = useState<"connecting" | "connected" | "reconnecting">("connecting");
+  const [clock, setClock] = useState<ClockSample>(), [reload, setReload] = useState(0), [busy, setBusy] = useState(false);
+  const [panel, setPanel] = useState<"chat" | "content" | "members" | null>(null), [reactionsOpen, setReactionsOpen] = useState(false);
+  const [reaction, setReaction] = useState(""), [tick, setTick] = useState(0);
+  const [mediaDuration, setMediaDuration] = useState(0);
+  const updateDuration = useCallback((seconds: number) => { if (Number.isFinite(seconds) && seconds > 0) setMediaDuration(current => Math.abs(current - seconds) < 0.1 ? current : seconds); }, []);
+  const socket = useRef<WebSocket | null>(null), connectionRef = useRef(""), clockRef = useRef<ClockSample | undefined>(undefined);
+  const scope = uid + ":" + id, scopeRef = useRef(scope); scopeRef.current = scope;
+  const closing = useRef(false), refreshRef = useRef<() => Promise<void>>(async () => {});
+  const isHost = !!space && space.state.host_id === uid, activeUsers = space?.member_users.filter(person => space.active_members.includes(person.id)) || [];
+  const host = space?.member_users.find(person => person.id === space.state.host_id);
 
-  const [space, setSpace] = useState<Space | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [presence, setPresence] = useState<{ id: string; text: string }[]>([]);
-  const [floatReactions, setFloatReactions] = useState<{ id: string; emoji: string }[]>([]);
-  const [chatVisible, setChatVisible] = useState(false);
-  const [addContent, setAddContent] = useState(false);
-  const [reactionsBar, setReactionsBar] = useState(false);
-  const [messages, setMessages] = useState<SpaceMessage[]>([]);
-  const wsRef = useRef<WebSocket | null>(null);
-  const youtubeRef = useRef<WebView | null>(null);
-  const soundRef = useRef<AudioPlayer | null>(null);
-  const soundUrlRef = useRef<string | null>(null);
-  const lastJoinIdRef = useRef<string | null>(null);
-
-  const isHost = space?.state.host_id === user?.id;
-
-  const addPresence = useCallback((text: string) => {
-    const id = Math.random().toString(36).slice(2);
-    setPresence((cur) => [...cur, { id, text }]);
-    setTimeout(() => setPresence((cur) => cur.filter((p) => p.id !== id)), 3200);
-  }, []);
-
-  const addReaction = useCallback((emoji: string) => {
-    const id = Math.random().toString(36).slice(2);
-    setFloatReactions((cur) => [...cur, { id, emoji }]);
-    setTimeout(() => setFloatReactions((cur) => cur.filter((r) => r.id !== id)), 2200);
-  }, []);
-
-  const load = useCallback(async () => {
-    if (!id) return;
-    try {
-      const [s, ms] = await Promise.all([
-        spacesApi.get(id),
-        spacesApi.listMessages(id),
-      ]);
-      setSpace(s);
-      setMessages(ms);
-    } finally {
-      setLoading(false);
+  const acceptSnapshot = useCallback((next: Space) => setSpace(current => !current || acceptsPlayback(current.state, next.state) ? next : current), []);
+  const acceptState = useCallback((next: SpaceState, extra: Partial<Space> = {}) => setSpace(current => current && acceptsPlayback(current.state, next) ? { ...current, ...extra, state: next, version: next.version } : current), []);
+  useEffect(() => {
+    let live = true, attempt = 0, retryTimer: ReturnType<typeof setTimeout> | undefined, heartbeat: ReturnType<typeof setInterval> | undefined;
+    closing.current = false; const cid = connectionId(); connectionRef.current = cid;
+    setSpace(null); setMessages([]); setDataScope(""); setLoading(true); setError(""); setActionError(""); setClock(undefined); clockRef.current = undefined; setPanel(null); setReaction(""); setConnection("connecting");
+    const alive = () => live && getSessionUserId() === uid && scopeRef.current === scope;
+    function sample(serverTime: string | undefined, sentAt: number) {
+      const next = sampleServerClock(serverTime, sentAt, timelineNow(), clockRef.current);
+      if (next && alive()) { clockRef.current = next; setClock(next); }
     }
-  }, [id]);
-
-  // Initial load + open WebSocket
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    if (!id) return;
-    let mounted = true;
-
-    (async () => {
-      const ws = await openSpaceSocket(id, (msg) => {
-        if (!mounted) return;
-        if (msg.type === "snapshot") {
-          setSpace(msg.space);
-        } else if (msg.type === "presence") {
-          if (msg.user_id === user?.id) return; // ignore self
-          if (msg.event === "join") addPresence(`${msg.user_name} joined`);
-          if (msg.event === "leave") addPresence(`${msg.user_name} left`);
-          load();
-        } else if (msg.type === "content") {
-          setSpace((prev) =>
-            prev ? { ...prev, content: msg.content, mode: msg.mode, state: msg.state } : prev,
-          );
-          addPresence(`${msg.by_name} shared ${msg.content?.title ?? "something"}`);
-        } else if (msg.type === "state") {
-          setSpace((prev) => (prev ? { ...prev, state: msg.state } : prev));
-          if (msg.by !== user?.id) {
-            addPresence(
-              `${msg.by_name} ${msg.state.is_playing ? "pressed play" : "paused"}`,
-            );
+    function terminal(cause: unknown) {
+      if (!alive()) return;
+      closing.current = true; if (retryTimer) clearTimeout(retryTimer); if (heartbeat) clearInterval(heartbeat); socket.current?.close();
+      setSpace(null); setLoading(false); setError(messageFor(cause, "This room could not be opened."));
+    }
+    async function refresh() {
+      const sentAt = timelineNow();
+      await Promise.all([
+        spacesApi.get(id, uid).then(next => { if (alive()) { sample(next.server_time || next.state.server_time, sentAt); acceptSnapshot(next); } }),
+        (async () => {
+          let cursor = messagesRef.current[messagesRef.current.length - 1]?.id;
+          for (let page = 0; page < 5; page++) {
+            const next = await spacesApi.listMessages(id, uid, undefined, cursor);
+            if (!alive()) return;
+            setMessages(current => mergeSpaceMessages(current, next));
+            if (!cursor || next.length < 100) break;
+            cursor = next[next.length - 1]?.id;
           }
-        } else if (msg.type === "message") {
-          setMessages((cur) => [...cur, msg.message]);
-        } else if (msg.type === "reaction") {
-          addReaction(msg.emoji);
-        }
-      });
-      wsRef.current = ws;
+        })(),
+      ]);
+    }
+    refreshRef.current = refresh;
+    function scheduleReconnect() {
+      if (!alive() || closing.current || retryTimer) return;
+      setConnection("reconnecting");
+      retryTimer = setTimeout(() => { retryTimer = undefined; void connect(); }, reconnectDelay(attempt++));
+    }
+    async function connect() {
+      if (!alive() || closing.current) return;
+      try {
+        const nextSocket = await openSpaceSocket(id, event => {
+          if (!alive()) return;
+          if (event.type === "snapshot" && event.space?.id === id) { acceptSnapshot(event.space); setLoading(false); }
+          else if (event.type === "state" && event.state) acceptState(event.state);
+          else if (event.type === "content" && event.state) acceptState(event.state, { content: event.content, mode: event.mode });
+          else if (event.type === "presence" || event.type === "host") void refresh().catch(cause => { if (cause instanceof ApiError && [401, 403, 404].includes(cause.status)) terminal(cause); });
+          else if (event.type === "message" && event.message?.id) setMessages(current => mergeSpaceMessages(current, [event.message]));
+          else if (event.type === "reaction" && REACTIONS.includes(event.emoji)) setReaction(event.emoji);
+          else if (event.type === "pong" && typeof event.client_time === "number") sample(event.server_time, event.client_time);
+        }, code => {
+          if (!alive() || closing.current) return;
+          if (heartbeat) clearInterval(heartbeat);
+          if ([1008, 4401, 4403].includes(code || 0)) terminal(new ApiError("Room access ended.", 403));
+          else scheduleReconnect();
+        }, { uid, connectionId: cid, onOpen: () => {
+          if (!alive() || closing.current) { socket.current?.close(); return; }
+          attempt = 0; setConnection("connected"); setActionError("");
+          const ping = () => { if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify({ type: "ping", client_time: timelineNow() })); };
+          ping(); if (heartbeat) clearInterval(heartbeat); heartbeat = setInterval(ping, 15000);
+          void refresh().catch(cause => { if (cause instanceof ApiError && [401, 403, 404].includes(cause.status)) terminal(cause); });
+        } });
+        if (!alive() || closing.current) { nextSocket.close(); return; }
+        socket.current = nextSocket;
+      } catch (cause) {
+        if (!alive()) return;
+        if (cause instanceof ApiError && [401, 403, 404].includes(cause.status)) terminal(cause); else scheduleReconnect();
+      }
+    }
+    if (!uid || !id) { setLoading(false); setError("Return to Spaces and choose a room."); }
+    else void (async () => {
+      try {
+        const sentAt = timelineNow(), joined = await spacesApi.join(id, cid, uid);
+        if (!alive()) return;
+        sample(joined.server_time || joined.state.server_time, sentAt); acceptSnapshot(joined); setDataScope(scope); setLoading(false);
+        await connect();
+      } catch (cause) { if (alive()) { setLoading(false); setError(messageFor(cause, "This room could not be opened. Try again.")); } }
     })();
-
+    const refreshTimer = setInterval(() => { if (alive() && !closing.current) void spacesApi.get(id, uid).then(next => { if (alive()) acceptSnapshot(next); }).catch(cause => { if (cause instanceof ApiError && [401, 403, 404].includes(cause.status)) terminal(cause); }); }, 30000);
+    const appState = AppState.addEventListener("change", state => { if (state === "active" && alive() && !closing.current) { void refresh().catch(() => {}); if (!socket.current || socket.current.readyState === WebSocket.CLOSED) scheduleReconnect(); } });
     return () => {
-      mounted = false;
-      try {
-        wsRef.current?.close();
-      } catch {}
+      live = false; if (retryTimer) clearTimeout(retryTimer); if (heartbeat) clearInterval(heartbeat); clearInterval(refreshTimer); appState.remove();
+      socket.current?.close(); socket.current = null;
+      if (uid && id && getSessionUserId() === uid) void spacesApi.leave(id, cid, uid).catch(() => {});
     };
-  }, [id, load, addPresence, addReaction, user?.id]);
+  }, [id, uid, reload, acceptSnapshot, acceptState, scope]);
 
-  // Audio sync — drive expo-audio player from server state
-  useEffect(() => {
-    let cancelled = false;
-    async function sync() {
-      if (!space || space.mode !== "audio" || !space.content) return;
-      const url = (space.content as any).url;
-      if (!url) return;
-      // Setup player only if URL changed
-      if (!soundRef.current || soundUrlRef.current !== url) {
-        try {
-          await setAudioModeAsync({ playsInSilentMode: true });
-        } catch {}
-        if (soundRef.current) {
-          try {
-            soundRef.current.remove();
-          } catch {}
-        }
-        const player = createAudioPlayer({ uri: url });
-        if (cancelled) {
-          try {
-            player.remove();
-          } catch {}
-          return;
-        }
-        soundRef.current = player;
-        soundUrlRef.current = url;
-      }
-      try {
-        // Project position
-        const elapsed = (Date.now() - new Date(space.state.updated_at).getTime()) / 1000;
-        const target = space.state.position_sec + (space.state.is_playing ? Math.max(0, elapsed) : 0);
-        await soundRef.current!.seekTo(target);
-        if (space.state.is_playing) soundRef.current!.play();
-        else soundRef.current!.pause();
-      } catch {}
-    }
-    sync();
-    return () => {
-      cancelled = true;
-    };
-  }, [space?.id, space?.mode, space?.content, space?.state.is_playing, space?.state.position_sec, space?.state.updated_at]);
+  useEffect(() => { if (!reaction) return; const timer = setTimeout(() => setReaction(""), 2200); return () => clearTimeout(timer); }, [reaction]);
+  useEffect(() => { setMediaDuration(0); }, [space?.state.session_id, space?.content?.type === "audio" ? space.content.upload_id || space.content.audio_id : space?.content?.type === "youtube" ? space.content.video_id : ""]);
+  useEffect(() => { if (!space?.state.is_playing) return; const timer = setInterval(() => setTick(value => value + 1), 1000); return () => clearInterval(timer); }, [space?.state.is_playing]);
+  void tick;
 
-  useEffect(() => {
-    return () => {
-      if (soundRef.current) {
-        try {
-          soundRef.current.remove();
-        } catch {}
-        soundRef.current = null;
-        soundUrlRef.current = null;
-      }
-    };
-  }, []);
-
-  // YouTube — push play/pause/seek when state changes (host or remote)
-  useEffect(() => {
-    if (!space || space.mode !== "video" || !youtubeRef.current) return;
-    const elapsed = (Date.now() - new Date(space.state.updated_at).getTime()) / 1000;
-    const target = space.state.position_sec + (space.state.is_playing ? Math.max(0, elapsed) : 0);
-    const js = `
-      if (window.YTPlayer) {
-        try { YTPlayer.seekTo(${target}, true); } catch(e){}
-        try { ${space.state.is_playing ? "YTPlayer.playVideo()" : "YTPlayer.pauseVideo()"}; } catch(e){}
-      }
-      true;
-    `;
-    youtubeRef.current.injectJavaScript(js);
-  }, [space?.id, space?.mode, space?.content, space?.state.is_playing, space?.state.position_sec, space?.state.updated_at]);
-
-  async function leaveAndExit() {
-    try {
-      await spacesApi.leave(id!);
-    } catch {}
-    try {
-      wsRef.current?.close();
-    } catch {}
-    router.back();
+  async function action(run: () => Promise<unknown>) {
+    if (busy || !uid) return;
+    const captured = scope; setBusy(true); setActionError("");
+    try { await run(); if (scopeRef.current === captured) await refreshRef.current(); return true; }
+    catch (cause) { if (scopeRef.current === captured) setActionError(messageFor(cause, "That change could not be saved. Try again.")); return false; }
+    finally { if (scopeRef.current === captured) setBusy(false); }
   }
-
+  function leave() {
+    closing.current = true; socket.current?.close();
+    void spacesApi.leave(id, connectionRef.current, uid).catch(() => {});
+    router.replace("/spaces");
+  }
   async function togglePlay() {
-    if (!space || !space.content) return;
-    let pos = space.state.position_sec;
-    if (space.state.is_playing) {
-      const elapsed = (Date.now() - new Date(space.state.updated_at).getTime()) / 1000;
-      pos = space.state.position_sec + Math.max(0, elapsed);
-    }
-    try {
-      await spacesApi.setState(id!, { is_playing: !space.state.is_playing, position_sec: pos });
-    } catch {}
-  }
-
-  async function handleSeek(newPositionSec: number) {
     if (!space || !isHost) return;
-    try {
-      await spacesApi.setState(id!, {
-        is_playing: space.state.is_playing,
-        position_sec: Math.max(0, newPositionSec),
-      });
-    } catch {}
+    const position = playbackPosition(space.state, timelineNow(), clock?.offsetMs || 0, mediaDuration || (space.content?.type === "audio" ? space.content.duration_sec : undefined));
+    const duration = mediaDuration || (space.content?.type === "audio" ? space.content.duration_sec : undefined);
+    const replay = !!duration && position >= duration - 0.1;
+    await action(async () => { const next = await spacesApi.setState(id, { is_playing: replay || !space.state.is_playing, position_sec: replay ? 0 : position, expected_version: space.state.version }, uid); if (scopeRef.current === scope) acceptState(next); });
   }
-
-  async function setYoutube(url: string) {
-    if (!url.trim()) return;
-    setAddContent(false);
-    try {
-      await spacesApi.setContent(id!, { type: "youtube", url, title: "YouTube video" });
-    } catch {}
+  async function seek(delta: number) {
+    if (!space || !isHost) return;
+    const duration = mediaDuration || (space.content?.type === "audio" ? space.content.duration_sec : undefined);
+    const position = playbackPosition(space.state, timelineNow(), clock?.offsetMs || 0, duration);
+    const nextPosition = duration ? Math.min(duration, Math.max(0, position + delta)) : Math.max(0, position + delta);
+    await action(async () => { const next = await spacesApi.setState(id, { is_playing: space.state.is_playing, position_sec: nextPosition, expected_version: space.state.version }, uid); if (scopeRef.current === scope) acceptState(next); });
   }
-
-  async function setAudio(track: AudioTrack) {
-    setAddContent(false);
-    try {
-      await spacesApi.setContent(id!, { type: "audio", audio_id: track.id, title: track.title });
-    } catch {}
+  async function chooseContent(body: { type: "youtube" | "audio"; url?: string; audio_id?: string; upload_id?: string; title?: string }) {
+    if (!isHost) return;
+    if (await action(() => spacesApi.setContent(id, body, uid))) setPanel(null);
   }
+  if (loading || !space || dataScope !== scope) return <SafeAreaView style={styles.safe}><View style={styles.center}>
+    {loading || (dataScope !== scope && !error) ? <><ActivityIndicator color={c.primaryDark} /><Text style={styles.secondary}>Opening your room…</Text></> : <>
+      <Ionicons name="planet-outline" size={42} color={c.primaryDark} /><Text style={styles.heading}>A little pause.</Text><Text accessibilityRole="alert" style={styles.secondary}>{error || "This room could not be opened."}</Text>
+      <Pressable accessibilityRole="button" onPress={() => setReload(value => value + 1)} style={styles.primaryButton}><Text style={styles.primaryText}>Try again</Text></Pressable>
+      <Pressable accessibilityRole="button" onPress={() => router.replace("/spaces")} style={styles.textButton}><Text style={styles.link}>Back to Spaces</Text></Pressable>
+    </>}
+  </View></SafeAreaView>;
 
-  async function setUploadedAudio(upload: AudioUpload) {
-    setAddContent(false);
-    try {
-      await spacesApi.setContent(id!, { type: "audio", upload_id: upload.id, title: upload.title });
-    } catch {}
-  }
-
-  async function react(emoji: string) {
-    setReactionsBar(false);
-    addReaction(emoji); // optimistic
-    try {
-      await spacesApi.reaction(id!, emoji);
-    } catch {}
-  }
-
-  if (loading || !space) {
-    return (
-      <SafeAreaView style={[styles.safe, { alignItems: "center", justifyContent: "center" }]}>
-        <ActivityIndicator color={c.primary} />
-      </SafeAreaView>
-    );
-  }
-
-  const activeUsers = space.member_users.filter((u) => space.active_members.includes(u.id));
-
-  return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      {/* Floating header */}
-      <View style={styles.header}>
-        <Pressable onPress={leaveAndExit} style={styles.headerBtn} testID="space-back">
-          <Ionicons name="chevron-back" size={20} color={c.text} />
-        </Pressable>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {space.name}
-          </Text>
-          <Text style={styles.headerSub}>
-            {activeUsers.length} {activeUsers.length === 1 ? "person" : "people"} together
-          </Text>
-        </View>
-        <View style={styles.avatarStack}>
-          {activeUsers.slice(0, 3).map((u, i) => (
-            <View key={u.id} style={[styles.stackedAvatar, { marginLeft: i === 0 ? 0 : -10 }]}>
-              <Avatar name={u.name} seed={u.id} photo={u.avatar} size={28} />
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* Main content area */}
-      <View style={styles.content}>
-        {space.mode === "video" && space.content?.type === "youtube" ? (
-          <View style={{ width: "100%" }}>
-            <View style={styles.videoWrap}>
-              {Platform.OS === "web" ? (
-                React.createElement("iframe", {
-                  src: `https://www.youtube.com/embed/${(space.content as any).video_id}?autoplay=1&controls=1&rel=0&modestbranding=1&playsinline=1`,
-                  style: { width: "100%", height: "100%", border: 0 },
-                  allow: "autoplay; encrypted-media; fullscreen; picture-in-picture",
-                  allowFullScreen: true,
-                  "data-testid": "youtube-player",
-                })
-              ) : (
-                <WebView
-                  ref={youtubeRef}
-                  source={{ html: youtubeHtml((space.content as any).video_id) }}
-                  style={styles.video}
-                  allowsInlineMediaPlayback
-                  mediaPlaybackRequiresUserAction={false}
-                  javaScriptEnabled
-                  onMessage={() => {}}
-                  testID="youtube-player"
-                />
-              )}
-            </View>
-            <SeekBar space={space} isHost={isHost} onSeek={handleSeek} c={c} f={f} />
-          </View>
-        ) : space.mode === "audio" && space.content?.type === "audio" ? (
-          <AudioVisual content={space.content as any} c={c} f={f} isPlaying={space.state.is_playing} />
-        ) : (
-          <IdleHero c={c} f={f} onAdd={() => setAddContent(true)} />
-        )}
-      </View>
-
-      {/* Presence overlay */}
-      <View pointerEvents="none" style={styles.presenceOverlay}>
-        {presence.map((p) => (
-          <PresenceToast key={p.id} text={p.text} c={c} f={f} />
-        ))}
-      </View>
-
-      {/* Floating reactions */}
-      <View pointerEvents="none" style={styles.reactionLayer}>
-        {floatReactions.map((r) => (
-          <FloatingReaction key={r.id} emoji={r.emoji} />
-        ))}
-      </View>
-
-      {/* Bottom controls */}
-      <View style={styles.controls}>
-        <Pressable
-          onPress={() => setAddContent(true)}
-          style={styles.controlBtn}
-          testID="space-add-content"
-        >
-          <Ionicons name="add" size={22} color={c.text} />
-        </Pressable>
-        <Pressable
-          onPress={togglePlay}
-          disabled={!space.content || !isHost}
-          style={[
-            styles.playBtn,
-            (!space.content || !isHost) && { opacity: 0.4 },
-          ]}
-          testID="space-play-toggle"
-        >
-          <Ionicons
-            name={space.state.is_playing ? "pause" : "play"}
-            size={26}
-            color={c.textInverse}
-          />
-        </Pressable>
-        <Pressable onPress={() => setReactionsBar((v) => !v)} style={styles.controlBtn} testID="space-reactions-btn">
-          <Ionicons name="heart-outline" size={22} color={c.text} />
-        </Pressable>
-        <Pressable onPress={() => setChatVisible(true)} style={styles.controlBtn} testID="space-chat-btn">
-          <Ionicons name="chatbubble-outline" size={20} color={c.text} />
-        </Pressable>
-        <Pressable onPress={leaveAndExit} style={[styles.controlBtn, styles.leaveBtn]} testID="space-leave">
-          <Ionicons name="exit-outline" size={20} color={c.error} />
-        </Pressable>
-      </View>
-
-      {/* Reactions strip */}
-      {reactionsBar ? (
-        <View style={styles.reactionsBar}>
-          {REACTIONS.map((e) => (
-            <Pressable
-              key={e}
-              onPress={() => react(e)}
-              style={({ pressed }) => [
-                styles.reactionItem,
-                pressed && { transform: [{ scale: 0.9 }] },
-              ]}
-              testID={`reaction-${e}`}
-            >
-              <Text style={{ fontSize: 26 }}>{e}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
-      {/* Chat overlay */}
-      <ChatOverlay
-        visible={chatVisible}
-        onClose={() => setChatVisible(false)}
-        spaceId={id!}
-        messages={messages}
-        currentUserId={user?.id || ""}
-        c={c}
-        f={f}
-      />
-
-      {/* Add content modal */}
-      <AddContentModal
-        visible={addContent}
-        onClose={() => setAddContent(false)}
-        onYoutube={setYoutube}
-        onAudio={setAudio}
-        onUploadedAudio={setUploadedAudio}
-        c={c}
-        f={f}
-      />
-    </SafeAreaView>
-  );
-}
-
-function youtubeHtml(videoId: string) {
-  return `
-<!doctype html>
-<html><head><meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-<style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden}#p{width:100%;height:100%}</style>
-</head>
-<body>
-<div id="p"></div>
-<script>
-  var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';document.head.appendChild(tag);
-  function onYouTubeIframeAPIReady(){
-    window.YTPlayer=new YT.Player('p',{
-      videoId:'${videoId}',
-      playerVars:{autoplay:1,controls:0,rel:0,modestbranding:1,playsinline:1},
-      events:{onReady:function(){try{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'ready'}));}catch(e){}}}
-    });
-  }
-</script>
-</body></html>`;
-}
-
-function IdleHero({ c, f, onAdd }: { c: Palette; f: any; onAdd: () => void }) {
-  return (
-    <View style={{ alignItems: "center", justifyContent: "center", padding: spacing.xl }}>
-      <View
-        style={{
-          width: 80,
-          height: 80,
-          borderRadius: 40,
-          backgroundColor: c.primaryBgSubtle,
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: spacing.lg,
-        }}
-      >
-        <Ionicons name="planet-outline" size={36} color={c.primaryDark} />
-      </View>
-      <Text
-        style={{
-          fontFamily: f.heading,
-          fontSize: 24,
-          color: c.text,
-          textAlign: "center",
-          marginBottom: 6,
-        }}
-      >
-        The room is open.
-      </Text>
-      <Text
-        style={{
-          fontFamily: f.body,
-          fontSize: 14,
-          color: c.textSecondary,
-          textAlign: "center",
-          marginBottom: spacing.lg,
-          lineHeight: 20,
-        }}
-      >
-        Add a video or a song and you&apos;ll be watching together in seconds.
-      </Text>
-      <Pressable
-        onPress={onAdd}
-        style={({ pressed }) => [
-          {
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            backgroundColor: c.primary,
-            paddingHorizontal: 18,
-            paddingVertical: 12,
-            borderRadius: radius.lg,
-          },
-          pressed && { transform: [{ scale: 0.98 }] },
-        ]}
-        testID="idle-add-content"
-      >
-        <Ionicons name="add" size={18} color={c.textInverse} />
-        <Text style={{ color: c.textInverse, fontFamily: f.bodyBold, fontSize: 15 }}>
-          Add content
-        </Text>
+  const duration = mediaDuration || (space.content?.type === "audio" ? space.content.duration_sec : undefined);
+  const position = playbackPosition(space.state, timelineNow(), clock?.offsetMs || 0, duration);
+  const ended = !!duration && position >= duration - 0.1;
+  return <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <View style={styles.header}>
+      <IconButton label="Leave room" icon="chevron-back" onPress={leave} style={styles.iconButton} color={c.text} testID="space-back" />
+      <View style={{ flex: 1, minWidth: 0 }}><Text style={styles.roomTitle} numberOfLines={1}>{space.name}</Text><Text style={styles.small}>{activeUsers.length} here · {space.members.length} members</Text></View>
+      <Pressable accessibilityRole="button" accessibilityLabel="View room members and hosting" onPress={() => setPanel("members")} style={{ minHeight: 48, justifyContent: "center" }}>
+        <View style={{ flexDirection: "row" }}>{activeUsers.slice(0, 3).map((person, index) => <View key={person.id} style={{ marginLeft: index ? -8 : 0 }}><Avatar name={person.name} seed={person.id} photo={person.avatar} size={30} /></View>)}</View>
+        {!activeUsers.length ? <Ionicons name="people-outline" size={24} color={c.textSecondary} /> : null}
       </Pressable>
     </View>
-  );
-}
-
-function AudioVisual({
-  content,
-  c,
-  f,
-  isPlaying,
-}: {
-  content: any;
-  c: Palette;
-  f: any;
-  isPlaying: boolean;
-}) {
-  const pulse = useSharedValue(1);
-  useEffect(() => {
-    if (isPlaying) {
-      pulse.value = withTiming(1.06, { duration: 1200, easing: Easing.inOut(Easing.ease) });
-      const i = setInterval(() => {
-        pulse.value = withTiming(pulse.value > 1 ? 1 : 1.06, { duration: 1200 });
-      }, 1200);
-      return () => clearInterval(i);
-    }
-    pulse.value = withTiming(1);
-  }, [isPlaying, pulse]);
-  const aStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
-
-  return (
-    <View style={{ alignItems: "center", padding: spacing.xl }}>
-      <Animated.View
-        style={[
-          {
-            width: 220,
-            height: 220,
-            borderRadius: 28,
-            backgroundColor: c.surfaceElevated,
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: spacing.lg,
-            shadowColor: "#000",
-            shadowOpacity: 0.08,
-            shadowOffset: { width: 0, height: 12 },
-            shadowRadius: 28,
-            elevation: 6,
-          },
-          aStyle,
-        ]}
-      >
-        <Text style={{ fontSize: 80 }}>{content.cover_emoji || "🎧"}</Text>
-      </Animated.View>
-      <Text style={{ fontFamily: f.heading, fontSize: 22, color: c.text }}>{content.title}</Text>
-      <Text style={{ fontFamily: f.body, fontSize: 13, color: c.textSecondary, marginTop: 4 }}>
-        {content.artist || "Listening together"}
-      </Text>
+    <View style={[styles.connection, connection !== "connected" && { backgroundColor: c.surfaceElevated }]} testID="space-connection">
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: connection === "connected" ? c.success : c.primaryDark }} />
+      <Text accessibilityLiveRegion="polite" style={styles.small}>{connection === "connected" ? "Room connected" : connection === "reconnecting" ? "Reconnecting · playback will resync" : "Connecting to the room…"}</Text>
     </View>
-  );
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+      <View style={styles.hostRow}><Ionicons name="sparkles-outline" size={17} color={c.primaryDark} /><Text style={styles.hostText}>{isHost ? "You're hosting" : (host?.name || "The host") + " is hosting"}</Text>
+        <Pressable accessibilityRole="button" onPress={() => setPanel("members")} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 10 }}><Text style={styles.link}>{isHost || space.creator_id === uid ? "Manage" : "People"}</Text></Pressable>
+      </View>
+      {space.content?.type === "youtube" ? <SpaceYouTube videoId={space.content.video_id} state={space.state} offsetMs={clock?.offsetMs || 0} onDuration={updateDuration} /> :
+        space.content?.type === "audio" ? <SpaceAudio content={space.content} state={space.state} offsetMs={clock?.offsetMs || 0} uid={uid} onDuration={updateDuration} /> :
+          <View style={styles.idle}>
+            <View style={styles.orbit}><Ionicons name="planet-outline" size={52} color={c.primaryDark} /></View>
+            <Text style={styles.heading}>A little place, together.</Text>
+            <Text style={styles.secondary}>{isHost ? "Put on a song or a video. Everyone in the room can settle in with you." : "Settle in. Your host can choose a song or a video for everyone."}</Text>
+            {isHost ? <Pressable accessibilityRole="button" onPress={() => setPanel("content")} style={styles.primaryButton} testID="idle-add-content"><Text style={styles.primaryText}>Choose something</Text></Pressable> : <Pressable accessibilityRole="button" onPress={() => setPanel("chat")} style={styles.textButton}><Text style={styles.link}>Say hello in the room</Text></Pressable>}
+          </View>}
+      {space.content ? <View style={styles.transport}>
+        <Text style={styles.secondary}>{formatPlayback(position)}{duration ? " / " + formatPlayback(duration) : ""}</Text>
+        {isHost ? <View style={{ flexDirection: "row", gap: 12 }}><IconButton label="Seek back ten seconds" icon="play-back" onPress={() => void seek(-10)} disabled={busy} style={styles.iconButton} color={c.textSecondary} testID="seek-back-10" /><IconButton label="Seek forward ten seconds" icon="play-forward" onPress={() => void seek(10)} disabled={busy} style={styles.iconButton} color={c.textSecondary} testID="seek-fwd-10" /></View> : <Text style={styles.small}>Your host controls shared playback.</Text>}
+      </View> : null}
+      {actionError ? <Text accessibilityRole="alert" style={styles.error} testID="space-action-error">{actionError}</Text> : null}
+      {reaction ? <Text accessibilityLiveRegion="polite" style={{ fontSize: 32, textAlign: "center", marginVertical: 8 }} testID="space-reaction">{reaction}</Text> : null}
+    </ScrollView>
+    {reactionsOpen ? <View style={styles.reactions}>{REACTIONS.map(emoji => <Pressable key={emoji} accessibilityRole="button" accessibilityLabel={"Send " + emoji + " reaction"} style={{ minHeight: 44, minWidth: 40, alignItems: "center", justifyContent: "center" }} onPress={() => { setReactionsOpen(false); void action(() => spacesApi.reaction(id, emoji, uid)); }}><Text style={{ fontSize: 26 }}>{emoji}</Text></Pressable>)}</View> : null}
+    <View style={styles.controls}>
+      <IconButton label={isHost ? "Choose room activity" : "Only the host can choose content"} icon="add" onPress={() => setPanel("content")} disabled={!isHost || busy} style={styles.iconButton} color={c.text} testID="space-add-content" />
+      <IconButton label={ended ? "Replay shared playback" : space.state.is_playing ? "Pause shared playback" : "Start shared playback"} icon={ended ? "refresh" : space.state.is_playing ? "pause" : "play"} onPress={() => void togglePlay()} disabled={!isHost || !space.content || busy} style={styles.playButton} color={c.textInverse} testID="space-play-toggle" />
+      <IconButton label="Choose a reaction" icon="heart-outline" onPress={() => setReactionsOpen(value => !value)} style={styles.iconButton} color={c.text} testID="space-reactions-btn" />
+      <IconButton label="Open room conversation" icon="chatbubble-outline" onPress={() => setPanel("chat")} style={styles.iconButton} color={c.text} testID="space-chat-btn" />
+      <IconButton label="Leave room" icon="exit-outline" onPress={leave} style={[styles.iconButton, { backgroundColor: c.errorBg }]} color={c.error} testID="space-leave" />
+    </View>
+
+    <RoomSheet visible={panel === "members"} title="Here, together" onClose={() => setPanel(null)}>
+      <Text style={styles.secondary}>Hosting controls the shared song or video. Your own volume stays yours.</Text>
+      {space.member_users.map(person => { const here = space.active_members.includes(person.id), hosting = space.state.host_id === person.id; return <View key={person.id} style={styles.memberRow}><Avatar name={person.name} seed={person.id} photo={person.avatar} size={42} /><View style={{ flex: 1 }}><Text style={styles.body}>{person.name}{person.id === uid ? " (you)" : ""}</Text><Text style={styles.small}>{hosting ? "Host · " : ""}{here ? "Here now" : "Invited"}</Text></View>{(isHost || space.creator_id === uid) && here && !hosting ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => void action(() => spacesApi.handoff(id, person.id, uid))} style={styles.textButton}><Text style={styles.link}>{person.id === uid ? "Host" : "Pass host"}</Text></Pressable> : null}</View>; })}
+      {!isHost && space.creator_id !== uid ? <Text style={styles.small}>Ask your host in the room conversation if you'd like a turn.</Text> : null}
+    </RoomSheet>
+    <ContentSheet key={scope} visible={panel === "content"} uid={uid} onClose={() => setPanel(null)} onChoose={chooseContent} busy={busy} actionError={actionError} />
+    <ChatSheet key={scope + ":chat"} visible={panel === "chat"} onClose={() => setPanel(null)} spaceId={id} uid={uid} messages={messages} onSent={message => setMessages(current => mergeSpaceMessages(current, [message]))} onHistory={older => setMessages(current => mergeSpaceMessages(current, older))} />
+  </SafeAreaView>;
 }
 
-function PresenceToast({ text, c, f }: { text: string; c: Palette; f: any }) {
-  const op = useSharedValue(0);
-  const ty = useSharedValue(8);
-  useEffect(() => {
-    op.value = withTiming(1, { duration: 220 });
-    ty.value = withTiming(0, { duration: 220 });
-    op.value = withDelay(2400, withTiming(0, { duration: 600 }));
-  }, [op, ty]);
-  const aStyle = useAnimatedStyle(() => ({
-    opacity: op.value,
-    transform: [{ translateY: ty.value }],
-  }));
-  return (
-    <Animated.View style={[presenceStyles(c, f).toast, aStyle]}>
-      <Text style={presenceStyles(c, f).toastText}>{text}</Text>
-    </Animated.View>
-  );
+function IconButton({ label, icon, onPress, disabled, style, color, testID }: { label: string; icon: React.ComponentProps<typeof Ionicons>["name"]; onPress: () => void; disabled?: boolean; style: any; color: string; testID?: string }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [style, { opacity: disabled ? 0.38 : pressed ? 0.72 : 1 }]} testID={testID}><Ionicons name={icon} size={23} color={color} /></Pressable>;
 }
-
-const presenceStyles = (c: Palette, f: any) =>
-  StyleSheet.create({
-    toast: {
-      backgroundColor: c.surfaceElevated,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 999,
-      marginBottom: 6,
-      alignSelf: "center",
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    toastText: { fontFamily: f.bodyMedium, fontSize: 12, color: c.textSecondary },
-  });
-
-function FloatingReaction({ emoji }: { emoji: string }) {
-  const ty = useSharedValue(0);
-  const op = useSharedValue(0);
-  const tx = useSharedValue(Math.random() * 60 - 30);
-  useEffect(() => {
-    op.value = withSequence(withTiming(1, { duration: 180 }), withDelay(800, withTiming(0, { duration: 900 })));
-    ty.value = withTiming(-220, { duration: 2100, easing: Easing.out(Easing.cubic) });
-  }, [op, ty]);
-  const aStyle = useAnimatedStyle(() => ({
-    opacity: op.value,
-    transform: [{ translateY: ty.value }, { translateX: tx.value }],
-  }));
-  return (
-    <Animated.View
-      style={[
-        {
-          position: "absolute",
-          bottom: 110,
-          left: SCREEN_W / 2 - 18,
-        },
-        aStyle,
-      ]}
-    >
-      <Text style={{ fontSize: 36 }}>{emoji}</Text>
-    </Animated.View>
-  );
-}
-
-function ChatOverlay({
-  visible,
-  onClose,
-  spaceId,
-  messages,
-  currentUserId,
-  c,
-  f,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  spaceId: string;
-  messages: SpaceMessage[];
-  currentUserId: string;
-  c: Palette;
-  f: any;
-}) {
-  const [text, setText] = useState("");
-  const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
-
-  async function send() {
-    const t = text.trim();
-    if (!t) return;
-    setText("");
-    try {
-      await spacesApi.sendMessage(spaceId, t);
-    } catch {}
-  }
-
-  return (
-    <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
-      <Pressable style={styles.chatBackdrop} onPress={onClose} />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.chatSheet}
-      >
-        <View style={styles.chatHandleWrap}>
-          <View style={styles.chatHandle} />
-        </View>
-        <View style={styles.chatHeader}>
-          <Text style={styles.chatTitle}>Side conversation</Text>
-          <Pressable onPress={onClose} style={styles.chatClose} testID="space-chat-close">
-            <Ionicons name="close" size={18} color={c.text} />
-          </Pressable>
-        </View>
-        <ScrollView contentContainerStyle={styles.chatBody}>
-          {messages.length === 0 ? (
-            <Text style={styles.chatEmpty}>Be the first to say something.</Text>
-          ) : (
-            messages.map((m) => {
-              const mine = m.sender_id === currentUserId;
-              return (
-                <View
-                  key={m.id}
-                  style={[
-                    styles.chatBubble,
-                    mine ? styles.chatBubbleMine : styles.chatBubbleOther,
-                  ]}
-                >
-                  {!mine ? <Text style={styles.chatSender}>{m.sender_name}</Text> : null}
-                  <Text style={styles.chatText}>{m.text}</Text>
-                </View>
-              );
-            })
-          )}
-        </ScrollView>
-        <View style={styles.chatComposer}>
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            placeholder="Whisper something…"
-            placeholderTextColor={c.textTertiary}
-            style={styles.chatInput}
-            testID="space-chat-input"
-          />
-          <Pressable onPress={send} style={styles.chatSend} testID="space-chat-send">
-            <Ionicons name="arrow-up" size={18} color={c.textInverse} />
-          </Pressable>
-        </View>
+function RoomSheet({ visible, title, onClose, children, footer }: { visible: boolean; title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode }) {
+  const { c, f } = useTheme(), styles = useMemo(() => makeStyles(c, f), [c, f]);
+  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <View style={styles.sheetFrame}><Pressable accessibilityRole="button" accessibilityLabel="Close panel" onPress={onClose} style={StyleSheet.absoluteFillObject} />
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.sheet}>
+        <View style={styles.sheetHeader}><Text style={styles.heading}>{title}</Text><IconButton label="Close panel" icon="close" onPress={onClose} style={styles.iconButton} color={c.text} /></View>
+        <ScrollView keyboardShouldPersistTaps="handled" style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 16, paddingBottom: 16 }}>{children}</ScrollView>
+        {footer}
       </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-function SeekBar({
-  space,
-  isHost,
-  onSeek,
-  c,
-  f,
-}: {
-  space: Space;
-  isHost: boolean;
-  onSeek: (positionSec: number) => void;
-  c: Palette;
-  f: any;
-}) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    if (!space.state.is_playing) return;
-    const t = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(t);
-  }, [space.state.is_playing]);
-
-  const duration = (space.content as any)?.duration_sec || 0;
-  const elapsed = (now - new Date(space.state.updated_at).getTime()) / 1000;
-  const current =
-    space.state.position_sec + (space.state.is_playing ? Math.max(0, elapsed) : 0);
-  const pct = duration > 0 ? Math.min(1, current / duration) : 0;
-  const fmt = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${sec.toString().padStart(2, "0")}`;
-  };
-
-  return (
-    <View style={{ paddingHorizontal: spacing.md, paddingTop: 8, paddingBottom: 4 }}>
-      <View
-        style={{
-          height: 4,
-          borderRadius: 2,
-          backgroundColor: c.surfaceElevated,
-          overflow: "hidden",
-        }}
-        onStartShouldSetResponder={() => isHost}
-        onResponderRelease={(e) => {
-          if (!isHost || !duration) return;
-          const w = e.nativeEvent.locationX;
-          const targetLayout = (e.currentTarget as any)?._nativeTag;
-          void targetLayout;
-          // Layout width fallback via measure — use screen approximation
-          const barWidth = e.currentTarget && (e as any).currentTarget?.offsetWidth
-            ? (e as any).currentTarget.offsetWidth
-            : e.nativeEvent.pageX
-              ? Math.max(1, e.nativeEvent.pageX / (w / Math.max(0.001, e.nativeEvent.locationX)))
-              : 300;
-          const clampedPct = Math.max(0, Math.min(1, w / barWidth));
-          onSeek(clampedPct * duration);
-        }}
-        testID="video-seek-bar"
-      >
-        <View style={{ width: `${pct * 100}%`, height: "100%", backgroundColor: c.primary }} />
-      </View>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
-        <Text style={{ fontFamily: f.body, fontSize: 11, color: c.textSecondary }}>
-          {fmt(current)}
-        </Text>
-        <Text style={{ fontFamily: f.body, fontSize: 11, color: c.textSecondary }}>
-          {duration ? fmt(duration) : "live"}
-        </Text>
-      </View>
-      {isHost ? (
-        <View style={{ flexDirection: "row", justifyContent: "center", gap: 12, marginTop: 6 }}>
-          <Pressable
-            onPress={() => onSeek(Math.max(0, current - 10))}
-            style={{ padding: 6 }}
-            testID="seek-back-10"
-          >
-            <Ionicons name="play-back" size={16} color={c.textSecondary} />
-          </Pressable>
-          <Pressable
-            onPress={() => onSeek(current + 10)}
-            style={{ padding: 6 }}
-            testID="seek-fwd-10"
-          >
-            <Ionicons name="play-forward" size={16} color={c.textSecondary} />
-          </Pressable>
-        </View>
-      ) : null}
     </View>
-  );
+  </Modal>;
 }
-
-function AddContentModal({
-  visible,
-  onClose,
-  onYoutube,
-  onAudio,
-  onUploadedAudio,
-  c,
-  f,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onYoutube: (url: string) => void;
-  onAudio: (track: AudioTrack) => void;
-  onUploadedAudio: (upload: AudioUpload) => void;
-  c: Palette;
-  f: any;
-}) {
-  const [tab, setTab] = useState<"video" | "audio">("video");
-  const [audioSubtab, setAudioSubtab] = useState<"library" | "yours">("library");
-  const [url, setUrl] = useState("");
-  const [tracks, setTracks] = useState<AudioTrack[]>([]);
-  const [uploads, setUploads] = useState<AudioUpload[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
-
+function ChatSheet({ visible, onClose, spaceId, uid, messages, onSent, onHistory }: { visible: boolean; onClose: () => void; spaceId: string; uid: string; messages: SpaceMessage[]; onSent: (message: SpaceMessage) => void; onHistory: (messages: SpaceMessage[]) => void }) {
+  const { c, f } = useTheme(), styles = useMemo(() => makeStyles(c, f), [c, f]);
+  const [text, setText] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [olderBusy, setOlderBusy] = useState(false), [hasOlder, setHasOlder] = useState(true);
+  const draftIdentity = useRef({ text: "", id: "" });
+  const alive = useRef(true); useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  async function send() {
+    if (!text.trim() || busy) return;
+    const draft = text.trim(); setBusy(true); setError("");
+    if (draftIdentity.current.text !== draft) draftIdentity.current = { text: draft, id: connectionId() };
+    try { const message = await spacesApi.sendMessage(spaceId, draft, uid, draftIdentity.current.id); if (alive.current) { onSent(message); setText(""); draftIdentity.current = { text: "", id: "" }; } }
+    catch (cause) { if (alive.current) setError(messageFor(cause, "Could not confirm delivery. Check the conversation before trying again.")); }
+    finally { if (alive.current) setBusy(false); }
+  }
+  async function loadOlder() {
+    if (olderBusy || !messages[0]) return;
+    setOlderBusy(true); setError("");
+    try { const older = await spacesApi.listMessages(spaceId, uid, messages[0].id); if (alive.current) { onHistory(older); setHasOlder(older.length === 50); } }
+    catch (cause) { if (alive.current) setError(messageFor(cause, "Earlier messages could not be loaded.")); }
+    finally { if (alive.current) setOlderBusy(false); }
+  }
+  return <RoomSheet visible={visible} title="Room conversation" onClose={onClose} footer={<>
+    {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+    <View style={styles.composer}><TextInput accessibilityLabel="Message the room" value={text} onChangeText={setText} placeholder="Say something…" placeholderTextColor={c.textSecondary} maxLength={4000} style={styles.chatInput} multiline testID="space-chat-input" /><IconButton label="Send room message" icon="arrow-up" onPress={() => void send()} disabled={busy || !text.trim()} style={[styles.iconButton, { backgroundColor: c.primary }]} color={c.textInverse} testID="space-chat-send" /></View>
+  </>}>
+    {hasOlder && messages.length >= 50 ? <Pressable accessibilityRole="button" onPress={() => void loadOlder()} disabled={olderBusy} style={styles.textButton}><Text style={styles.link}>{olderBusy ? "Loading earlier messages…" : "Earlier messages"}</Text></Pressable> : null}
+    {messages.length ? messages.map(message => <View key={message.id} style={[styles.bubble, { alignSelf: message.sender_id === uid ? "flex-end" : "flex-start", backgroundColor: message.sender_id === uid ? c.surfaceElevated : c.surface }]}>{message.sender_id !== uid ? <Text style={styles.small}>{message.sender_name}</Text> : null}<Text style={styles.body}>{message.text}</Text></View>) : <Text style={styles.secondary}>A hello is a lovely place to start.</Text>}
+  </RoomSheet>;
+}
+function ContentSheet({ visible, uid, onClose, onChoose, busy, actionError }: { visible: boolean; uid: string; onClose: () => void; onChoose: (body: { type: "youtube" | "audio"; url?: string; audio_id?: string; upload_id?: string; title?: string }) => Promise<void>; busy: boolean; actionError: string }) {
+  const { c, f } = useTheme(), styles = useMemo(() => makeStyles(c, f), [c, f]);
+  const [tab, setTab] = useState<"video" | "audio">("video"), [url, setUrl] = useState(""), [tracks, setTracks] = useState<AudioTrack[]>([]), [uploads, setUploads] = useState<AudioUpload[]>([]);
+  const [loading, setLoading] = useState(false), [uploading, setUploading] = useState(false), [error, setError] = useState(""), [revision, setRevision] = useState(0);
+  const alive = useRef(true); useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
-    if (visible && tab === "audio" && audioSubtab === "library" && tracks.length === 0) {
-      setLoading(true);
-      spacesApi.audioLibrary().then(setTracks).finally(() => setLoading(false));
-    }
-    if (visible && tab === "audio" && audioSubtab === "yours") {
-      setLoading(true);
-      spacesApi.audioUploads().then(setUploads).finally(() => setLoading(false));
-    }
-  }, [visible, tab, audioSubtab, tracks.length]);
-
-  async function pickAndUpload() {
+    if (!visible || tab !== "audio") return;
+    let active = true; setLoading(true); setError("");
+    void Promise.all([spacesApi.audioLibrary(uid), spacesApi.audioUploads(uid)]).then(([library, own]) => { if (active) { setTracks(library); setUploads(own); } }).catch(cause => { if (active) setError(messageFor(cause, "Audio choices could not be loaded.")); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [visible, tab, uid, revision]);
+  async function upload() {
     if (uploading) return;
     try {
-      const res = await DocumentPicker.getDocumentAsync({
-        type: "audio/*",
-        copyToCacheDirectory: true,
-      });
-      if (res.canceled || !res.assets?.[0]) return;
-      const a = res.assets[0];
-      // rough size guard on client
-      if (a.size && a.size > 10 * 1024 * 1024) {
-        alert("Please pick an audio file under 10MB.");
-        return;
-      }
-      setUploading(true);
-      // Read as base64
-      const resp = await fetch(a.uri);
-      const blob = await resp.blob();
-      const data_url: string = await new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onerror = () => reject(new Error("read failed"));
-        r.onload = () => resolve(r.result as string);
-        r.readAsDataURL(blob);
-      });
-      const title = a.name?.replace(/\.[^.]+$/, "") || "Uploaded audio";
-      await spacesApi.uploadAudio(title, data_url);
-      // Refresh list
-      const fresh = await spacesApi.audioUploads();
-      setUploads(fresh);
-      setAudioSubtab("yours");
-    } catch (e) {
-      // best-effort
-    } finally {
-      setUploading(false);
-    }
+      const picked = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
+      if (picked.canceled || !picked.assets?.[0] || !alive.current) return;
+      setUploading(true); setError("");
+      await uploadSpaceAudio(picked.assets[0], uid);
+      if (alive.current) setRevision(value => value + 1);
+    } catch (cause) { if (alive.current) setError(messageFor(cause, "Audio could not be uploaded. Try again.")); }
+    finally { if (alive.current) setUploading(false); }
   }
-
-  return (
-    <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.chatBackdrop} onPress={onClose} />
-      <View style={styles.addSheet}>
-        <View style={styles.chatHandleWrap}>
-          <View style={styles.chatHandle} />
-        </View>
-        <Text style={styles.addTitle}>Add content</Text>
-
-        <View style={styles.segmentRow}>
-          <Pressable
-            onPress={() => setTab("video")}
-            style={[styles.segment, tab === "video" && styles.segmentOn]}
-            testID="add-tab-video"
-          >
-            <Text style={[styles.segmentText, tab === "video" && styles.segmentTextOn]}>
-              YouTube
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setTab("audio")}
-            style={[styles.segment, tab === "audio" && styles.segmentOn]}
-            testID="add-tab-audio"
-          >
-            <Text style={[styles.segmentText, tab === "audio" && styles.segmentTextOn]}>
-              Audio
-            </Text>
-          </Pressable>
-        </View>
-
-        {tab === "video" ? (
-          <View>
-            <TextInput
-              value={url}
-              onChangeText={setUrl}
-              placeholder="Paste a YouTube link"
-              placeholderTextColor={c.textTertiary}
-              autoCapitalize="none"
-              style={styles.input}
-              testID="youtube-url-input"
-            />
-            <Pressable
-              onPress={() => {
-                onYoutube(url);
-                setUrl("");
-              }}
-              disabled={!url.trim()}
-              style={({ pressed }) => [
-                styles.cta,
-                !url.trim() && { opacity: 0.4 },
-                pressed && { transform: [{ scale: 0.98 }] },
-              ]}
-              testID="youtube-submit"
-            >
-              <Text style={styles.ctaText}>Watch together</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View>
-            {/* Library / Yours sub-tabs + Upload */}
-            <View style={[styles.segmentRow, { marginBottom: spacing.sm }]}>
-              <Pressable
-                onPress={() => setAudioSubtab("library")}
-                style={[styles.pillSegment, audioSubtab === "library" && styles.pillOn]}
-                testID="audio-subtab-library"
-              >
-                <Text style={[styles.pillText, audioSubtab === "library" && styles.pillTextOn]}>
-                  Curated
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setAudioSubtab("yours")}
-                style={[styles.pillSegment, audioSubtab === "yours" && styles.pillOn]}
-                testID="audio-subtab-yours"
-              >
-                <Text style={[styles.pillText, audioSubtab === "yours" && styles.pillTextOn]}>
-                  Your uploads
-                </Text>
-              </Pressable>
-              <View style={{ flex: 1 }} />
-              <Pressable
-                onPress={pickAndUpload}
-                disabled={uploading}
-                style={({ pressed }) => [
-                  styles.uploadBtn,
-                  uploading && { opacity: 0.6 },
-                  pressed && { transform: [{ scale: 0.96 }] },
-                ]}
-                testID="audio-upload-btn"
-              >
-                {uploading ? (
-                  <ActivityIndicator color={c.textInverse} size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="cloud-upload-outline" size={14} color={c.textInverse} />
-                    <Text style={styles.uploadBtnText}>Upload</Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
-            <ScrollView style={{ maxHeight: 360 }}>
-              {loading ? (
-                <ActivityIndicator color={c.primary} style={{ margin: spacing.lg }} />
-              ) : audioSubtab === "library" ? (
-                tracks.map((t) => (
-                  <Pressable
-                    key={t.id}
-                    onPress={() => onAudio(t)}
-                    style={({ pressed }) => [
-                      styles.trackRow,
-                      pressed && { backgroundColor: c.primaryBgSubtle },
-                    ]}
-                    testID={`track-${t.id}`}
-                  >
-                    <View style={styles.trackCover}>
-                      <Text style={{ fontSize: 22 }}>{t.cover_emoji}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.trackTitle}>{t.title}</Text>
-                      <Text style={styles.trackArtist}>{t.artist}</Text>
-                    </View>
-                    <Ionicons name="play" size={18} color={c.primary} />
-                  </Pressable>
-                ))
-              ) : uploads.length === 0 ? (
-                <View style={{ padding: spacing.lg, alignItems: "center" }}>
-                  <Text style={{ color: c.textSecondary, fontFamily: f.body, textAlign: "center" }}>
-                    No uploads yet. Tap Upload to add an audio file.
-                  </Text>
-                </View>
-              ) : (
-                uploads.map((u) => (
-                  <Pressable
-                    key={u.id}
-                    onPress={() => onUploadedAudio(u)}
-                    style={({ pressed }) => [
-                      styles.trackRow,
-                      pressed && { backgroundColor: c.primaryBgSubtle },
-                    ]}
-                    testID={`upload-${u.id}`}
-                  >
-                    <View style={styles.trackCover}>
-                      <Text style={{ fontSize: 22 }}>{u.cover_emoji || "🎙"}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.trackTitle}>{u.title}</Text>
-                      <Text style={styles.trackArtist}>
-                        {u.uploader_name}
-                        {u.duration_sec ? ` · ${Math.round(u.duration_sec)}s` : ""}
-                      </Text>
-                    </View>
-                    <Ionicons name="play" size={18} color={c.primary} />
-                  </Pressable>
-                ))
-              )}
-            </ScrollView>
-          </View>
-        )}
-      </View>
-    </Modal>
-  );
+  return <RoomSheet visible={visible} title="Set the mood" onClose={onClose}>
+    <Text style={styles.secondary}>Choose something to enjoy together. YouTube availability depends on the video owner.</Text>
+    <View style={{ flexDirection: "row", gap: 8 }}>{(["video", "audio"] as const).map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: tab === value }} onPress={() => setTab(value)} style={[styles.segment, tab === value && { backgroundColor: c.primaryBgSubtle }]} testID={"add-tab-" + value}><Text style={[styles.body, { color: tab === value ? c.primaryDark : c.textSecondary }]}>{value === "video" ? "Watch together" : "Listen together"}</Text></Pressable>)}</View>
+    {tab === "video" ? <>
+      <TextInput accessibilityLabel="YouTube video link" value={url} onChangeText={setUrl} autoCapitalize="none" autoCorrect={false} placeholder="Paste a YouTube link" placeholderTextColor={c.textSecondary} style={styles.input} testID="youtube-url-input" />
+      <Pressable accessibilityRole="button" disabled={!url.trim() || busy} onPress={() => void onChoose({ type: "youtube", url: url.trim(), title: "YouTube video" })} style={[styles.primaryButton, (!url.trim() || busy) && { opacity: 0.4 }]} testID="youtube-submit"><Text style={styles.primaryText}>{busy ? "Choosing…" : "Watch together"}</Text></Pressable>
+    </> : <>
+      <Pressable accessibilityRole="button" disabled={uploading} onPress={() => void upload()} style={styles.upload} testID="audio-upload-btn"><Ionicons name="cloud-upload-outline" size={22} color={c.primaryDark} /><View style={{ flex: 1 }}><Text style={styles.body}>{uploading ? "Saving your audio…" : "Upload your own audio"}</Text><Text style={styles.small}>Private to you and the room · up to 10 MB</Text></View>{uploading ? <ActivityIndicator color={c.primaryDark} /> : null}</Pressable>
+      {loading ? <ActivityIndicator color={c.primaryDark} /> : <>
+        <Text style={styles.sectionLabel}>Your uploads</Text>
+        {!uploads.length ? <Text style={styles.small}>Your saved audio will appear here.</Text> : uploads.map(item => <Pressable key={item.id} accessibilityRole="button" disabled={busy} onPress={() => void onChoose({ type: "audio", upload_id: item.id, title: item.title })} style={styles.track} testID={"upload-" + item.id}><Ionicons name="musical-note-outline" size={24} color={c.primaryDark} /><View style={{ flex: 1 }}><Text style={styles.body}>{item.title}</Text><Text style={styles.small}>{item.uploader_name || "Your upload"}</Text></View><Ionicons name="play-outline" size={20} color={c.primaryDark} /></Pressable>)}
+        {tracks.length ? <Text style={styles.sectionLabel}>More sounds</Text> : <Text style={styles.small}>Upload audio you own or have permission to share.</Text>}
+        {tracks.map(item => <Pressable key={item.id} accessibilityRole="button" disabled={busy} onPress={() => void onChoose({ type: "audio", audio_id: item.id, title: item.title })} style={styles.track} testID={"track-" + item.id}><Ionicons name="headset-outline" size={24} color={c.primaryDark} /><View style={{ flex: 1 }}><Text style={styles.body}>{item.title}</Text><Text style={styles.small}>{item.artist}</Text></View><Ionicons name="play-outline" size={20} color={c.primaryDark} /></Pressable>)}
+      </>}
+    </>}
+    {error || actionError ? <><Text accessibilityRole="alert" style={styles.error}>{error || actionError}</Text><Pressable accessibilityRole="button" onPress={() => setRevision(value => value + 1)} style={styles.textButton}><Text style={styles.link}>Try again</Text></Pressable></> : null}
+  </RoomSheet>;
 }
-
-const makeStyles = (c: Palette, f: any) =>
-  StyleSheet.create({
-    safe: { flex: 1, backgroundColor: c.bg },
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      gap: spacing.sm,
-    },
-    headerBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: c.surface,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    headerCenter: { flex: 1 },
-    headerTitle: { fontFamily: f.heading, fontSize: 18, color: c.text, letterSpacing: -0.3 },
-    headerSub: { fontFamily: f.body, fontSize: 11, color: c.textSecondary, marginTop: 2 },
-    avatarStack: { flexDirection: "row", alignItems: "center" },
-    stackedAvatar: { borderRadius: 999, borderWidth: 2, borderColor: c.bg },
-    content: { flex: 1, alignItems: "stretch", justifyContent: "center" },
-    videoWrap: { width: "100%", aspectRatio: 16 / 9, maxHeight: 320, backgroundColor: "#000", alignSelf: "center" },
-    video: { flex: 1, backgroundColor: "#000" },
-    presenceOverlay: {
-      position: "absolute",
-      top: 80,
-      left: 0,
-      right: 0,
-      alignItems: "center",
-      pointerEvents: "none" as any,
-    },
-    reactionLayer: {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      top: 0,
-      bottom: 0,
-      pointerEvents: "none" as any,
-    },
-    controls: {
-      position: "absolute",
-      bottom: 24,
-      left: 0,
-      right: 0,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: spacing.sm,
-      paddingHorizontal: spacing.md,
-    },
-    controlBtn: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: c.surface,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: "#000",
-      shadowOpacity: 0.08,
-      shadowOffset: { width: 0, height: 6 },
-      shadowRadius: 14,
-      elevation: 4,
-    },
-    leaveBtn: { backgroundColor: c.errorBg },
-    playBtn: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: c.primary,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: c.primaryDark,
-      shadowOpacity: 0.3,
-      shadowOffset: { width: 0, height: 8 },
-      shadowRadius: 16,
-      elevation: 6,
-    },
-    reactionsBar: {
-      position: "absolute",
-      bottom: 92,
-      alignSelf: "center",
-      flexDirection: "row",
-      gap: 8,
-      backgroundColor: c.surfaceElevated,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderRadius: 999,
-      shadowColor: "#000",
-      shadowOpacity: 0.1,
-      shadowOffset: { width: 0, height: 8 },
-      shadowRadius: 16,
-      elevation: 6,
-    },
-    reactionItem: { padding: 4 },
-    chatBackdrop: { flex: 1, backgroundColor: c.overlay },
-    chatSheet: {
-      position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
-      maxHeight: SCREEN_H * 0.7,
-      backgroundColor: c.bg,
-      borderTopLeftRadius: 28,
-      borderTopRightRadius: 28,
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.lg,
-    },
-    chatHandleWrap: { alignItems: "center", paddingVertical: spacing.sm },
-    chatHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: c.border },
-    chatHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: spacing.sm,
-    },
-    chatTitle: { fontFamily: f.heading, fontSize: 18, color: c.text },
-    chatClose: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: c.surface,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    chatBody: { paddingVertical: spacing.sm, gap: 8 },
-    chatEmpty: { color: c.textSecondary, fontFamily: f.body, textAlign: "center", padding: spacing.lg },
-    chatBubble: {
-      maxWidth: "78%",
-      paddingVertical: 8,
-      paddingHorizontal: 12,
-      borderRadius: 16,
-      marginBottom: 6,
-    },
-    chatBubbleMine: { backgroundColor: c.surfaceElevated, alignSelf: "flex-end", borderBottomRightRadius: 4 },
-    chatBubbleOther: { backgroundColor: c.surface, alignSelf: "flex-start", borderBottomLeftRadius: 4 },
-    chatSender: { fontFamily: f.bodyBold, fontSize: 11, color: c.primaryDark, marginBottom: 2 },
-    chatText: { fontFamily: f.body, fontSize: 14, color: c.text },
-    chatComposer: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      backgroundColor: c.surface,
-      borderRadius: 999,
-      paddingLeft: spacing.md,
-      paddingRight: 6,
-      paddingVertical: 6,
-    },
-    chatInput: { flex: 1, fontFamily: f.body, fontSize: 14, color: c.text, paddingVertical: 8 },
-    chatSend: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: c.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    addSheet: {
-      position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
-      backgroundColor: c.bg,
-      borderTopLeftRadius: 28,
-      borderTopRightRadius: 28,
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.lg,
-    },
-    addTitle: { fontFamily: f.heading, fontSize: 22, color: c.text, marginBottom: spacing.md },
-    segmentRow: { flexDirection: "row", gap: 8, marginBottom: spacing.md },
-    segment: {
-      paddingVertical: 8,
-      paddingHorizontal: 16,
-      borderRadius: 999,
-      backgroundColor: c.surface,
-    },
-    segmentOn: { backgroundColor: c.primary },
-    segmentText: { fontFamily: f.bodyMedium, fontSize: 13, color: c.textSecondary },
-    segmentTextOn: { color: c.textInverse },
-    pillSegment: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 999,
-      backgroundColor: c.surface,
-    },
-    pillOn: { backgroundColor: c.primaryBgSubtle },
-    pillText: { fontFamily: f.bodyMedium, fontSize: 12, color: c.textSecondary },
-    pillTextOn: { color: c.primaryDark },
-    uploadBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      backgroundColor: c.primary,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 999,
-    },
-    uploadBtnText: { color: c.textInverse, fontFamily: f.bodyBold, fontSize: 12 },
-    input: {
-      height: 52,
-      backgroundColor: c.surface,
-      borderRadius: radius.md,
-      paddingHorizontal: spacing.md,
-      fontFamily: f.body,
-      fontSize: 15,
-      color: c.text,
-      marginBottom: spacing.md,
-    },
-    cta: {
-      height: 52,
-      borderRadius: radius.lg,
-      backgroundColor: c.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    ctaText: { color: c.textInverse, fontFamily: f.bodyBold, fontSize: 15 },
-    trackRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.md,
-      padding: spacing.sm,
-      borderRadius: radius.lg,
-      marginBottom: 4,
-    },
-    trackCover: {
-      width: 44,
-      height: 44,
-      borderRadius: 12,
-      backgroundColor: c.primaryBgSubtle,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    trackTitle: { fontFamily: f.bodyBold, fontSize: 15, color: c.text },
-    trackArtist: { fontFamily: f.body, fontSize: 12, color: c.textSecondary, marginTop: 2 },
-  });
+const makeStyles = (c: Palette, f: any) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: c.bg }, center: { flex: 1, padding: 28, gap: 18, alignItems: "center", justifyContent: "center" },
+  header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 8, width: "100%", maxWidth: 1120, alignSelf: "center" },
+  roomTitle: { fontFamily: f.heading, fontSize: 23, color: c.text, lineHeight: 30 },
+  heading: { fontFamily: f.heading, fontSize: 26, color: c.text, textAlign: "center" },
+  body: { fontFamily: f.body, fontSize: 16, lineHeight: 23, color: c.text },
+  secondary: { fontFamily: f.body, fontSize: 15, lineHeight: 23, color: c.textSecondary, textAlign: "center", maxWidth: 480 },
+  small: { fontFamily: f.body, fontSize: 13, lineHeight: 19, color: c.textSecondary },
+  link: { fontFamily: f.bodyBold, fontSize: 14, color: c.primaryDark },
+  connection: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 8, minHeight: 36 },
+  content: { padding: 16, paddingBottom: 24, width: "100%", maxWidth: 900, alignSelf: "center", flexGrow: 1, justifyContent: "center" },
+  hostRow: { flexDirection: "row", gap: 8, alignItems: "center", marginBottom: 12 },
+  hostText: { flex: 1, color: c.primaryDark, fontFamily: f.bodyMedium, fontSize: 14 },
+  idle: { alignItems: "center", paddingVertical: 32, gap: 16 },
+  orbit: { width: 120, height: 120, borderRadius: 44, backgroundColor: c.surfaceElevated, alignItems: "center", justifyContent: "center", marginBottom: 8 },
+  primaryButton: { minHeight: 52, borderRadius: 26, backgroundColor: c.primary, paddingHorizontal: 24, alignItems: "center", justifyContent: "center" },
+  primaryText: { fontFamily: f.bodyBold, fontSize: 16, color: c.textInverse },
+  textButton: { minHeight: 48, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
+  iconButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: c.surface, alignItems: "center", justifyContent: "center" },
+  playButton: { width: 64, height: 64, borderRadius: 32, backgroundColor: c.primary, alignItems: "center", justifyContent: "center" },
+  controls: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: c.border },
+  transport: { alignItems: "center", gap: 6, marginTop: 14 },
+  error: { color: c.error, fontFamily: f.body, fontSize: 14, lineHeight: 21, textAlign: "center", paddingVertical: 8 },
+  reactions: { alignSelf: "center", flexDirection: "row", backgroundColor: c.surfaceElevated, borderRadius: 24, padding: 4, marginBottom: 8 },
+  sheetFrame: { flex: 1, backgroundColor: c.overlay, justifyContent: "flex-end", alignItems: "center" },
+  sheet: { width: "100%", maxWidth: 760, maxHeight: "88%", backgroundColor: c.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingBottom: 28 },
+  sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 16 },
+  memberRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
+  bubble: { maxWidth: "90%", borderRadius: 18, padding: 12, gap: 4 },
+  composer: { flexDirection: "row", gap: 8, padding: 6, paddingLeft: 16, borderRadius: 28, backgroundColor: c.surface, alignItems: "flex-end" },
+  chatInput: { flex: 1, minWidth: 0, minHeight: 48, maxHeight: 140, fontFamily: f.body, fontSize: 16, lineHeight: 23, color: c.text, paddingVertical: 12 },
+  segment: { flex: 1, minHeight: 48, paddingHorizontal: 12, borderRadius: radius.lg, alignItems: "center", justifyContent: "center", backgroundColor: c.surface },
+  input: { minHeight: 56, borderRadius: radius.lg, backgroundColor: c.surface, paddingHorizontal: 16, color: c.text, fontFamily: f.body, fontSize: 16 },
+  upload: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, backgroundColor: c.surface, borderRadius: radius.lg, minHeight: 80 },
+  track: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, minHeight: 64 },
+  sectionLabel: { fontFamily: f.bodyBold, fontSize: 14, color: c.textSecondary, marginTop: 8 },
+});

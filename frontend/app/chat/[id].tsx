@@ -31,71 +31,128 @@ import { useAuth } from "../../src/AuthContext";
 import { VoiceMessageBubble, FilePreviewCard } from "../../src/MessageParts";
 import PrivateImageCard from "../../src/PrivateImageCard";
 import {isImageFilename} from "../../src/imagePreview";
+import {subscribeChatEvents} from "../../src/chatRealtime";
+import {useChatConnection} from "../../src/ChatRealtimeProvider";
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
+  return <ChatConversation key={id + ":" + (user?.id || "")} id={id}/>;
+}
+
+function ChatConversation({id}: {id: string}) {
   const router = useRouter();
   const { user } = useAuth();
   const { c, f } = useTheme();
+  const connection = useChatConnection();
   const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
   const [chatInfo, setChatInfo] = useState<{ other: User | null } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [pending, setPending] = useState<PendingMessage[]>([]);
   const messagesRef = useRef<Message[]>([]);
   messagesRef.current = messages;
-  useEffect(() => {
-    let active = true;
-    const sync = async () => { if (user) { const all = await getOutbox(user.id); if(active)setPending(all.filter(m=>m.chat_id===id)); } };
-    void sync().catch(()=>setError("Could not read queued messages")); const stop=subscribeOutbox(()=>void sync().catch(()=>setError("Could not read queued messages")));
-    return()=>{active=false;stop();};
-  },[user?.id,id]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [emotesOpen,setEmotesOpen]=useState(false);
+  const [attachmentsOpen,setAttachmentsOpen]=useState(false);
+  const [creatingSpace,setCreatingSpace]=useState(false);
+  const [hasOlder,setHasOlder]=useState(false);
+  const [loadingOlder,setLoadingOlder]=useState(false);
+  const olderFlight=useRef(false);
   const [draft,setDraft]=useState<{uri:string;name:string;type:"image"|"file";size?:number|null;uploadedId?:string}|null>(null);
   const [newMessages,setNewMessages]=useState(false);
   const nearBottom=useRef(true);
   const loadingRef = useRef(false);
+  const reloadRequested = useRef(false);
+  const sendFlight = useRef(false);
+  const uploadFlight = useRef(false);
+  const creatingSpaceRef = useRef(false);
+  const chatInfoRef = useRef(chatInfo);
+  chatInfoRef.current = chatInfo;
   const activeChat = useRef(id);
+  const focused = useRef(false);
   activeChat.current = id+":"+(user?.id||"");
 
   const listRef = useRef<FlatList<Message>>(null);
 
-  const load = useCallback(async () => {
-    if (!id || !user || loadingRef.current || (Platform.OS==="web" && document.hidden)) return;
+  const load = useCallback(async (): Promise<void> => {
+    if (!id || !user || (Platform.OS==="web" && document.hidden)) return;
+    if (loadingRef.current) { reloadRequested.current = true; return; }
     const scope=id+":"+user.id;
     loadingRef.current = true;
     try {
       const [info, msgs] = await Promise.all([
-        api.getAs<{ other: User | null }>(user.id,`/chats/${id}`),
-        api.getAs<Message[]>(user.id,"/chats/"+id+"/messages?limit=100"+(messagesRef.current.length ? "&after="+messagesRef.current[messagesRef.current.length-1].id : "")),
+        chatInfoRef.current ? Promise.resolve(chatInfoRef.current) : api.getAs<{ other: User | null }>(user.id,`/chats/${id}`),
+        (async () => {
+          const all: Message[] = [];
+          let after = messagesRef.current[messagesRef.current.length - 1]?.id;
+          for (let page = 0; page < 10; page++) {
+            const batch = await api.getAs<Message[]>(user.id,"/chats/"+id+"/messages?limit=100"+(after ? "&after="+encodeURIComponent(after) : ""));
+            if (activeChat.current !== scope) return [];
+            if (!after) setHasOlder(batch.length === 100);
+            all.push(...batch);
+            if (!after || batch.length < 100) break;
+            after = batch[batch.length - 1]?.id;
+            if (page === 9) reloadRequested.current = true;
+          }
+          return all;
+        })(),
       ]);
       if (activeChat.current !== scope) return;
       setChatInfo(info);
-      setMessages((previous) => Array.from(new Map([...previous, ...msgs].map(m => [m.id, m])).values()).sort((a,b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)));
+      const merged = Array.from(new Map([...messagesRef.current, ...msgs].map(m => [m.id, m])).values()).sort((a,b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+      messagesRef.current = merged; setMessages(merged);
       setError(null);
-    } catch {
-      if(activeChat.current===scope)setError("Couldn't load messages — check your connection");
+    } catch (failure) {
+      if(activeChat.current===scope)setError(failure instanceof Error ? failure.message : "Couldn't load messages. Please try again.");
     } finally {
-      if(activeChat.current===scope){loadingRef.current = false;setLoading(false);}
+      if(activeChat.current===scope){
+        loadingRef.current = false;setLoading(false);
+        if (reloadRequested.current) { reloadRequested.current = false; void load(); }
+      }
     }
   }, [id,user?.id]);
 
   useEffect(() => {
-    setMessages([]); setChatInfo(null); setLoading(true);setText("");setSending(false);setDraft(null);setEmotesOpen(false);setVoiceOpen(false);nearBottom.current=true;setNewMessages(false);
+    activeChat.current = id+":"+(user?.id||"");
+    setError(null);
+    setMessages([]); setChatInfo(null); setPending([]); setLoading(true);setText("");setSending(false);setDraft(null);setEmotesOpen(false);setVoiceOpen(false);setAttachmentsOpen(false);setCreatingSpace(false);nearBottom.current=true;setNewMessages(false);
     messagesRef.current = []; loadingRef.current = false;
+    chatInfoRef.current = null; reloadRequested.current = false; sendFlight.current = false; uploadFlight.current = false; creatingSpaceRef.current = false;
+    olderFlight.current = false; setHasOlder(false); setLoadingOlder(false);
     load();
+    return () => { activeChat.current = ""; };
   }, [load]);
 
-  // Lightweight polling for new messages — only while this screen is focused
+  useEffect(() => {
+    let active = true;
+    const sync = async () => {
+      if (!user) return;
+      const all = await getOutbox(user.id);
+      if (active) setPending(all.filter(message => message.chat_id === id));
+    };
+    const changed = () => {
+      void sync().catch(() => { if (active) setError("Could not read queued messages"); });
+      void load();
+    };
+    void sync().catch(() => { if (active) setError("Could not read queued messages"); });
+    const stop = subscribeOutbox(changed);
+    return () => { active = false; stop(); };
+  }, [user?.id, id, load]);
+
+  // The account provider owns one connection; views only subscribe while focused.
   useFocusEffect(
     useCallback(() => {
-      const t = setInterval(load, 4000);
-      return () => clearInterval(t);
-    }, [load]),
+      focused.current = true;
+      void load();
+      const stop = user ? subscribeChatEvents(user.id, event => {
+        if (event.type !== "chat_changed" || event.chat_id === id) void load();
+      }) : () => {};
+      return () => { focused.current = false; stop(); };
+    }, [load, user?.id, id]),
   );
 
   function jumpToLatest(){nearBottom.current=true;setNewMessages(false);listRef.current?.scrollToEnd({animated:true});}
@@ -111,21 +168,23 @@ export default function ChatScreen() {
   },[load]);
 
   async function send(payload: Record<string,unknown>): Promise<boolean> {
-    if (!user) return false;
+    if (!user || sendFlight.current) return false;
+    sendFlight.current = true;
     const scope=id+":"+user.id;setSending(true);
     try { await queueMessage(user.id,payload); if(activeChat.current===scope){nearBottom.current=true;setNewMessages(false);}return activeChat.current===scope; }
-    catch(e) { setError(e instanceof Error ? e.message : "Could not save this message for sending");return false; }
-    finally {if(activeChat.current===scope)setSending(false);}
+    catch(e) { if(activeChat.current===scope)setError(e instanceof Error ? e.message : "Could not save this message for sending");return false; }
+    finally {if(activeChat.current===scope){sendFlight.current = false;setSending(false);}}
   }
   async function sendText() {
     const t = text.trim();
     if (!t) return;
     const ok = await send({ chat_id: id, type: "text", text: t });
-    if (ok) setText("");
+    if (ok) setText(current => current.trim() === t ? "" : current);
   }
 
   async function sendAttachment(){
-    if(!draft || !user || sending)return;
+    if(!draft || !user || sending || uploadFlight.current)return;
+    uploadFlight.current = true;
     const selected=draft,uid=user.id,scope=id+":"+uid;setSending(true);setError(null);
     try{
       const uploadedId=selected.uploadedId||(await uploadAttachment(id,selected.uri,selected.name,uid)).id;
@@ -133,10 +192,11 @@ export default function ChatScreen() {
       setDraft({...selected,uploadedId});
       if(await send({chat_id:id,type:selected.type,attachment_id:uploadedId}))setDraft(null);
     }catch(error){if(activeChat.current===scope)setError(error instanceof Error?error.message:"Couldn't upload. Your file is still selected; try again.");}
-    finally{if(activeChat.current===scope)setSending(false);}
+    finally{if(activeChat.current===scope){uploadFlight.current=false;setSending(false);}}
   }
   async function attachImage(){
     if(sending)return;const scope=activeChat.current;
+    setAttachmentsOpen(false);
     try{
       const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:["images"],quality:0.8});
       const photo=!result.canceled&&result.assets[0];
@@ -148,6 +208,7 @@ export default function ChatScreen() {
   }
   async function attachFile(){
     if(sending)return;const scope=activeChat.current;
+    setAttachmentsOpen(false);
     try{
       const result=await DocumentPicker.getDocumentAsync({multiple:false,copyToCacheDirectory:true});
       const file=!result.canceled&&result.assets[0];
@@ -157,20 +218,52 @@ export default function ChatScreen() {
       }
     }catch(error){if(activeChat.current===scope)setError(error instanceof Error?error.message:"Couldn't choose this file.");}
   }
+  async function loadOlder() {
+    if (!user || !hasOlder || olderFlight.current || !messagesRef.current[0]) return;
+    const scope = activeChat.current;
+    olderFlight.current = true; setLoadingOlder(true);
+    try {
+      const older = await api.getAs<Message[]>(user.id,"/chats/" + id + "/messages?before=" + encodeURIComponent(messagesRef.current[0].id));
+      if (activeChat.current !== scope) return;
+      const merged = Array.from(new Map([...older, ...messagesRef.current].map(message => [message.id, message])).values());
+      messagesRef.current = merged; setMessages(merged); setHasOlder(older.length === 50);
+    } catch (failure) {
+      if (activeChat.current === scope) setError(failure instanceof Error ? failure.message : "Could not load older messages");
+    } finally {
+      if (activeChat.current === scope) { olderFlight.current = false; setLoadingOlder(false); }
+    }
+  }
+  async function startSpace() {
+    if (!chatInfo?.other || !user || creatingSpaceRef.current) return;
+    const uid = user.id, scope = activeChat.current;
+    creatingSpaceRef.current = true; setCreatingSpace(true); setError(null);
+    try {
+      const space = await api.postAs<{id: string; name?: string}>(uid, "/spaces", {
+        name: chatInfo.other.name.split(" ")[0] + " & you", member_ids: [chatInfo.other.id],
+      });
+      if (activeChat.current !== scope) return;
+      await queueMessage(uid, {chat_id: id, type: "space_invite", text: "Started a space", space_id: space.id, space_name: space.name || "Shared space"});
+      if (activeChat.current === scope && focused.current) router.push(`/space/${space.id}`);
+    } catch (failure) {
+      if (activeChat.current === scope) setError(failure instanceof Error ? failure.message : "Couldn't start this Space. Please try again.");
+    } finally {
+      if (activeChat.current === scope) { creatingSpaceRef.current = false; setCreatingSpace(false); }
+    }
+  }
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.iconBtn} testID="chat-back">
+        <Pressable accessibilityRole="button" accessibilityLabel="Back to chats" onPress={() => router.back()} style={styles.iconBtn} testID="chat-back">
           <Ionicons name="chevron-back" size={22} color={c.text} />
         </Pressable>
         <Pressable accessibilityLabel="Message notifications" onPress={()=>router.push("/notifications")} style={styles.iconBtn}><Ionicons name="notifications-outline" size={20} color={c.primary}/></Pressable>
         <View style={styles.headerCenter}>
           <Avatar name={chatInfo?.other?.name} seed={chatInfo?.other?.id} photo={chatInfo?.other?.avatar} size={36} />
-          <View>
+          <View style={{flex:1,minWidth:0}}>
             <Text style={styles.headerName} numberOfLines={1}>
               {chatInfo?.other?.name || "Chat"}
             </Text>
-            <Text style={styles.headerSub}>Private conversation</Text>
+            <Text numberOfLines={1} style={styles.headerSub}>{connection === "offline" ? "Offline · messages stay queued" : connection === "reconnecting" ? "Reconnecting…" : "Private conversation"}</Text>
           </View>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Contact privacy and reporting" onPress={()=>chatInfo?.other && router.push(("/privacy?contact="+chatInfo.other.id) as never)} style={styles.iconBtn}><Ionicons name="ellipsis-horizontal" size={22} color={c.text}/></Pressable>
@@ -186,27 +279,12 @@ export default function ChatScreen() {
       {/* Phase 2 — Start a shared space */}
       <Pressable
         style={styles.spacesPill}
-        onPress={async () => {
-          if (!chatInfo?.other) return;
-          try {
-            const space = await api.post<{ id: string; name?: string }>("/spaces", {
-              name: `${chatInfo.other.name.split(" ")[0]} & you`,
-              member_ids: [chatInfo.other.id],
-            });
-            await api.post(`/chats/${id}/messages`, {
-              chat_id: id,
-              type: "space_invite",
-              text: "Started a space",
-              space_id: space.id,
-              space_name: space.name || "Shared space",
-            });
-            router.push(`/space/${space.id}`);
-          } catch {}
-        }}
+        accessibilityRole="button" accessibilityLabel="Start a shared space" disabled={creatingSpace || !chatInfo?.other}
+        onPress={() => void startSpace()}
         testID="shared-space-pill"
       >
         <Ionicons name="sparkles-outline" size={14} color={c.textSecondary} />
-        <Text style={styles.spacesText}>Start a shared space</Text>
+        <Text style={styles.spacesText}>{creatingSpace ? "Creating your space…" : "Start a shared space"}</Text>
         <Ionicons name="arrow-forward" size={12} color={c.primary} />
       </Pressable>
 
@@ -225,7 +303,7 @@ export default function ChatScreen() {
             testID="chat-error"
           >
             <Ionicons name="cloud-offline-outline" size={14} color={c.error} />
-            <Text style={styles.errorText}>{error}  ·  Tap to retry</Text>
+            <Text style={styles.errorText}>{error} · Tap to retry</Text>
           </Pressable>
         ) : null}
         {loading ? (
@@ -242,15 +320,12 @@ export default function ChatScreen() {
             data={messages}
             keyExtractor={(m) => m.id}
             contentContainerStyle={styles.msgList}
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => <View>
+              {index === 0 || new Date(messages[index - 1].created_at).toLocaleDateString() !== new Date(item.created_at).toLocaleDateString()
+                ? <Text style={styles.dateLabel}>{new Date(item.created_at).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}</Text> : null}
               <MessageRow msg={item} mine={item.sender_id === user?.id} />
-            )}
-            ListHeaderComponent={messages.length >= 50 ? <Pressable onPress={async () => {
-              try {
-                const older = await api.get<Message[]>("/chats/" + id + "/messages?before=" + messages[0].id);
-                setMessages(prev => Array.from(new Map([...older, ...prev].map(m => [m.id, m])).values()));
-              } catch { setError("Could not load older messages"); }
-            }}><Text style={{ color: c.primary, padding: 12 }}>Load older messages</Text></Pressable> : null}
+            </View>}
+            ListHeaderComponent={hasOlder ? <Pressable accessibilityRole="button" accessibilityLabel="Load older messages" disabled={loadingOlder} onPress={()=>void loadOlder()}><Text style={{color:c.primary,padding:16,textAlign:"center",fontFamily:f.bodyMedium}}>{loadingOlder ? "Loading earlier messages…" : "Load older messages"}</Text></Pressable> : null}
             ListFooterComponent={<View>{pending.filter(p => !messages.some(m=>m.client_message_id===p.id)).map(p => <View key={p.id} style={{padding:12,alignSelf:"flex-end"}}>
               <Text style={{color:c.text}}>{String(p.payload.text || (p.payload.emote_id?"Emote waiting to send":"File waiting to send"))}</Text>
               <Text style={{color:c.textSecondary}}>{p.state==="failed"?p.error:"Waiting to send…"}</Text>
@@ -259,7 +334,7 @@ export default function ChatScreen() {
             </View>)}</View>}
             ListEmptyComponent={
               <View style={styles.empty}>
-                <Text style={styles.emptyText}>Say something gentle.</Text>
+                <Text style={styles.emptyText}>A little closer starts with hello.</Text>
               </View>
             }
           /></View>
@@ -271,15 +346,17 @@ export default function ChatScreen() {
           <View style={{flexDirection:"row",gap:12}}><Pressable accessibilityRole="button" accessibilityLabel="Cancel attachment" disabled={sending} onPress={()=>setDraft(null)} style={{flex:1,minHeight:44,alignItems:"center",justifyContent:"center",borderRadius:14,backgroundColor:c.surface}}><Text style={{color:c.text,fontFamily:f.bodyMedium}}>Cancel</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="Send attachment" disabled={sending} onPress={()=>void sendAttachment()} style={{flex:1,minHeight:44,alignItems:"center",justifyContent:"center",borderRadius:14,backgroundColor:c.primary}}>{sending?<ActivityIndicator color={c.textInverse}/>:<Text style={{color:c.textInverse,fontFamily:f.bodyBold}}>Send {draft.type==="image"?"photo":"file"}</Text>}</Pressable></View>
         </View>:null}
         {emotesOpen?<EmotePicker key={id+":"+user?.id} onClose={()=>setEmotesOpen(false)} onSend={emote_id=>send({chat_id:id,type:"emote",emote_id})}/>:null}
+        {attachmentsOpen ? <View testID="chat-attachment-menu" style={styles.attachmentMenu}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Choose a photo to share" disabled={sending} onPress={attachImage} style={styles.attachmentChoice} testID="attach-image"><Ionicons name="image-outline" size={23} color={c.primary}/><Text style={styles.attachmentLabel}>Photo</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Choose a file to share" disabled={sending} onPress={attachFile} style={styles.attachmentChoice} testID="attach-file"><Ionicons name="document-outline" size={23} color={c.primary}/><Text style={styles.attachmentLabel}>File</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Record a voice memo" disabled={sending} onPress={()=>{setAttachmentsOpen(false);setVoiceOpen(true);}} style={styles.attachmentChoice}><Ionicons name="mic-outline" size={23} color={c.primary}/><Text style={styles.attachmentLabel}>Voice memo</Text></Pressable>
+        </View> : null}
         {voiceOpen ? <VoiceComposer getChatId={async()=>id} onSent={()=>setVoiceOpen(false)} onClose={()=>setVoiceOpen(false)}/> : (
           <View style={styles.composer}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Choose a file to share" disabled={sending} onPress={attachFile} style={styles.attachBtn} testID="attach-file">
-              <Ionicons name="add" size={22} color={c.text} />
+            <Pressable accessibilityRole="button" accessibilityLabel={attachmentsOpen ? "Close attachment options" : "Add an attachment"} accessibilityState={{expanded:attachmentsOpen}} disabled={sending} onPress={()=>{setAttachmentsOpen(value=>!value);setEmotesOpen(false);}} style={styles.attachBtn} testID="attachment-menu-button">
+              <Ionicons name={attachmentsOpen ? "close" : "add"} size={23} color={c.text} />
             </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel="Choose a photo to share" disabled={sending} onPress={attachImage} style={styles.attachBtn} testID="attach-image">
-              <Ionicons name="image-outline" size={20} color={c.text} />
-            </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel="Open emotes" disabled={sending} onPress={()=>setEmotesOpen(true)} style={styles.attachBtn}><Ionicons name="happy-outline" size={21} color={c.text}/></Pressable>
+            <View style={styles.inputWrap}>
             <TextInput
               value={text}
               onChangeText={setText}
@@ -287,11 +364,15 @@ export default function ChatScreen() {
               placeholderTextColor={c.textTertiary}
               style={styles.input}
               multiline
+              maxLength={10000}
               accessibilityLabel="Message"
               testID="message-input"
             />
+            <Pressable accessibilityRole="button" accessibilityLabel="Open emotes" disabled={sending} onPress={()=>{setEmotesOpen(true);setAttachmentsOpen(false);}} style={styles.emoteBtn}><Ionicons name="happy-outline" size={21} color={c.textSecondary}/></Pressable>
+            </View>
             {text.trim().length > 0 ? (
               <Pressable
+                accessibilityRole="button" accessibilityLabel="Send message"
                 onPress={sendText}
                 disabled={sending}
                 style={styles.sendBtn}
@@ -303,7 +384,7 @@ export default function ChatScreen() {
               <Pressable
                 accessibilityRole="button" accessibilityLabel="Record a voice memo"
                 disabled={sending}
-                onPress={() => setVoiceOpen(true)}
+                onPress={() => { setAttachmentsOpen(false); setVoiceOpen(true); }}
                 style={styles.sendBtn}
                 testID="mic-button"
               >
@@ -317,7 +398,7 @@ export default function ChatScreen() {
   );
 }
 
-function MessageRow({ msg, mine }: { msg: Message; mine: boolean }) {
+const MessageRow = React.memo(function MessageRow({ msg, mine }: { msg: Message; mine: boolean }) {
   const { c, f } = useTheme();
   const router = useRouter();
   const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
@@ -395,11 +476,12 @@ function MessageRow({ msg, mine }: { msg: Message; mine: boolean }) {
       </View>
     </View>
   );
-}
+});
 
 const makeStyles = (c: any, f: any) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: c.bg },
   header: {
+    width: "100%", maxWidth: 960, alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: spacing.md,
@@ -408,16 +490,17 @@ const makeStyles = (c: any, f: any) => StyleSheet.create({
   },
   headerCenter: {
     flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
   },
   headerName: { fontFamily: f.heading, fontSize: 18, color: c.text },
-  headerSub: { fontFamily: f.body, fontSize: 11, color: c.textTertiary, marginTop: 2 },
+  headerSub: { fontFamily: f.body, fontSize: 12, color: c.textSecondary, marginTop: 2, flexShrink: 1 },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: c.surface,
@@ -428,14 +511,14 @@ const makeStyles = (c: any, f: any) => StyleSheet.create({
     alignSelf: "center",
     gap: 6,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: c.border,
     borderStyle: "dashed",
     marginVertical: spacing.sm,
   },
-  spacesText: { fontFamily: f.body, fontSize: 12, color: c.textSecondary },
+  spacesText: { fontFamily: f.bodyMedium, fontSize: 13, color: c.textSecondary },
   spacesSoon: {
     fontFamily: f.bodyMedium,
     fontSize: 10,
@@ -447,7 +530,8 @@ const makeStyles = (c: any, f: any) => StyleSheet.create({
     overflow: "hidden",
     marginLeft: 2,
   },
-  msgList: { padding: spacing.md, gap: spacing.sm, paddingBottom: spacing.lg },
+  msgList: { width: "100%", maxWidth: 960, alignSelf: "center", padding: spacing.md, paddingBottom: spacing.lg },
+  dateLabel: { textAlign: "center", fontFamily: f.bodyMedium, fontSize: 12, color: c.textSecondary, paddingVertical: 16 },
   msgRow: { flexDirection: "row", marginBottom: spacing.sm },
   msgLeft: { justifyContent: "flex-start" },
   msgRight: { justifyContent: "flex-end" },
@@ -457,7 +541,7 @@ const makeStyles = (c: any, f: any) => StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 20,
   },
-  msgText: { fontFamily: f.body, fontSize: 15, color: c.text, lineHeight: 22 },
+  msgText: { fontFamily: f.body, fontSize: 16, color: c.text, lineHeight: 24 },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -469,10 +553,10 @@ const makeStyles = (c: any, f: any) => StyleSheet.create({
     borderRadius: 999,
     marginVertical: spacing.sm,
   },
-  errorText: { fontFamily: f.bodyMedium, fontSize: 12, color: c.error },
+  errorText: { fontFamily: f.bodyMedium, fontSize: 13, lineHeight: 20, flexShrink: 1, color: c.error },
   msgTime: {
     fontFamily: f.body,
-    fontSize: 10,
+    fontSize: 12,
     color: c.textTertiary,
     marginTop: 4,
     alignSelf: "flex-end",
@@ -484,6 +568,7 @@ const makeStyles = (c: any, f: any) => StyleSheet.create({
     backgroundColor: c.primaryBgSubtle,
   },
   composer: {
+    width: "100%", maxWidth: 960, alignSelf: "center",
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
@@ -494,13 +579,18 @@ const makeStyles = (c: any, f: any) => StyleSheet.create({
     backgroundColor: c.bg,
   },
   attachBtn: {
-    width: 40,
+    width: 44,
     height: 44,
     borderRadius: 20,
     backgroundColor: c.surface,
     alignItems: "center",
     justifyContent: "center",
   },
+  inputWrap: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "flex-end", backgroundColor: c.surface, borderRadius: 24 },
+  emoteBtn: { width: 40, height: 44, alignItems: "center", justifyContent: "center" },
+  attachmentMenu: { width: "100%", maxWidth: 960, alignSelf: "center", flexDirection: "row", gap: 10, paddingHorizontal: spacing.md, paddingTop: 12, paddingBottom: 8, backgroundColor: c.bg },
+  attachmentChoice: { flex: 1, minHeight: 76, alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 18, backgroundColor: c.surface },
+  attachmentLabel: { fontFamily: f.bodyMedium, fontSize: 13, color: c.text },
   input: {
     flex: 1,
     minWidth:0,
@@ -512,13 +602,13 @@ const makeStyles = (c: any, f: any) => StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 10,
     fontFamily: f.body,
-    fontSize: 15,
+    fontSize: 16,
     color: c.text,
   },
   sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: c.primary,
     alignItems: "center",
     justifyContent: "center",

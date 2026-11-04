@@ -317,7 +317,8 @@ class AuthService:
         for chat in await self.db.chats.find({"members": user_id}).to_list(500):
             ids.update(m for m in chat["members"] if m != user_id)
         from safety import blocked
-        return {uid for uid in ids if not await blocked(self.db, user_id, uid)}
+        active = {u['id'] for u in await self.db.users.find({'id': {'$in': list(ids)}, 'disabled': {'$ne': True}}, {'id': 1}).to_list(1000)}
+        return {uid for uid in ids if uid in active and not await blocked(self.db, user_id, uid)}
 
     async def require_contact(self, current_id, other_id):
         if other_id not in await self.contacts(current_id):

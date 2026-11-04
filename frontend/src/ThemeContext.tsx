@@ -3,6 +3,7 @@ import {AppState, Platform, useColorScheme} from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {palettes, ThemeName, Palette, fontPairs, FontPair} from "./theme";
 import {AppearanceMode, DecorName, resolveDark, validTime} from "./appearance";
+import {nextThemeTransitionDelay} from "./appearanceClock";
 
 type Preferences = {mode: AppearanceMode; dayTheme: ThemeName; nightTheme: ThemeName; dayAt: string; nightAt: string; decor: DecorName};
 const defaults: Preferences = {mode: "schedule", dayTheme: "warm", nightTheme: "evening", dayAt: "07:00", nightAt: "19:00", decor: "plain"};
@@ -13,6 +14,7 @@ export function ThemeProvider({children}: {children: React.ReactNode}) {
   const [fontKey, setFontKeyState] = useState<FontPair>("fraunces");
   const [clock, setClock] = useState(() => new Date());
   const scheme = useColorScheme(); const edited = useRef(false); const fontEdited = useRef(false);
+  const renderedDark = useRef(resolveDark(prefs.mode, clock, scheme === "dark", prefs.nightAt, prefs.dayAt));
   const prefsRef = useRef(prefs);
   const writes = useRef(Promise.resolve());
   useEffect(() => {
@@ -34,12 +36,40 @@ export function ThemeProvider({children}: {children: React.ReactNode}) {
       }
       if (!fontEdited.current && font && font in fontPairs) setFontKeyState(font as FontPair);
     }).catch(() => {});
-    const tick = () => setClock(new Date());
-    const timer = setInterval(tick, 1000);
-    const sub = AppState.addEventListener("change", state => {if (state === "active") tick();});
-    if (Platform.OS === "web") document.addEventListener("visibilitychange", tick);
-    return () => {live = false; clearInterval(timer); sub.remove(); if (Platform.OS === "web") document.removeEventListener("visibilitychange", tick);};
+    return () => {live = false;};
   }, []);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let live = true;
+    const visible = () => AppState.currentState !== "background" &&
+      (Platform.OS !== "web" || typeof document === "undefined" || document.visibilityState !== "hidden");
+    const stop = () => {if (timer !== undefined) clearTimeout(timer); timer = undefined;};
+    const tick = () => {
+      stop(); if (!live) return;
+      const next = new Date();
+      // A minute-level clock check catches a foreground clock/timezone change,
+      // but only an actual theme transition updates React state.
+      if (renderedDark.current !== resolveDark(prefs.mode, next, scheme === "dark", prefs.nightAt, prefs.dayAt)) setClock(next);
+      if (prefs.mode === "schedule" && visible()) {
+        timer = setTimeout(tick, Math.min(60_000, nextThemeTransitionDelay(next, prefs.dayAt, prefs.nightAt)));
+      }
+    };
+    const resume = () => {if (visible()) tick(); else stop();};
+    tick();
+    const sub = AppState.addEventListener("change", resume);
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", resume);
+      window.addEventListener("focus", resume);
+    }
+    return () => {
+      live = false; stop(); sub.remove();
+      if (Platform.OS === "web" && typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", resume);
+        window.removeEventListener("focus", resume);
+      }
+    };
+  }, [prefs.mode, prefs.dayAt, prefs.nightAt, scheme]);
   const setAppearance = useCallback((patch: Partial<Preferences>) => {
     edited.current = true;
     const next = {...prefsRef.current, ...patch};
@@ -51,6 +81,7 @@ export function ThemeProvider({children}: {children: React.ReactNode}) {
   const setTheme = useCallback((t: ThemeName) => setAppearance(palettes[t].isDark ? {nightTheme: t} : {dayTheme: t}), [setAppearance]);
   const setFontKey = useCallback((font: FontPair) => {fontEdited.current = true; setFontKeyState(font); void AsyncStorage.setItem("connect_font", font).catch(() => {});}, []);
   const dark = resolveDark(prefs.mode, clock, scheme === "dark", prefs.nightAt, prefs.dayAt);
+  renderedDark.current = dark;
   const themeName = dark ? prefs.nightTheme : prefs.dayTheme;
   const c = palettes[themeName];
   useEffect(() => {

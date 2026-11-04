@@ -8,6 +8,10 @@ let accessToken: string | null = null;
 let sessionUserId: string | null = null;
 let sessionEpoch = 0;
 let refreshFlight: Promise<string | null> | null = null;
+const REQUEST_TIMEOUT_MS = 95_000;
+let secureWrites: Promise<unknown> = Promise.resolve();
+export const getSessionUserId = () => sessionUserId;
+export const getSessionEpoch = () => sessionEpoch;
 const expiredListeners = new Set<() => void>();
 export function onSessionExpired(listener: () => void) {
   expiredListeners.add(listener);
@@ -16,17 +20,37 @@ export function onSessionExpired(listener: () => void) {
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }
+// Keep the deadline until the response body is decoded, not only until headers arrive.
+// The API may need to wake on the free hosting tier, but it must never wait forever.
+export async function withRequestDeadline<T>(run: (signal: AbortSignal) => Promise<T>, timeout = REQUEST_TIMEOUT_MS): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new ApiError("KUKU is taking longer to connect. Please try again; your session has been kept.", 408));
+      controller.abort();
+    }, timeout);
+  });
+  try { return await Promise.race([run(controller.signal), deadline]); }
+  finally { clearTimeout(timer!); }
+}
+function storeRefresh(value: string | null) {
+  secureWrites = secureWrites.catch(() => {}).then(() => value
+    ? SecureStore.setItemAsync(REFRESH_KEY, value)
+    : SecureStore.deleteItemAsync(REFRESH_KEY));
+  return secureWrites;
+}
 export async function setToken(value: string | null) {
   accessToken = value;
-  if (!value) { sessionUserId = null; sessionEpoch++; }
-  if (!value && Platform.OS !== "web") await SecureStore.deleteItemAsync(REFRESH_KEY);
+  if (!value) { sessionUserId = null; sessionEpoch++; refreshFlight = null; }
+  if (!value && Platform.OS !== "web") await storeRefresh(null);
 }
 export async function acceptSession(data: { token: string; refresh_token?: string; user: {id:string} }) {
   sessionEpoch++;
   accessToken = data.token;
   sessionUserId = data.user.id;
   if (Platform.OS !== "web" && data.refresh_token) {
-    await SecureStore.setItemAsync(REFRESH_KEY, data.refresh_token);
+    await storeRefresh(data.refresh_token);
   }
 }
 function headers() {
@@ -43,19 +67,26 @@ async function parse(response: Response) {
 export async function refreshSession(): Promise<string | null> {
   if (refreshFlight) return refreshFlight;
   const epoch = sessionEpoch;
-  refreshFlight = (async () => {
+  const flight = (async () => {
     const refresh_token = Platform.OS === "web" ? undefined : await SecureStore.getItemAsync(REFRESH_KEY);
     if (Platform.OS !== "web" && !refresh_token) return null;
-    const renew = async () => parse(await fetch(API_BASE + "/auth/refresh", {
-      method: "POST", credentials: "include", headers: headers(), body: JSON.stringify({ refresh_token }),
+    const renew = async (signal: AbortSignal) => parse(await fetch(API_BASE + "/auth/refresh", {
+      method: "POST", credentials: "include", headers: headers(), body: JSON.stringify({ refresh_token }), signal,
     }));
-    const data = Platform.OS === "web" && typeof navigator !== "undefined" && navigator.locks
-      ? await navigator.locks.request("kuku-session-refresh", renew) : await renew();
+    const data = await withRequestDeadline(signal => Platform.OS === "web" && typeof navigator !== "undefined" && navigator.locks
+      ? navigator.locks.request("kuku-session-refresh", {signal}, () => renew(signal)) : renew(signal));
     if (sessionEpoch !== epoch) return accessToken;
-    await acceptSession(data);
+    // A refresh rotates credentials in the same session; it does not invalidate
+    // unrelated in-flight reads for that account.
+    if (sessionUserId && data.user.id !== sessionUserId) throw new ApiError("Your account changed. Please sign in again.", 401);
+    accessToken = data.token;
+    sessionUserId = data.user.id;
+    if (Platform.OS !== "web" && data.refresh_token) await storeRefresh(data.refresh_token);
+    if (sessionEpoch !== epoch) return accessToken;
     return data.token;
   })();
-  try { return await refreshFlight; }
+  refreshFlight = flight;
+  try { return await flight; }
   catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       if (sessionEpoch !== epoch) return accessToken;
@@ -64,30 +95,46 @@ export async function refreshSession(): Promise<string | null> {
       return null;
     }
     throw error;
-  } finally { refreshFlight = null; }
+  } finally { if (refreshFlight === flight) refreshFlight = null; }
 }
 export async function getToken(): Promise<string | null> {
   return accessToken || refreshSession();
 }
 async function request<T>(path: string, options: RequestInit = {}, retried = false, expectedUser?: string): Promise<T> {
   const anonymous = ["/auth/login", "/auth/register", "/auth/forgot-password", "/auth/reset-password"].includes(path);
+  const startedEpoch = sessionEpoch;
+  const startedUser = expectedUser || sessionUserId;
   const token = anonymous ? null : await getToken();
-  if (expectedUser && sessionUserId !== expectedUser) throw new ApiError("Account changed", 401);
-  const response = await fetch(API_BASE + path, {
-    ...options, credentials: "include",
-    headers: { ...headers(), ...(token ? { Authorization: "Bearer " + token } : {}), ...options.headers },
+  const assertCurrent = () => {
+    if (!anonymous && (sessionEpoch !== startedEpoch || (startedUser && sessionUserId !== startedUser))) throw new ApiError("Account changed", 401);
+  };
+  assertCurrent();
+  let unauthorized = false;
+  const data = await withRequestDeadline(async signal => {
+    const response = await fetch(API_BASE + path, {
+      ...options, credentials: "include", signal,
+      headers: { ...headers(), ...(token ? { Authorization: "Bearer " + token } : {}), ...options.headers },
+    });
+    assertCurrent();
+    if (response.status === 401 && !anonymous && !retried) { unauthorized = true; return null; }
+    const body = await parse(response);
+    assertCurrent();
+    return body;
   });
-  if (response.status === 401 && !anonymous && !retried) {
+  if (unauthorized) {
     const renewed = await refreshSession();
+    assertCurrent();
     if (renewed) return request<T>(path, options, true, expectedUser);
     expiredListeners.forEach((listener) => listener());
+    throw new ApiError("Please sign in again.", 401);
   }
-  return parse(response);
+  return data as T;
 }
 export const api = {
   postAs: <T = any>(uid:string,path:string,body:unknown) => request<T>(path,{method:"POST",body:JSON.stringify(body)},false,uid),
   get: <T = any>(path: string) => request<T>(path),
   getAs: <T = any>(uid:string,path:string) => request<T>(path,{},false,uid),
+  deleteAs: <T = any>(uid:string,path:string) => request<T>(path,{method:"DELETE"},false,uid),
   post: <T = any>(path: string, body?: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(body ?? {}) }),
   delete: <T = any>(path: string) => request<T>(path, { method: "DELETE" }),
 };
@@ -103,29 +150,44 @@ export type Message = {
 export type Chat = { id: string; type: string; other: User | null; last_message: Message | null; updated_at: string };
 
 export async function uploadAttachment(chatId: string, uri: string, name: string, expectedUser?: string, kind = "file") {
-  if (expectedUser && sessionUserId !== expectedUser) throw new ApiError("Account changed", 401);
+  const epoch = sessionEpoch;
+  const assertCurrent = () => {
+    if (sessionEpoch !== epoch || (expectedUser && sessionUserId !== expectedUser)) throw new ApiError("Account changed", 401);
+  };
+  assertCurrent();
   const url = API_ORIGIN + "/api/chats/" + encodeURIComponent(chatId) + "/attachments?name=" + encodeURIComponent(name) + "&kind=" + encodeURIComponent(kind);
   const token = await getToken();
-  if (expectedUser && sessionUserId !== expectedUser) throw new ApiError("Account changed", 401);
+  assertCurrent();
   if (Platform.OS !== "web") {
     const files = await import("expo-file-system/legacy");
     const info = await files.getInfoAsync(uri);
     if (!info.exists || info.isDirectory || !info.size || info.size > 25 * 1024 * 1024) throw new Error("Choose a file between 1 byte and 25 MB");
-    const response = await files.uploadAsync(url, uri, {
-      httpMethod: "POST", uploadType: files.FileSystemUploadType.BINARY_CONTENT,
-      headers: { Authorization: "Bearer " + token, "Content-Type": "application/octet-stream" },
+    assertCurrent();
+    const response = await withRequestDeadline(async signal => {
+      const task = files.createUploadTask(url, uri, {
+        httpMethod: "POST", uploadType: files.FileSystemUploadType.BINARY_CONTENT,
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/octet-stream" },
+      });
+      const cancel = () => { void task.cancelAsync().catch(() => {}); };
+      signal.addEventListener("abort", cancel, {once: true});
+      try {
+        const result = await task.uploadAsync();
+        if (!result) throw new Error("The upload was cancelled. Your file is still selected.");
+        return result;
+      } finally { signal.removeEventListener("abort", cancel); }
     });
     const data = JSON.parse(response.body);
     if (response.status >= 400) throw new ApiError(data.detail || "Upload failed", response.status);
-    if (expectedUser && sessionUserId !== expectedUser) throw new ApiError("Account changed", 401);
+    assertCurrent();
     return data as {id: string; file_name: string; file_size: number};
   }
   const blob = await (await fetch(uri)).blob();
   if (!blob.size || blob.size > 25 * 1024 * 1024) throw new Error("Choose a file between 1 byte and 25 MB");
-  if (expectedUser && sessionUserId !== expectedUser) throw new ApiError("Account changed", 401);
-  const data = await parse(await fetch(url, {
+  assertCurrent();
+  const data = await withRequestDeadline(async signal => parse(await fetch(url, {
     method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/octet-stream" }, body: blob,
-  }));
-  if (expectedUser && sessionUserId !== expectedUser) throw new ApiError("Account changed", 401);
+    signal,
+  })));
+  assertCurrent();
   return data as {id: string; file_name: string; file_size: number};
 }

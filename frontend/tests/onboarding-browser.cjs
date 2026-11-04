@@ -249,6 +249,8 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),390);
     await page.screenshot({path:path.join(shots,"photo-files-390.png"),fullPage:true});
     await page.goto(origin+"/chat/synthetic-chat");
+    await page.getByTestId("attachment-menu-button").waitFor();
+    await page.getByTestId("attachment-menu-button").click();
     await page.getByRole("button",{name:"Choose a photo to share",exact:true}).waitFor();
     const uploadsBefore=state().attachmentUploads;
     let pick=page.waitForEvent("filechooser");
@@ -260,6 +262,7 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.getByTestId("attachment-draft").count(),0);
     assert.equal(state().attachmentUploads,uploadsBefore);
     pick=page.waitForEvent("filechooser");
+    await page.getByTestId("attachment-menu-button").click();
     await page.getByRole("button",{name:"Choose a photo to share",exact:true}).click();
     await (await pick).setFiles({name:"family-photo.jpg",mimeType:"image/jpeg",buffer:Buffer.from(TEST_PHOTO,"base64")});
     await page.screenshot({path:path.join(shots,"chat-photo-draft-390.png"),fullPage:true});

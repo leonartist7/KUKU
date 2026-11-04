@@ -64,3 +64,12 @@ Path owners in this active session:
 ## Work packages
 Follow the IDs and dependencies in docs/MASTER_PLAN.md. Initial work spans R01/R03/D01/D03/M01/M02/S01/S02/S03/C01/C02.
 Do not mark a full phase complete when a release gate is still outstanding.
+
+## Continuation schedule
+An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
+
+## Active controller lease
+Controller: root initial implementation.
+Lease recorded at: 2026-11-04T14:41:32.942Z
+Lease expires at: 2026-11-04T16:11:32.942Z
+State: ACTIVE; preparing first integrated cloud verification.

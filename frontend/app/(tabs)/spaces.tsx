@@ -1,348 +1,106 @@
-import React, { useCallback, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  ActivityIndicator,
-  RefreshControl,
-} from "react-native";
+import React, { useCallback, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { Palette, radius, spacing } from "../../src/theme";
+import { getSessionUserId } from "../../src/api";
 import { useTheme } from "../../src/ThemeContext";
 import { useAuth } from "../../src/AuthContext";
+import type { Palette } from "../../src/theme";
+import { spacesApi, type Space } from "../../src/spaces";
 import Avatar from "../../src/Avatar";
-import { spacesApi, Space } from "../../src/spaces";
-
-function activityLabel(s: Space): string {
-  if (s.mode === "video") return "Watching";
-  if (s.mode === "audio") return "Listening";
-  return "Idle";
-}
 
 export default function SpacesScreen() {
-  const router = useRouter();
-  const { c, f } = useTheme();
-  const { user } = useAuth();
-  const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
-  const [active, setActive] = useState<Space[]>([]);
-  const [saved, setSaved] = useState<Space[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
+  const router = useRouter(), { c, f } = useTheme(), { user } = useAuth(), uid = user?.id || "";
+  const styles = useMemo(() => makeStyles(c, f), [c, f]);
+  const [active, setActive] = useState<Space[]>([]), [saved, setSaved] = useState<Space[]>([]);
+  const [loading, setLoading] = useState(true), [refreshing, setRefreshing] = useState(false), [error, setError] = useState(""), [search, setSearch] = useState("");
+  const [dataUid, setDataUid] = useState("");
+  const generation = useRef(0), account = useRef(uid); account.current = uid;
   const load = useCallback(async () => {
+    if (!uid) return;
+    const request = ++generation.current; setError("");
     try {
-      const data = await spacesApi.list();
-      setActive(data.active);
-      setSaved(data.saved);
-    } catch {
+      const data = await spacesApi.list(uid);
+      if (generation.current === request && getSessionUserId() === uid && account.current === uid) { setActive(data.active); setSaved(data.saved); setDataUid(uid); }
+    } catch (cause) {
+      if (generation.current === request && account.current === uid) setError(cause instanceof Error ? cause.message : "Your rooms could not be loaded. Try again.");
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (generation.current === request && account.current === uid) { setLoading(false); setRefreshing(false); }
     }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
-
-  return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.push("/you")} style={styles.profileBtn} testID="profile-button">
-          <Avatar name={user?.name} seed={user?.id} photo={user?.avatar} size={40} />
-        </Pressable>
-        <View style={styles.titleBlock}>
-          <Text style={styles.kicker}>Together</Text>
-          <Text style={styles.title}>Spaces</Text>
-        </View>
-        <View style={{ width: 40 }} />
-      </View>
-
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={c.primary} />
-        </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                load();
-              }}
-              tintColor={c.primary}
-            />
-          }
-        >
-          {/* Create card — prominent */}
-          <Pressable
-            onPress={() => router.push("/space/create")}
-            style={({ pressed }) => [
-              styles.createCard,
-              pressed && { transform: [{ scale: 0.99 }], opacity: 0.96 },
-            ]}
-            testID="create-space-button"
-          >
-            <View style={styles.createIconWrap}>
-              <Ionicons name="add" size={26} color={c.textInverse} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.createTitle}>Create a Space</Text>
-              <Text style={styles.createSub}>
-                A small room for the people who matter. Watch, listen, be together.
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={c.primary} />
-          </Pressable>
-
-          {/* Active Now */}
-          <SectionHeader title="Active now" count={active.length} />
-          {active.length === 0 ? (
-            <View style={styles.emptyRow}>
-              <Text style={styles.emptyText}>Nothing happening right now. Quiet, calm.</Text>
-            </View>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeRow}>
-              {active.map((s) => (
-                <ActiveCard key={s.id} space={s} onOpen={() => router.push(`/space/${s.id}`)} />
-              ))}
-            </ScrollView>
-          )}
-
-          {/* Your Rooms */}
-          <SectionHeader title="Your rooms" count={saved.length} />
-          {saved.length === 0 ? (
-            <View style={styles.emptyRow}>
-              <Text style={styles.emptyText}>Spaces you create show up here.</Text>
-            </View>
-          ) : (
-            <View style={{ gap: spacing.sm }}>
-              {saved.map((s) => (
-                <RoomRow
-                  key={s.id}
-                  space={s}
-                  onOpen={() => router.push(`/space/${s.id}`)}
-                />
-              ))}
-            </View>
-          )}
-
-          <Text style={styles.footnote}>
-            Phase 2 · shared presence · synced together
-          </Text>
-        </ScrollView>
-      )}
-    </SafeAreaView>
-  );
-}
-
-function SectionHeader({ title, count }: { title: string; count: number }) {
-  const { c, f } = useTheme();
-  return (
-    <View style={{ marginTop: spacing.lg, marginBottom: spacing.sm, flexDirection: "row", alignItems: "baseline" }}>
-      <Text
-        style={{
-          fontFamily: f.bodyBold,
-          fontSize: 12,
-          color: c.textTertiary,
-          textTransform: "uppercase",
-          letterSpacing: 1.3,
-          marginRight: 8,
-        }}
-      >
-        {title}
-      </Text>
-      <Text style={{ fontFamily: f.body, fontSize: 12, color: c.textTertiary }}>· {count}</Text>
+  }, [uid]);
+  useFocusEffect(useCallback(() => {
+    setActive([]); setSaved([]); setLoading(true); setSearch("");
+    void load();
+    return () => { generation.current++; };
+  }, [load]));
+  const query = search.trim().toLocaleLowerCase(), matches = (space: Space) => !query || space.name.toLocaleLowerCase().includes(query);
+  const activeRooms = dataUid === uid ? active.filter(matches) : [], rooms = dataUid === uid ? saved.filter(matches) : [];
+  return <SafeAreaView style={styles.safe} edges={["top"]}>
+    <View style={styles.header}>
+      <View style={{ flex: 1 }}><Text style={styles.kicker}>A little time together</Text><Text style={styles.title}>Spaces</Text></View>
+      <Pressable accessibilityRole="button" accessibilityLabel="Create a Space" onPress={() => router.push("/space/create")} style={styles.createIcon} testID="create-space-button"><Ionicons name="add" size={25} color={c.textInverse} /></Pressable>
     </View>
-  );
+    {loading ? <View style={styles.center}><ActivityIndicator color={c.primaryDark} /><Text style={styles.subtitle}>Opening your rooms…</Text></View> :
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} tintColor={c.primaryDark} />} keyboardShouldPersistTaps="handled">
+        <View style={styles.intro}><View style={styles.introIcon}><Ionicons name="planet-outline" size={38} color={c.primaryDark} /></View><View style={{ flex: 1 }}><Text style={styles.introTitle}>Make room for each other.</Text><Text style={styles.subtitle}>A song, a video, a quiet catch-up. Your own small place to be together.</Text></View></View>
+        {error ? <View style={styles.notice}><Text accessibilityRole="alert" style={styles.error}>{error}</Text><Pressable accessibilityRole="button" onPress={() => void load()} style={styles.retry}><Text style={styles.link}>Try again</Text></Pressable></View> : null}
+        {saved.length + active.length > 4 ? <View style={styles.search}><Ionicons name="search-outline" size={20} color={c.textSecondary} /><TextInput accessibilityLabel="Find a Space" value={search} onChangeText={setSearch} placeholder="Find a room" placeholderTextColor={c.textSecondary} style={styles.searchInput} /></View> : null}
+        <Section title="Happening now" count={activeRooms.length} />
+        {activeRooms.length ? <View style={styles.grid}>{activeRooms.map(space => <RoomCard key={space.id} space={space} active onOpen={() => router.push("/space/" + space.id)} />)}</View> :
+          <View style={styles.empty}><Text style={styles.body}>{query ? "No active rooms match that name." : "It's quiet here for now."}</Text><Text style={styles.subtitle}>Open one of your rooms to spend a little time together.</Text></View>}
+        <Section title="Your rooms" count={rooms.length} />
+        {rooms.length ? <View style={{ gap: 12 }}>{rooms.map(space => <RoomCard key={space.id} space={space} onOpen={() => router.push("/space/" + space.id)} />)}</View> :
+          <View style={styles.empty}><Text style={styles.body}>{query ? "No rooms match that name." : "Your first room starts with someone you know."}</Text><Text style={styles.subtitle}>Choose your people, give it a name and settle in.</Text><Pressable accessibilityRole="button" onPress={() => router.push("/space/create")} style={styles.createButton}><Text style={{ color: c.textInverse, fontFamily: f.bodyBold, fontSize: 16 }}>Create a Space</Text><Ionicons name="arrow-forward" size={18} color={c.textInverse} /></Pressable></View>}
+        <Text style={styles.footnote}>Private rooms for the people you've invited. Hosting controls shared playback; everyone keeps their own volume.</Text>
+      </ScrollView>}
+  </SafeAreaView>;
 }
-
-function ActiveCard({ space, onOpen }: { space: Space; onOpen: () => void }) {
+function Section({ title, count }: { title: string; count: number }) {
   const { c, f } = useTheme();
-  const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
-  const activeUsers = space.member_users.filter((u) => space.active_members.includes(u.id));
-  return (
-    <Pressable
-      onPress={onOpen}
-      style={({ pressed }) => [styles.activeCard, pressed && { transform: [{ scale: 0.98 }] }]}
-      testID={`active-space-${space.id}`}
-    >
-      <View style={styles.activeBadge}>
-        <View style={styles.activeDot} />
-        <Text style={styles.activeBadgeText}>{activityLabel(space)}</Text>
-      </View>
-      <Text style={styles.activeTitle} numberOfLines={2}>
-        {space.name}
-      </Text>
-      {space.content?.title ? (
-        <Text style={styles.activeSub} numberOfLines={1}>
-          {space.content.type === "audio" ? "🎧 " : "▶  "}
-          {space.content.title}
-        </Text>
-      ) : null}
-      <View style={styles.avatarStack}>
-        {activeUsers.slice(0, 4).map((u, i) => (
-          <View key={u.id} style={[styles.stackedAvatar, { marginLeft: i === 0 ? 0 : -10 }]}>
-            <Avatar name={u.name} seed={u.id} photo={u.avatar} size={28} />
-          </View>
-        ))}
-        {activeUsers.length > 4 ? (
-          <View style={[styles.stackedAvatar, styles.stackedMore, { marginLeft: -10 }]}>
-            <Text style={styles.stackedMoreText}>+{activeUsers.length - 4}</Text>
-          </View>
-        ) : null}
-        <Text style={styles.activeCount}>
-          {activeUsers.length} {activeUsers.length === 1 ? "person" : "people"}
-        </Text>
-      </View>
-    </Pressable>
-  );
+  return <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 28, marginBottom: 12 }}><Text style={{ fontFamily: f.bodyBold, fontSize: 16, color: c.text }}>{title}</Text><Text style={{ color: c.textSecondary, fontFamily: f.body, fontSize: 13 }}>{count}</Text></View>;
 }
-
-function RoomRow({ space, onOpen }: { space: Space; onOpen: () => void }) {
-  const { c, f } = useTheme();
-  const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
-  return (
-    <Pressable
-      onPress={onOpen}
-      style={({ pressed }) => [styles.roomRow, pressed && { backgroundColor: c.primaryBgSubtle }]}
-      testID={`room-row-${space.id}`}
-    >
-      <View style={styles.roomAvatarStack}>
-        {space.member_users.slice(0, 3).map((u, i) => (
-          <View key={u.id} style={[styles.stackedAvatar, { marginLeft: i === 0 ? 0 : -10 }]}>
-            <Avatar name={u.name} seed={u.id} photo={u.avatar} size={36} />
-          </View>
-        ))}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.roomTitle} numberOfLines={1}>
-          {space.name}
-        </Text>
-        <Text style={styles.roomSub} numberOfLines={1}>
-          {space.member_users.map((u) => u.name.split(" ")[0]).join(", ") || "Just you"}
-        </Text>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={c.textTertiary} />
-    </Pressable>
-  );
+function RoomCard({ space, active, onOpen }: { space: Space; active?: boolean; onOpen: () => void }) {
+  const { c, f } = useTheme(), styles = useMemo(() => makeStyles(c, f), [c, f]);
+  const present = space.member_users.filter(person => space.active_members.includes(person.id));
+  const people = active ? present : space.member_users;
+  return <Pressable accessibilityRole="button" accessibilityLabel={space.name + ", " + present.length + " here"} onPress={onOpen} style={({ pressed }) => [styles.room, active && styles.activeRoom, pressed && { opacity: 0.8 }]} testID={(active ? "active-space-" : "room-row-") + space.id}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+      <View style={[styles.roomIcon, active && { backgroundColor: c.primaryBgSubtle }]}><Ionicons name={space.mode === "video" ? "videocam-outline" : space.mode === "audio" ? "musical-notes-outline" : "planet-outline"} size={25} color={c.primaryDark} /></View>
+      <View style={{ flex: 1, minWidth: 0 }}><Text style={styles.roomTitle} numberOfLines={1}>{space.name}</Text><Text style={styles.subtitle} numberOfLines={1}>{active ? (space.mode === "video" ? "Watching together" : space.mode === "audio" ? "Listening together" : "Hanging out") : space.member_users.map(person => person.name.split(" ")[0]).join(", ") || "Just you"}</Text></View>
+      <Ionicons name="chevron-forward" size={19} color={c.textSecondary} />
+    </View>
+    {active ? <View style={{ gap: 12, marginTop: 16 }}>
+      {space.content?.title ? <Text style={styles.body} numberOfLines={2}>{space.content.title}</Text> : null}
+      <View style={{ flexDirection: "row", alignItems: "center" }}>{people.slice(0, 4).map((person, index) => <View key={person.id} style={{ marginLeft: index ? -8 : 0 }}><Avatar name={person.name} seed={person.id} photo={person.avatar} size={30} /></View>)}<Text style={[styles.subtitle, { marginLeft: 10 }]}>{present.length} here</Text></View>
+    </View> : null}
+  </Pressable>;
 }
-
-const makeStyles = (c: Palette, f: any) =>
-  StyleSheet.create({
-    safe: { flex: 1, backgroundColor: c.bg },
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.md,
-      paddingBottom: spacing.sm,
-    },
-    profileBtn: { width: 40, height: 40, borderRadius: 20, overflow: "hidden" },
-    titleBlock: { flex: 1, alignItems: "center" },
-    kicker: {
-      fontFamily: f.bodyMedium,
-      fontSize: 11,
-      color: c.textTertiary,
-      letterSpacing: 1.4,
-      textTransform: "uppercase",
-      marginBottom: 2,
-    },
-    title: { fontFamily: f.heading, fontSize: 22, color: c.text, letterSpacing: -0.3 },
-    scroll: { padding: spacing.lg, paddingBottom: 140 },
-    center: { flex: 1, alignItems: "center", justifyContent: "center" },
-    createCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.md,
-      backgroundColor: c.surface,
-      borderRadius: radius.xl,
-      padding: spacing.md,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    createIconWrap: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: c.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    createTitle: { fontFamily: f.heading, fontSize: 18, color: c.text, marginBottom: 2 },
-    createSub: { fontFamily: f.body, fontSize: 12, color: c.textSecondary, lineHeight: 17 },
-    emptyRow: {
-      backgroundColor: c.surface,
-      padding: spacing.md,
-      borderRadius: radius.lg,
-      borderStyle: "dashed",
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    emptyText: { fontFamily: f.body, fontSize: 13, color: c.textSecondary, textAlign: "center" },
-    activeRow: { gap: spacing.md, paddingBottom: 4, paddingRight: spacing.md },
-    activeCard: {
-      width: 240,
-      backgroundColor: c.surfaceElevated,
-      padding: spacing.md,
-      borderRadius: radius.xl,
-      gap: spacing.sm,
-    },
-    activeBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      alignSelf: "flex-start",
-      backgroundColor: c.primaryBgSubtle,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 999,
-    },
-    activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.success },
-    activeBadgeText: { fontFamily: f.bodyBold, fontSize: 10, color: c.primaryDark, letterSpacing: 0.4 },
-    activeTitle: { fontFamily: f.heading, fontSize: 18, color: c.text, lineHeight: 22 },
-    activeSub: { fontFamily: f.body, fontSize: 13, color: c.textSecondary },
-    avatarStack: { flexDirection: "row", alignItems: "center", marginTop: spacing.sm },
-    stackedAvatar: {
-      borderRadius: 999,
-      borderWidth: 2,
-      borderColor: c.surfaceElevated,
-    },
-    stackedMore: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      backgroundColor: c.primaryBgSubtle,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    stackedMoreText: { fontFamily: f.bodyBold, fontSize: 11, color: c.primaryDark },
-    activeCount: { marginLeft: 10, fontFamily: f.body, fontSize: 12, color: c.textSecondary },
-    roomRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.md,
-      padding: spacing.md,
-      backgroundColor: c.surface,
-      borderRadius: radius.lg,
-    },
-    roomAvatarStack: { flexDirection: "row", alignItems: "center" },
-    roomTitle: { fontFamily: f.bodyBold, fontSize: 16, color: c.text },
-    roomSub: { fontFamily: f.body, fontSize: 12, color: c.textSecondary, marginTop: 2 },
-    footnote: {
-      marginTop: spacing.xl,
-      textAlign: "center",
-      color: c.textTertiary,
-      fontFamily: f.body,
-      fontSize: 11,
-      letterSpacing: 0.3,
-    },
-  });
+const makeStyles = (c: Palette, f: any) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: c.bg },
+  header: { width: "100%", maxWidth: 1120, alignSelf: "center", flexDirection: "row", alignItems: "center", paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16 },
+  kicker: { color: c.textSecondary, fontFamily: f.bodyMedium, fontSize: 13, marginBottom: 5 },
+  title: { color: c.text, fontFamily: f.heading, fontSize: 34, lineHeight: 42 },
+  createIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: c.primary, alignItems: "center", justifyContent: "center" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
+  content: { width: "100%", maxWidth: 1120, alignSelf: "center", padding: 24, paddingTop: 8, paddingBottom: 44 },
+  intro: { flexDirection: "row", alignItems: "center", gap: 16, paddingVertical: 16, marginBottom: 4 },
+  introIcon: { width: 72, height: 80, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: c.surfaceElevated },
+  introTitle: { color: c.text, fontFamily: f.heading, fontSize: 23, lineHeight: 29, marginBottom: 6 },
+  subtitle: { color: c.textSecondary, fontFamily: f.body, fontSize: 14, lineHeight: 21 },
+  body: { color: c.text, fontFamily: f.bodyMedium, fontSize: 16, lineHeight: 23 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  room: { backgroundColor: c.surface, borderRadius: 22, padding: 18 },
+  activeRoom: { flexGrow: 1, flexShrink: 1, flexBasis: 280, maxWidth: 520, backgroundColor: c.surfaceElevated },
+  roomIcon: { width: 48, height: 48, borderRadius: 18, backgroundColor: c.bg, alignItems: "center", justifyContent: "center" },
+  roomTitle: { color: c.text, fontFamily: f.bodyBold, fontSize: 17, lineHeight: 24, marginBottom: 3 },
+  empty: { gap: 8, backgroundColor: c.surface, borderRadius: 22, padding: 24 },
+  createButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 14, alignSelf: "flex-start", minHeight: 52, paddingHorizontal: 22, borderRadius: 26, backgroundColor: c.primary, marginTop: 12 },
+  footnote: { fontFamily: f.body, fontSize: 13, lineHeight: 20, color: c.textSecondary, textAlign: "center", maxWidth: 540, alignSelf: "center", marginTop: 28 },
+  notice: { backgroundColor: c.errorBg, borderRadius: 18, padding: 16, gap: 6 },
+  error: { color: c.error, fontFamily: f.body, fontSize: 14, lineHeight: 21 },
+  retry: { minHeight: 44, justifyContent: "center" },
+  link: { color: c.primaryDark, fontFamily: f.bodyBold, fontSize: 15 },
+  search: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, backgroundColor: c.surface, borderRadius: 22, marginTop: 16 },
+  searchInput: { flex: 1, minWidth: 0, minHeight: 48, color: c.text, fontFamily: f.body, fontSize: 16 },
+});

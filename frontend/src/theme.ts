@@ -213,7 +213,7 @@ const moon: Palette = {
   isDark: true,
 };
 
-export const palettes: Record<ThemeName, Palette> = {
+const rawPalettes: Record<ThemeName, Palette> = {
   warm,
   dune,
   honey,
@@ -230,6 +230,41 @@ export const palettes: Record<ThemeName, Palette> = {
   plum: {...evening, bg: "#2B2030", surface: "#3C2C43", surfaceElevated: "#513C59", primary: "#D2ADD9", primaryDark: "#BD94C6", primaryLight: "#E9CFED", primaryBgSubtle: "#513C59", text: "#F4E9F3", textSecondary: "#C5AEC9", textInverse: "#2B2030", border: "#513C59"},
   midnight: {...moon, bg: "#151E32", surface: "#202D46", surfaceElevated: "#2F405E", primary: "#B4C8EE", primaryDark: "#93AEDB", primaryLight: "#D4E0F5", primaryBgSubtle: "#2F405E", text: "#ECF0F9", textSecondary: "#AFBED5", textInverse: "#151E32", border: "#354868"},
 };
+
+// Keep the softness in surfaces, while small labels and controls remain readable.
+// These roles are used on all three common surfaces throughout the app.
+export function contrastRatio(foreground: string, background: string): number {
+  const luminance = (hex: string) => {
+    const channels = [1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16) / 255)
+      .map(channel => channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4));
+    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  };
+  const a = luminance(foreground), b = luminance(background);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+// Precomputed color roles avoid doing contrast searches during app startup.
+const readableRoles: Record<ThemeName, Pick<Palette, "textSecondary" | "textTertiary" | "primary" | "primaryDark" | "error" | "success">> = {
+  warm: {textSecondary: "#6b6258", textTertiary: "#6d665d", primary: "#776451", primaryDark: "#7a634e", error: "#8e5a4f", success: "#636a52"},
+  dune: {textSecondary: "#685c4d", textTertiary: "#6b6050", primary: "#735f45", primaryDark: "#745e43", error: "#7e5944", success: "#62644e"},
+  honey: {textSecondary: "#6d5b44", textTertiary: "#705e47", primary: "#7d5c2e", primaryDark: "#805b2a", error: "#875645", success: "#646442"},
+  rose: {textSecondary: "#715a5d", textTertiary: "#745e61", primary: "#855760", primaryDark: "#8d5361", error: "#9b4b4c", success: "#66654c"},
+  sage: {textSecondary: "#5c6252", textTertiary: "#606756", primary: "#5d684e", primaryDark: "#5b6949", error: "#835b4d", success: "#4f6b4c"},
+  evening: {textSecondary: "#beb1a0", textTertiary: "#b6ac9e", primary: "#d4b792", primaryDark: "#c4a98a", error: "#dd9f8c", success: "#a8b28e"},
+  charcoal: {textSecondary: "#a9a090", textTertiary: "#9f9787", primary: "#e8d9bf", primaryDark: "#bfad8e", error: "#d8897a", success: "#9eb085"},
+  cocoa: {textSecondary: "#bcad98", textTertiary: "#afa290", primary: "#d9b58b", primaryDark: "#bf9d77", error: "#da927d", success: "#a3ae88"},
+  moon: {textSecondary: "#a7b3be", textTertiary: "#9ba5af", primary: "#9fb6c9", primaryDark: "#90a6b9", error: "#d99184", success: "#9eb085"},
+  ocean: {textSecondary: "#476268", textTertiary: "#536661", primary: "#346a72", primaryDark: "#285b65", error: "#795a55", success: "#476a53"},
+  lavender: {textSecondary: "#665573", textTertiary: "#6a5a6d", primary: "#6b577d", primaryDark: "#67517d", error: "#924953", success: "#5e6055"},
+  peach: {textSecondary: "#745544", textTertiary: "#6e5c51", primary: "#83543e", primaryDark: "#8d4f37", error: "#845447", success: "#63604a"},
+  forest: {textSecondary: "#b1c4b3", textTertiary: "#b5b2a5", primary: "#a5c7a5", primaryDark: "#95bb99", error: "#dda593", success: "#abb693"},
+  plum: {textSecondary: "#c5afc9", textTertiary: "#b9aeaa", primary: "#d2add9", primaryDark: "#c7a4cf", error: "#dfa293", success: "#abb493"},
+  midnight: {textSecondary: "#afbed5", textTertiary: "#a3acb7", primary: "#b4c8ee", primaryDark: "#93aedb", error: "#db9b90", success: "#9fb186"},
+};
+
+export const palettes = Object.fromEntries(Object.entries(rawPalettes).map(([name, palette]) =>
+  [name, {...palette, ...readableRoles[name as ThemeName]}]
+)) as Record<ThemeName, Palette>;
 
 export const themeMeta: { name: ThemeName; label: string; tagline: string }[] = [
   { name: "warm", label: "Warm", tagline: "Cream and soft gold" },
@@ -250,7 +285,7 @@ export const themeMeta: { name: ThemeName; label: string; tagline: string }[] = 
 ];
 
 // Back-compat default export (warm) for any file that imports { colors }.
-export const colors: Palette = warm;
+export const colors: Palette = palettes.warm;
 
 export const radius = {
   sm: 12,
@@ -268,6 +303,23 @@ export const spacing = {
   xl: 32,
   xxl: 48,
 };
+
+export const layout = {
+  contentMaxWidth: 1120,
+  readingMaxWidth: 760,
+  formMaxWidth: 440,
+  pagePadding: 24,
+  touchTarget: 48,
+};
+
+export const typography = {
+  title: {fontSize: 32, lineHeight: 40, letterSpacing: -0.7},
+  section: {fontSize: 22, lineHeight: 30, letterSpacing: -0.3},
+  body: {fontSize: 16, lineHeight: 24},
+  caption: {fontSize: 14, lineHeight: 20},
+};
+
+export const motion = {quick: 120, normal: 200, enter: 240};
 
 export type FontPair = "fraunces" | "serifed" | "sans";
 
