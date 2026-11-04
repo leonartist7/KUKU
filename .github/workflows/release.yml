@@ -75,3 +75,137 @@ jobs:
             frontend/test-results/dependency-audit.json
           if-no-files-found: ignore
           retention-days: 7
+
+  # Standalone, debug-test-signed preview. A normal assembleDebug APK needs Metro.
+  android_preview:
+    name: Android standalone preview (TEST SIGNING)
+    needs: [backend, frontend]
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.head_ref, 'codex/kuku-')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      KUKU_ANDROID_PREVIEW: 'true'
+      KUKU_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPO_PUBLIC_BACKEND_URL: https://kuku-api-staging.onrender.com
+      EXPO_PUBLIC_ENABLE_CALLS: 'false'
+      EXPO_PUBLIC_ENABLE_PUSH: 'false'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0, official immutable release
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install locked JavaScript dependencies in the cloud
+        run: npm ci --no-audit --no-fund
+      - name: Validate SDK versions and prepare an isolated test application
+        run: |
+          node scripts/generate-brand.cjs
+          node scripts/check-release.cjs
+          node scripts/prepare-android-preview.cjs config
+          npx --no-install expo prebuild --platform android --no-install
+          node scripts/prepare-android-preview.cjs verify-native
+      - name: Prepare Android SDK 36 and the SDK 54 native toolchain
+        shell: bash
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          set +e
+          yes | "$sdkmanager" --licenses > /dev/null
+          license_status=${PIPESTATUS[1]}
+          set -e
+          test "$license_status" -eq 0
+          "$sdkmanager" "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006" "cmake;3.22.1"
+      - name: Assemble a standalone arm64 preview using PUBLIC DEBUG TEST signing
+        working-directory: frontend/android
+        env:
+          NODE_ENV: production
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease \
+            -PreactNativeArchitectures=arm64-v8a \
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" \
+            --max-workers=2 --no-parallel --no-daemon --stacktrace
+      - name: Verify bundled app identity, signature and artifact provenance
+        shell: bash
+        run: |
+          apk="android/app/build/outputs/apk/release/app-release.apk"
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          test -s "$apk"
+          mkdir -p android-preview
+          "$tools/apksigner" verify --verbose --print-certs "$apk" > android-preview/test-signature.txt
+          "$tools/aapt" dump badging "$apk" > android-preview/package.txt
+          grep -q "package: name='com.leonartist7.kuku.preview'" android-preview/package.txt
+          grep -q "targetSdkVersion:'36'" android-preview/package.txt
+          grep -q "native-code: 'arm64-v8a'" android-preview/package.txt
+          if grep -q '^application-debuggable' android-preview/package.txt; then
+            echo "::error::A standalone preview must not depend on developer support."
+            exit 1
+          fi
+          unzip -p "$apk" assets/index.android.bundle > android-preview/app.hermes
+          test -s android-preview/app.hermes
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const bundle = fs.readFileSync('android-preview/app.hermes');
+          const magic = Buffer.from('c61fbc03c103191f', 'hex');
+          if (!bundle.subarray(0, 8).equals(magic)) throw new Error('Expected embedded Hermes bytecode; no Metro-only APK may be published.');
+          const config = JSON.parse(fs.readFileSync('app.json', 'utf8')).expo;
+          fs.writeFileSync('android-preview/build.json', JSON.stringify({
+            source_sha: process.env.KUKU_SOURCE_SHA,
+            workflow_run_id: process.env.GITHUB_RUN_ID,
+            workflow_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+            package: config.android.package,
+            version: config.version,
+            version_code: config.android.versionCode,
+            api_origin: process.env.EXPO_PUBLIC_BACKEND_URL,
+            calls_enabled: false,
+            native_push_enabled: false,
+            signing: 'PUBLIC ANDROID DEBUG TEST KEY — NOT PRODUCTION SIGNING',
+            architecture: 'arm64-v8a',
+            embedded_hermes_bytes: bundle.length,
+            device_testing: 'NOT TESTED',
+          }, null, 2) + '\n');
+          NODE
+          rm android-preview/app.hermes
+          cp "$apk" android-preview/KUKU-Preview-arm64-TEST-SIGNED.apk
+          cd android-preview
+          sha256sum KUKU-Preview-arm64-TEST-SIGNED.apk > SHA256SUMS.txt
+      - name: Publish the test APK and build evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kuku-android-preview-test-signed-${{ github.run_number }}-${{ github.run_attempt }}
+          path: |
+            frontend/android-preview/KUKU-Preview-arm64-TEST-SIGNED.apk
+            frontend/android-preview/SHA256SUMS.txt
+            frontend/android-preview/build.json
+            frontend/android-preview/package.txt
+            frontend/android-preview/test-signature.txt
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+      - name: Preserve native build diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kuku-android-preview-diagnostics-${{ github.run_number }}-${{ github.run_attempt }}
+          path: |
+            frontend/android/build/reports
+            frontend/android/app/build/reports
+          if-no-files-found: ignore
+          retention-days: 3

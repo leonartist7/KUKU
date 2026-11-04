@@ -4,6 +4,7 @@ import {SafeAreaView} from "react-native-safe-area-context";
 import {Ionicons} from "@expo/vector-icons";
 import {useAuth} from "./AuthContext";
 import {useTheme} from "./ThemeContext";
+import {useReducedMotion} from "./useReducedMotion";
 import {api,ApiError} from "./api";
 import {openPrivateDownload} from "./downloads";
 import {ImagePreview,validImagePreview} from "./imagePreview";
@@ -30,6 +31,7 @@ export default function PrivateImageCard({attachmentId,fileName="Photo",unavaila
   attachmentId?:string;fileName?:string|null;unavailable?:boolean;canDelete?:boolean;compact?:boolean;subtitle?:string;
 }){
   const {c,f}=useTheme(),{user}=useAuth();const account=useRef(user?.id);account.current=user?.id;
+  const reducedMotion=useReducedMotion();
   const [open,setOpen]=useState(false),[deleted,setDeleted]=useState(false),[visible,setVisible]=useState(Platform.OS!=="web");
   const [actionError,setActionError]=useState("");const container=useRef<View>(null);
   const gone=unavailable||deleted;const title=fileName||"Photo";
@@ -64,7 +66,7 @@ export default function PrivateImageCard({attachmentId,fileName="Photo",unavaila
       </View>
       {gone||thumb.error?<Text style={{flex:compact?1:undefined,paddingVertical:8,fontFamily:f.body,color:c.textSecondary,fontSize:12,lineHeight:17}}>{gone?"Image deleted":"Preview unavailable · Tap for options"}</Text>:compact&&subtitle?<Text numberOfLines={2} style={{flex:1,fontFamily:f.body,color:c.textSecondary,fontSize:12,lineHeight:19}}>{subtitle}</Text>:null}
     </Pressable>
-    <Modal visible={open&&!gone} animationType="fade" onRequestClose={close} transparent={false}>
+    <Modal visible={open&&!gone} animationType={reducedMotion?"none":"fade"} onRequestClose={close} transparent={false}>
       <SafeAreaView edges={["top","bottom"]} style={{flex:1,backgroundColor:c.bg}}>
         <View style={{flexDirection:"row",alignItems:"center",justifyContent:"flex-end",paddingHorizontal:16,paddingVertical:8}}><Pressable accessibilityRole="button" accessibilityLabel="Close image preview" onPress={close} style={button}><Ionicons name="close" size={24} color={c.text}/></Pressable></View>
         <View style={{flex:1,alignItems:"center",justifyContent:"center",padding:12}} testID="image-viewer">

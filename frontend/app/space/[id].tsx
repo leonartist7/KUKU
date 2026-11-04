@@ -13,6 +13,7 @@ import { spacesApi, openSpaceSocket, uploadSpaceAudio, type Space, type SpaceMes
 import { acceptsPlayback, formatPlayback, mergeSpaceMessages, playbackPosition, reconnectDelay, sampleServerClock, timelineNow, type ClockSample } from "../../src/spacePlayback";
 import SpaceAudio from "../../src/SpaceAudio";
 import SpaceYouTube from "../../src/SpaceYouTube";
+import {useReducedMotion} from "../../src/useReducedMotion";
 
 const REACTIONS = ["❤️", "👏", "✨", "😂", "🥰", "🎶"];
 function connectionId() {
@@ -233,7 +234,8 @@ function IconButton({ label, icon, onPress, disabled, style, color, testID }: { 
 }
 function RoomSheet({ visible, title, onClose, children, footer }: { visible: boolean; title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode }) {
   const { c, f } = useTheme(), styles = useMemo(() => makeStyles(c, f), [c, f]);
-  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+  const reducedMotion = useReducedMotion();
+  return <Modal visible={visible} transparent animationType={reducedMotion ? "none" : "fade"} onRequestClose={onClose}>
     <View style={styles.sheetFrame}><Pressable accessibilityRole="button" accessibilityLabel="Close panel" onPress={onClose} style={StyleSheet.absoluteFillObject} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.sheet}>
         <View style={styles.sheetHeader}><Text style={styles.heading}>{title}</Text><IconButton label="Close panel" icon="close" onPress={onClose} style={styles.iconButton} color={c.text} /></View>

@@ -2,6 +2,7 @@
   "buildCommand": "npm run build:web",
   "outputDirectory": "dist",
   "framework": null,
+  "regions": ["fra1"],
   "installCommand": "npm ci",
   "rewrites": [
     {

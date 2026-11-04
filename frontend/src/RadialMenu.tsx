@@ -3,10 +3,12 @@ import {Modal, Pressable, View, Text, StyleSheet} from "react-native";
 import {SafeAreaView} from "react-native-safe-area-context";
 import {Ionicons} from "@expo/vector-icons";
 import {useTheme} from "./ThemeContext";
+import {useReducedMotion} from "./useReducedMotion";
 export type RadialAction = {key: string; label: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void};
 export default function RadialMenu({visible, onClose, actions}: {visible: boolean; onClose: () => void; actions: RadialAction[]; anchor?: {x: number; y: number}}) {
   const {c, f} = useTheme();
-  return <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
+  const reducedMotion=useReducedMotion();
+  return <Modal transparent visible={visible} animationType={reducedMotion?"none":"fade"} onRequestClose={onClose}>
     <View style={{flex: 1, backgroundColor: c.overlay, justifyContent: "flex-end"}}>
       <Pressable accessibilityRole="button" accessibilityLabel="Dismiss quick actions" style={StyleSheet.absoluteFill} onPress={onClose}/>
       <SafeAreaView edges={["bottom"]} style={{width: "100%", maxWidth: 540, alignSelf: "center", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, backgroundColor: c.bg}}>

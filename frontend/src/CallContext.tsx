@@ -6,6 +6,7 @@ import * as Haptics from "expo-haptics";
 import { CALLS_ENABLED } from "./config";
 import { useAuth } from "./AuthContext";
 import { useTheme } from "./ThemeContext";
+import {useReducedMotion} from "./useReducedMotion";
 import { Palette, spacing } from "./theme";
 import { ApiError, User } from "./api";
 import { callsApi, openCallSocket, Call, CallSignal } from "./calls";
@@ -53,6 +54,7 @@ function initialSession(uid: string, other: User, direction: CallSession["direct
 
 export function CallProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const reducedMotion=useReducedMotion();
   const uid = user?.email_verified ? user.id : null;
   const uidRef = useRef(uid); uidRef.current = uid;
   const router = useRouter();
@@ -450,7 +452,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   return <CallCtx.Provider value={{ supported, incoming, incomingBusy, incomingError, session, start, join, answer, declineIncoming, hangUp, dismiss, toggleMute, resumeAudio, loadOutputs, selectOutput, subscribe }}>
     {children}
-    <Modal visible={!!incoming} transparent animationType="fade" onRequestClose={() => { if (!incomingBusy) void declineIncoming(); }}>
+    <Modal visible={!!incoming} transparent animationType={reducedMotion?"none":"fade"} onRequestClose={() => { if (!incomingBusy) void declineIncoming(); }}>
       {incoming ? <IncomingCallView incoming={incoming} busy={incomingBusy} error={incomingError} onAnswer={() => { void answer(); }} onDecline={() => { void declineIncoming(); }} /> : null}
     </Modal>
   </CallCtx.Provider>;

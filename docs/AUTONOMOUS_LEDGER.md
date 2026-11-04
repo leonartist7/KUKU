@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-04T14:22:32.810Z
+Updated: 2026-11-04T15:26:53.339Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -70,6 +70,15 @@ An enabled continuation task was created on 4 November 2026: every four hours fo
 
 ## Active controller lease
 Controller: root initial implementation.
-Lease recorded at: 2026-11-04T14:41:32.942Z
-Lease expires at: 2026-11-04T16:11:32.942Z
-State: ACTIVE; preparing first integrated cloud verification.
+Lease recorded at: 2026-11-04T15:26:53.339Z
+Lease expires at: 2026-11-04T16:56:53.339Z
+State: ACTIVE; integrating reduced-motion, browser acceptance and cloud Android build.
+
+## Verified implementation checkpoint
+- Source 71b67c2a1e378a88e6982b2193f96ae49639e118: TypeScript, 65 frontend unit tests, web export and complete synthetic onboarding/chat/files/voice/emote/browser walkthrough pass. Backend suite: 88 tests pass against isolated MongoDB7.
+- Run41854212983: Spaces walkthrough reached private audio playback, host handoff, retry/reconnect, list and responsive screenshots; final creation assertion failed only from a duplicate retained-screen text locator. Fixed active-room scope is included in the next commit; whole walkthrough is not yet marked passed.
+- Public baseline recorded in docs/performance/2026-11-04-before.json: readiness first sample61428ms, then84/97ms; login HTML6676ms, then167/167ms. These are direct HTTP samples, not Core Web Vitals.
+- Vercel preview branch configuration now points to the existing API and explicitly disables calls. READY71b67c2 deployment dpl_8AcUqqAVe8vBQPEkqF88QkQBWWk8 is not the live beta alias; backend remains previous release until acceptance.
+- Workspace transport briefly disconnected. Published source is safe on GitHub; pending owned files were preserved as Git blobs. Executor recovered; no dependency/toolchain installs were used locally.
+- Incoming fourth checkpoint adds reduced-motion across sheets/viewers, colocates JSON proxy in Frankfurt with the API, verifies decoded photo drafts, and starts a standalone arm64 Android preview job after web/backend pass. APK signing is a PUBLIC TEST key with a separate .preview app ID; production signing/push/calls and physical-device checks remain open.
+- M03/M04 chat tools are in coordinated isolated implementation; not merged or accepted yet.

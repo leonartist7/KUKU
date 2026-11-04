@@ -167,6 +167,8 @@ function audioFixture() {
     await (await chooser).setFiles({ name: "family.wav", mimeType: "audio/wav", buffer: wav });
     await page.getByTestId("upload-synthetic-audio").waitFor();
     await page.getByTestId("upload-synthetic-audio").click();
+    await page.getByText("Set the mood", { exact: true }).locator("..").getByRole("button", { name: "Close panel", exact: true, includeHidden: true }).waitFor({ state: "hidden" });
+    await page.getByTestId("add-tab-audio").waitFor({ state: "hidden" });
     await page.getByText("Family tune", { exact: true }).waitFor();
     await page.getByText(/^(Listening together|Track finished)$/).waitFor();
     assert.equal(binaryUploads, 1); assert.ok(mediaRequests > 0, "A private media reference resolves to a fixture stream");
@@ -187,8 +189,16 @@ function audioFixture() {
     await page.getByTestId("create-space-button").click();
     await page.getByTestId("space-name-input").fill("Evening tea");
     await page.getByTestId("pick-qa-room-member").click();
+    const creationResponse = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/spaces");
     await page.getByTestId("create-space-submit").click();
-    await page.getByText("Family tune", { exact: true }).waitFor();
+    assert.equal((await (await creationResponse).json()).id, "synthetic-room", "Creation returns the room that navigation opens");
+    await page.waitForURL(url => url.pathname === "/space/synthetic-room");
+    // Stack navigation may retain an aria-hidden previous room/list in the DOM.
+    // A role locator excludes inactive routes; its control row's parent is this room.
+    const currentRoom = page.getByRole("button", { name: "Choose room activity", exact: true }).locator("..").locator("..");
+    await currentRoom.getByText("Family tune", { exact: true }).waitFor({ state: "visible" });
+    assert.equal(await currentRoom.getByText("Family tune", { exact: true }).count(), 1, "The active created room renders its selected media once");
+    await currentRoom.getByText("You're hosting", { exact: true }).waitFor({ state: "visible" });
     assert.deepEqual(createdMembers, [sister.id]);
 
     await page.goto(origin + "/space/missing-room");

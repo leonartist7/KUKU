@@ -263,6 +263,7 @@ const server=http.createServer((req,res)=>{
     await page.getByRole("button",{name:"Choose a photo to share",exact:true}).click();
     await (await pick).setFiles({name:"family-photo.jpg",mimeType:"image/jpeg",buffer:Buffer.from(TEST_PHOTO,"base64")});
     await page.getByTestId("chat-attachment-preview").waitFor();
+    await page.waitForFunction(()=>{const photo=document.querySelector('[data-testid="chat-attachment-preview"] img');return photo?.complete && photo.naturalWidth>0;});
     assert.equal(state().attachmentUploads,uploadsBefore,"Choosing a photo must not upload or send it");
     await page.getByRole("button",{name:"Cancel attachment",exact:true}).click();
     assert.equal(await page.getByTestId("attachment-draft").count(),0);
@@ -271,6 +272,7 @@ const server=http.createServer((req,res)=>{
     await page.getByTestId("attachment-menu-button").click();
     await page.getByRole("button",{name:"Choose a photo to share",exact:true}).click();
     await (await pick).setFiles({name:"family-photo.jpg",mimeType:"image/jpeg",buffer:Buffer.from(TEST_PHOTO,"base64")});
+    await page.waitForFunction(()=>{const photo=document.querySelector('[data-testid="chat-attachment-preview"] img');return photo?.complete && photo.naturalWidth>0;});
     await page.screenshot({path:path.join(shots,"chat-photo-draft-390.png"),fullPage:true});
     const sentPhoto=page.waitForResponse(response=>response.request().method()==="POST"&&new URL(response.url()).pathname.endsWith("/messages"));
     await page.getByRole("button",{name:"Send attachment",exact:true}).click();
