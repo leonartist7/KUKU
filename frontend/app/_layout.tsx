@@ -8,16 +8,12 @@ import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import { View, Text, ActivityIndicator, StyleSheet, Platform } from "react-native";
-import {
-  useFonts,
-  Fraunces_400Regular,
-  Fraunces_600SemiBold,
-} from "@expo-google-fonts/fraunces";
-import {
-  DMSans_400Regular,
-  DMSans_500Medium,
-  DMSans_600SemiBold,
-} from "@expo-google-fonts/dm-sans";
+import { useFonts } from "expo-font";
+const Fraunces_400Regular = require("@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.ttf");
+const Fraunces_600SemiBold = require("@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.ttf");
+const DMSans_400Regular = require("@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf");
+const DMSans_500Medium = require("@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.ttf");
+const DMSans_600SemiBold = require("@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.ttf");
 import { AuthProvider, useAuth } from "../src/AuthContext";
 import { ThemeProvider, useTheme } from "../src/ThemeContext";
 import { CallProvider } from "../src/CallContext";

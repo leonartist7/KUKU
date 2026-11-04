@@ -73,6 +73,7 @@ jobs:
         working-directory: frontend
         env:
           KUKU_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          KUKU_EXPECT_GOOGLE_FONT_FACES: '5'
         run: node tests/performance-browser.cjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
@@ -94,7 +95,8 @@ jobs:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.head_ref, 'codex/kuku-')
+      ((startsWith(github.head_ref, 'codex/kuku-') && github.head_ref != 'codex/kuku-release-20261027') ||
+      github.head_ref == 'codex/verify-kuku-performance-20261104')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
