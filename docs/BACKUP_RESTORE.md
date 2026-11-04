@@ -87,6 +87,40 @@ Do not add --drop, restore over an existing target, or restore admin/config data
 This proves the tooling and application recovery path with fixtures. It does not prove recovery
 of the live cluster or of real stored media.
 
+## Synthetic rehearsal completed — 4 November 2026
+
+The isolated cloud rehearsal passes at source a78c1d399c0b4157507c2d57f521da0a277e2dea.
+[Verification run](https://github.com/leonartist7/KUKU/actions/runs/41887901603);
+[checksum-only evidence](https://github.com/leonartist7/KUKU/actions/runs/41887901603/artifacts/13352487284).
+
+- Separate authenticated MongoDB services, both version 8.0.34; Database Tools 100.20.0.
+  This is not an exact-version/FCV test of the observed live Atlas 8.0.36 cluster.
+- A target identity restricted to its generated database is denied an attempted write to another
+  fixture namespace. Restore refuses a nonempty target and uses no --drop.
+- Actual app-created synthetic users, a chat, message and Space survive archive restoration.
+  Canonical documents/counts, indexes and collection validators match.
+- A separate fixture filesystem validates media hashes and rejects missing/corrupt bytes.
+  This is a provider double, not Blob/R2 object recovery or a durable media backup.
+- A closure recorded after the archive wins over the restored older active account.
+  Old sessions are revoked. The actual restored ASGI app passes fresh sign-in,
+  membership denial, idempotent-send retry, Space access and closed-account rejection.
+- No intercepted asynchronous HTTPX provider request occurred. Other network clients are not instrumented; no live provider credentials are supplied. Raw archives, media, credentials and account records
+  were not uploaded; the retained evidence contains versions, counts, checksums and timings only.
+
+Observed fixture timings: dump 117 ms, restore 351 ms, overall 2874 ms.
+These tiny, quiescent fixture measurements are not live RPO/RTO or online consistency guarantees.
+The test does not start the app lifespan/server process, test real signed media streaming,
+exercise active-call/presence recovery or prove nonempty device/ticket cleanup.
+
+Workflow: .github/workflows/restore-rehearsal.yml. Script: backend/scripts/restore_rehearsal.py.
+It runs only with explicit synthetic cloud guards and literal loopback endpoints; do not adapt it
+by adding live URIs or secrets. MongoDB8 rejected the initial runner kernel, so this job uses
+Ubuntu22.04/kernel6.8 and the observed available Mongo image pinned by digest. Revisit compatibility
+before changing the runner/image; do not bypass MongoDB's kernel safety check.
+
+[MongoDB kernel compatibility](https://www.mongodb.com/docs/v8.0/release-notes/8.0/).
+**Live restore gate below remains NOT VERIFIED.**
+
 ## Live backup and restore gate
 
 Before claiming recoverability, identify the actual application database and an existing private,

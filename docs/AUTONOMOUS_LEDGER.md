@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-04T18:20:42.122Z
+Updated: 2026-11-04T18:33:29.223Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: IDLE after verified beta checkpoint, 4 November 2026.
+Current controller: IDLE after B01 synthetic recovery checkpoint, 4 November 2026.
 Current source workspace is an isolated git worktree; never assume this local path exists in future runs.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -67,6 +67,18 @@ This section supersedes historical pending statements below.
 - Main, billing, DNS and project protection remain unchanged. No live personal messages/invitations or destructive data tests were sent. Source, checks and deployment evidence are remote; local Windows worktrees may be stale or unavailable.
 - Continuation is enabled every four hours for 42 passes (seven days), starting around 19:23 Europe/Paris on 4 November. Environment inheritance is recorded but does not guarantee a future computer is online. Use connected APIs/cloud CI when the executor is unavailable.
 
+
+## B01 verified synthetic recovery — 4 November 2026
+- Tested source: a78c1d399c0b4157507c2d57f521da0a277e2dea, draft PR #4. Restore run41887901603/job126777197318 passes on separate authenticated MongoDB8.0.34 services, Database Tools100.20.0 and runner kernel6.8.0-1070-azure. This does not establish exact live Atlas8.0.36/FCV compatibility.
+- Target identity is denied a write to another fixture namespace. Quiescent source archive restores only to an empty generated target, preserving canonical document/count/index/validator manifests.
+- Restored ASGI paths pass fresh sign-in, old-session rejection, membership denial, idempotent message retry, Space access and newer-closure rejection. Fixture media integrity accepts the copied bytes and rejects corruption/missing bytes. It is not real Blob/R2 recovery.
+- Actual checked-out source is pinned to the recorded PR head. Peer review narrowed cleanup claims to exercised sessions/closure: nonempty device/ticket cleanup and active nested Space/call state are NOT demonstrated. Network counter covers async HTTPX only, not all network clients; no live provider credentials are supplied.
+- Fixture dump117ms/restore351ms/overall2874ms are not live RPO/RTO or online consistency guarantees. Archive bytes and media were never published.
+- Evidence artifact13352487284: https://github.com/leonartist7/KUKU/actions/runs/41887901603/artifacts/13352487284 . The checksum-only report is also persisted at docs/recovery/2026-11-04-synthetic-restore.json, so the evidence survives artifact expiry.
+- Initial cloud attempts failed from MongoDB8/kernel incompatibility and an unavailable exact-version Docker tag. The compatible Ubuntu22.04 runner and observed image digest are pinned; no MongoDB safety check was bypassed.
+- Release suite on the tested source a78c1d3 (run41887901752) passes119 backend tests,110 frontend unit tests,TypeScript,web export and all three browser journeys. Android is intentionally skipped on this test-only branch; existing APK evidence remains unchanged.
+- Application runtime and existing beta are unchanged; no API/frontend redeploy is required for this test-only package. Main, release branch, billing, access settings and live data were not changed.
+
 ## Known external gates
 - Render service is currently free and healthCheckPath is unset in live configuration.
   Repo render.yaml already names /health/ready. Connected Render tools do not expose service-settings updates.
@@ -85,10 +97,10 @@ Do not mark a full phase complete when a release gate is still outstanding.
 An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
 
 ## Active controller lease
-Controller: root initial implementation.
+Controller: root B01 continuation.
 Lease recorded at: 2026-11-04T18:20:42.123Z
-Lease expires at: 2026-11-04T19:50:42.123Z
-State: ACTIVE; cloud-only B01 synthetic logical restore rehearsal.
+Lease expires at: 2026-11-04T18:33:29.223Z
+State: IDLE; B01 synthetic archive/restore and restored ASGI checks verified; next controller may acquire a lease.
 
 ## Verified implementation checkpoint
 - Source 71b67c2a1e378a88e6982b2193f96ae49639e118: TypeScript, 65 frontend unit tests, web export and complete synthetic onboarding/chat/files/voice/emote/browser walkthrough pass. Backend suite: 88 tests pass against isolated MongoDB7.
@@ -143,11 +155,11 @@ State: ACTIVE; cloud-only B01 synthetic logical restore rehearsal.
 
 ## Next controller handoff
 1. Fetch fresh remote implementation and release refs and this ledger. The final bookkeeping checkpoint descends from accepted d3366883 plus verified cloud-probe configuration; app runtime remains d3366883. Acquire a lease before writes. Original PR #2 is merged and PR #3 will be integrated into the beta review branch; open a new incremental draft PR for future code so pull-request CI runs.
-2. Continue B01 with a synthetic cloud-only dump/restore rehearsal (isolated data/media), then P01 with measured browser startup/bundle/list/media traces and a clear before/after report. These remain independently executable. Do not treat prepared runbooks as completed restore evidence.
+2. B01 now has a passing synthetic archive/restore rehearsal (see the latest checkpoint). Continue P01 with measured browser startup/bundle/list/media traces and a before/after report. Further B01 work can seed nonempty device/ticket grants and exercise actual nested Space/call recovery, full isolated server startup and real provider-double streaming. Live backups/media restore and erasure remain unverified.
 3. Apply only compatibility-verified dependency repairs described in DEPENDENCY_REVIEW, regenerating the lockfile in cloud and checking Expo/web/native compatibility; preserve the CommonJS decoder boundary.
 4. N01/C03/A01 need real Android phones and provider/signing configuration. Calls stay false until actual two-party audio and cleanup pass; C04 video depends on C03. Do not invent device evidence or repeatedly report unchanged blockers.
 5. R02 always-on hosting and live readiness settings require a billing/configuration decision; current free service can sleep. B01 full physical erasure, live backups/media restore and retention policy also remain explicit gates. Continue other authorized work without charging or destructive live operations.
 6. Use RELEASE_RUNBOOK for future compatible beta rollouts. The manual beta alias is authoritative; release branch auto-build stays disabled. A metadata/docs-only checkpoint does not require another API deploy. Avoid duplicate deployments and keepalive schedules.
 
-## B01 synthetic restore rehearsal (in verification)
+## B01 synthetic restore rehearsal implementation history
 A cloud-only workflow now uses separate authenticated MongoDB 8 source/target services. The target restore identity is restricted to a generated fixture database. Actual app fixture accounts/messages/Spaces are archived with mongodump and restored using namespace remapping and stopOnError; document/index/validator manifests, media integrity negative controls, newer closure reconciliation, session revocation and restored ASGI authorization/idempotency checks must pass before evidence is accepted. No live database URI or provider credential is supplied. The fixture filesystem does not prove a Blob/R2 restore, FCV/PIT consistency, live recovery or full erasure. Runtime application code remains unchanged.
