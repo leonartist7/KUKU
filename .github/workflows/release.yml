@@ -68,6 +68,12 @@ jobs:
       - run: node tests/chat-tools-browser.cjs
         if: ${{ !cancelled() && steps.web_export.outcome == 'success' && steps.browser_runtime.outcome == 'success' }}
         working-directory: frontend
+      - name: Measure controlled browser and bundle performance
+        if: ${{ !cancelled() && steps.web_export.outcome == 'success' && steps.browser_runtime.outcome == 'success' }}
+        working-directory: frontend
+        env:
+          KUKU_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node tests/performance-browser.cjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -77,6 +83,7 @@ jobs:
             frontend/test-results/rooms
             frontend/test-results/chat-tools
             frontend/test-results/dependency-audit.json
+            frontend/test-results/performance
           if-no-files-found: ignore
           retention-days: 7
 
