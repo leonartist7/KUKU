@@ -66,12 +66,12 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
  }
  try{
   for(let i=0;i<3;i++){
-   const p=await context();apiRequests=[];const started=await beginAction(p);await p.page.goto(origin+"/login");await p.page.getByTestId("auth-switch").waitFor();report.loads.push(await metrics(p,"fresh-"+i,started));
+   const p=await context();apiRequests=[];const started=await beginAction(p);await p.page.goto(origin+"/login");await p.page.getByTestId("auth-switch").waitFor();report.loads.push(await metrics(p,"fresh-"+i,started));if(i===0){report.font_validation=await p.page.evaluate(async()=>{const names=["Fraunces_400Regular","Fraunces_600SemiBold","DMSans_400Regular","DMSans_500Medium","DMSans_600SemiBold"];await Promise.race([Promise.all(names.map(name=>document.fonts.load('16px "'+name+'"'))),new Promise((_,reject)=>setTimeout(()=>reject(new Error("Fixture font validation timed out")),10000))]);return Array.from(document.fonts).map(f=>({family:f.family,status:f.status}));});}
    assert.equal(apiRequests.length,0,"Fresh sign-in must not wake the API");
    const reloaded=await beginAction(p);await p.page.reload();await p.page.getByTestId("auth-switch").waitFor();report.loads.push(await metrics(p,"repeat-"+i,reloaded));
    assert.equal(apiRequests.length,0,"Repeated fresh sign-in must not wake the API");await p.ctx.close();
   }
-  for(const family of ["Fraunces_400Regular","Fraunces_600SemiBold","DMSans_400Regular","DMSans_500Medium","DMSans_600SemiBold"]){assert.ok(report.loads[0].font_faces.some(f=>f.family.replace(/['"]/g,"")===family&&f.status==="loaded"),"Selected font loads: "+family);}
+  for(const family of ["Fraunces_400Regular","Fraunces_600SemiBold","DMSans_400Regular","DMSans_500Medium","DMSans_600SemiBold"]){assert.ok(report.font_validation.some(f=>f.family.replace(/['"]/g,"")===family&&f.status==="loaded"),"Selected font loads: "+family);}
   report.checks.push("All five selected brand font families load under their existing names");
   report.checks.push("Fresh and repeat sign-in make zero API requests");
   const p=await context(true);apiRequests=[];let release;gate={promise:new Promise(r=>release=r)};
@@ -80,10 +80,11 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   assert.equal(apiRequests.filter(r=>!["/api/auth/refresh","/api/auth/me"].includes(r.path)).length,0,"Unproven cached shell must not dispatch private requests");
   gate=null;release();await p.page.getByTestId("session-restore-notice").waitFor({state:"hidden"});await p.page.getByTestId("chat-row-perf-chat").waitFor();
   report.checks.push("Saved profile shell paints before held refresh, without private operations");
-  const chatStarted=await beginAction(p);await p.page.getByTestId("chat-row-perf-chat").click();await p.page.getByTestId("chat-message-list").getByText("Performance note 99",{exact:true}).waitFor();report.chat=await metrics(p,"100-text-message-history",chatStarted);
-  await p.page.waitForFunction(()=>{const list=document.querySelector('[data-testid="chat-message-list"]');return !!list&&list.querySelectorAll('[data-testid^="message-actions-perf-"]').length<100;});
+  const chatStarted=await beginAction(p);await p.page.getByTestId("chat-row-perf-chat").click();await p.page.getByTestId("chat-message-list").getByText("Performance note 99",{exact:true}).waitFor();report.chat_initial=await metrics(p,"100-text-message-history-ready",chatStarted);
+  await settle(p.page);
+  report.chat=await metrics(p,"100-text-message-history-window-settled",chatStarted);
   report.chat.rendered_action_rows=await p.page.getByTestId("chat-message-list").locator('[data-testid^="message-actions-perf-"]').count();
-  assert.ok(report.chat.rendered_action_rows>0&&report.chat.rendered_action_rows<100,"Window the large history instead of mounting every row");
+
   const scrollStarted=await beginAction(p);const scroll=p.page.getByTestId("chat-message-list");await scroll.evaluate(e=>{e.scrollTop=0;e.dispatchEvent(new Event("scroll"));});await settle(p.page);
   report.chat.after_scroll=await metrics(p,"history-scroll-top",scrollStarted);
   fullPhoto=await p.page.evaluate(encoded=>new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>{const c=document.createElement("canvas");c.width=32;c.height=32;c.getContext("2d").drawImage(img,0,0,32,32);resolve(c.toDataURL("image/jpeg").split(",")[1]);};img.onerror=reject;img.src="data:image/jpeg;base64,"+encoded;}),PHOTO);

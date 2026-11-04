@@ -331,9 +331,6 @@ function ChatConversation({id}: {id: string}) {
           <View style={{flex: 1}}><Decor/><FlatList
             ref={listRef}
             testID="chat-message-list"
-            initialNumToRender={16}
-            maxToRenderPerBatch={16}
-            windowSize={7}
             scrollEventThrottle={100}
             onScroll={event=>{const {contentOffset,contentSize,layoutMeasurement}=event.nativeEvent;nearBottom.current=contentSize.height-layoutMeasurement.height-contentOffset.y<80;if(nearBottom.current)setNewMessages(false);}}
             onContentSizeChange={()=>{if(nearBottom.current)listRef.current?.scrollToEnd({animated:false});}}
