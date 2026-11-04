@@ -117,6 +117,9 @@ const server=http.createServer((req,res)=>{
     await page.goto(origin+"/appearance");
     await page.getByRole("radio",{name:"Automatic",exact:true}).waitFor();
     await page.clock.install({time:new Date("2026-10-29T18:59:58Z")});
+    // The clock jumps forward from noon while an efficient minute timer is
+    // already pending. Resume the app so it reschedules the exact 19:00 edge.
+    await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
     await page.clock.runFor(1000);
     await page.getByText("Active now: Sage.",{exact:false}).waitFor();
     await page.clock.runFor(1100);
@@ -126,7 +129,10 @@ const server=http.createServer((req,res)=>{
     await page.getByText("Active now: Forest.",{exact:false}).waitFor();
     await page.getByRole("radio",{name:"Little garden decoration",exact:true}).click();
     await page.screenshot({path:path.join(shots,"appearance-night-390.png"),fullPage:true});
-    await page.clock.setFixedTime(new Date("2026-10-30T07:00:00Z"));await page.clock.runFor(1000);
+    await page.clock.setFixedTime(new Date("2026-10-30T07:00:00Z"));
+    // Model returning to the app at the 07:00 edge after the overnight jump.
+    await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
+    await page.clock.runFor(1000);
     await page.getByText("Active now: Sage.",{exact:false}).waitFor();
     await page.getByLabel("Dark starts",{exact:true}).fill("25:00");
     await page.getByRole("button",{name:"Save schedule",exact:true}).click();

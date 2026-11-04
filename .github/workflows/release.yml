@@ -34,13 +34,22 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+        working-directory: frontend
+      - name: Record runtime dependency audit
+        continue-on-error: true
+        run: |
+          mkdir -p test-results
+          npm audit --omit=dev --json > test-results/dependency-audit.json
         working-directory: frontend
       - run: npm run typecheck
         working-directory: frontend
       - run: node --test tests/release.cjs tests/*.unit.cjs
         working-directory: frontend
       - run: npm run build:web
+        id: web_export
         working-directory: frontend
         env:
           EXPO_PUBLIC_BACKEND_URL: https://api-build-check.example
@@ -49,10 +58,12 @@ jobs:
       - run: npm install --no-save --package-lock=false playwright@1.56.1
         working-directory: frontend
       - run: npx playwright install --with-deps chromium
+        id: browser_runtime
         working-directory: frontend
       - run: node tests/onboarding-browser.cjs
         working-directory: frontend
       - run: node tests/rooms-browser.cjs
+        if: ${{ !cancelled() && steps.web_export.outcome == 'success' && steps.browser_runtime.outcome == 'success' }}
         working-directory: frontend
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
@@ -61,5 +72,6 @@ jobs:
           path: |
             frontend/test-results/onboarding
             frontend/test-results/rooms
+            frontend/test-results/dependency-audit.json
           if-no-files-found: ignore
           retention-days: 7
