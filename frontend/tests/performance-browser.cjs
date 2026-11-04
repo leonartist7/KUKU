@@ -44,11 +44,11 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
 (async()=>{
  await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));const origin="http://127.0.0.1:"+server.address().port;
  const browser=await chromium.launch({headless:true,args:["--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1"]});
- const errors=[],external=[];
+ const errors=[],external=[];let activePage=null;
  async function context(saved=false){
   const ctx=await browser.newContext({viewport:{width:390,height:844},reducedMotion:"reduce",serviceWorkers:"block"});
   if(saved)await ctx.addInitScript(u=>localStorage.setItem("kuku_profile",JSON.stringify(u)),user);
-  const page=await ctx.newPage();page.setDefaultTimeout(30000);page.on("pageerror",e=>errors.push(String(e)));
+  const page=await ctx.newPage();activePage=page;page.setDefaultTimeout(30000);page.on("pageerror",e=>errors.push(String(e)));
   page.on("request",r=>{const u=new URL(r.url());if(!["127.0.0.1",""].includes(u.hostname)&&!["data:","blob:"].includes(u.protocol))external.push(u.hostname);});
   await page.addInitScript(()=>{window.__perf={lcp:null,cls:0,longTasks:0};for(const type of ["largest-contentful-paint","layout-shift","longtask"]){try{new PerformanceObserver(list=>{for(const e of list.getEntries()){if(type==="largest-contentful-paint")window.__perf.lcp=e.startTime;if(type==="layout-shift"&&!e.hadRecentInput)window.__perf.cls+=e.value;if(type==="longtask")window.__perf.longTasks++;}}).observe({type,buffered:true});}catch{}}});
   const cdp=await ctx.newCDPSession(page);await cdp.send("Performance.enable");await cdp.send("Network.enable");await cdp.send("Emulation.setCPUThrottlingRate",{rate:4});
@@ -77,7 +77,7 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   assert.equal(apiRequests.filter(r=>!["/api/auth/refresh","/api/auth/me"].includes(r.path)).length,0,"Unproven cached shell must not dispatch private requests");
   gate=null;release();await p.page.getByTestId("session-restore-notice").waitFor({state:"hidden"});await p.page.getByTestId("chat-row-perf-chat").waitFor();
   report.checks.push("Saved profile shell paints before held refresh, without private operations");
-  const chatStarted=await beginAction(p);await p.page.getByTestId("chat-row-perf-chat").click();await p.page.getByText("Performance note 99",{exact:true}).waitFor();report.chat=await metrics(p,"100-text-message-history",chatStarted);
+  const chatStarted=await beginAction(p);await p.page.getByTestId("chat-row-perf-chat").click();await p.page.getByTestId("chat-message-list").getByText("Performance note 99",{exact:true}).waitFor();report.chat=await metrics(p,"100-text-message-history",chatStarted);
   report.chat.rendered_action_rows=await p.page.locator('[data-testid^="message-actions-perf-"]').count();
   const scrollStarted=await beginAction(p);const scroll=p.page.getByTestId("chat-message-list");await scroll.evaluate(e=>{e.scrollTop=0;e.dispatchEvent(new Event("scroll"));});await settle(p.page);
   report.chat.after_scroll=await metrics(p,"history-scroll-top",scrollStarted);
@@ -95,7 +95,7 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   const cyclesStarted=await beginAction(p);for(let i=0;i<3;i++){await p.page.getByTestId("files-segment-By person").click();await p.page.getByText("Sam",{exact:true}).first().waitFor();await p.page.getByTestId("files-segment-Recent").click();await p.page.getByTestId("image-open-perf-asset-0").waitFor();}
   await p.page.waitForTimeout(500);report.files_after_navigation=await metrics(p,"three-person-recent-cycles",cyclesStarted);
   report.files_after_navigation.previews=previewRequests.slice();
-  const previousIds=new Set(previewRequests.map(r=>r.id));const distant=p.page.waitForResponse(r=>{const u=new URL(r.url()),m=u.pathname.match(/attachments\\/(perf-asset-\\d+)\\/preview/);return !!m&&u.searchParams.get("size")==="thumb"&&!previousIds.has(m[1]);});
+  const previousIds=new Set(previewRequests.map(r=>r.id));const distant=p.page.waitForResponse(r=>{const u=new URL(r.url()),parts=u.pathname.split("/");return parts[2]==="attachments"&&parts[4]==="preview"&&u.searchParams.get("size")==="thumb"&&!previousIds.has(parts[3]);});
   const filesScrollStarted=await beginAction(p);const scrolled=await p.page.getByTestId("image-open-perf-asset-0").evaluate(e=>{for(let p=e.parentElement;p;p=p.parentElement){if(p.scrollHeight>p.clientHeight&&/auto|scroll/.test(getComputedStyle(p).overflowY)){p.scrollTop=p.scrollHeight;p.dispatchEvent(new Event("scroll"));return true;}}return false;});
   assert.equal(scrolled,true,"Files must expose a scrollable list");await distant;await p.page.waitForTimeout(500);
   report.files_scrolled=await metrics(p,"distant-image-scroll",filesScrollStarted);report.files_scrolled.new_thumbnail_ids=Array.from(new Set(previewRequests.filter(r=>r.size==="thumb"&&!previousIds.has(r.id)).map(r=>r.id)));
@@ -109,6 +109,6 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   report.summary={js_raw_bytes:inventory.filter(x=>x.path.endsWith(".js")).reduce((n,x)=>n+x.raw_bytes,0),js_gzip_bytes:inventory.filter(x=>x.path.endsWith(".js")).reduce((n,x)=>n+x.gzip_bytes,0),font_raw_bytes:inventory.filter(x=>!x.path.endsWith(".js")).reduce((n,x)=>n+x.raw_bytes,0),initial_thumbnails:report.files_initial.previews.length,total_preview_requests_after_cycles:previewRequests.length};
   fs.writeFileSync(path.join(out,"performance.json"),JSON.stringify(report,null,2)+"\n");console.log("KUKU_PERFORMANCE_SUMMARY "+JSON.stringify({...report.summary,loads:report.loads.map(x=>({label:x.label,document_elapsed_ms:x.document_elapsed_ms,runner_action_elapsed_ms:x.runner_action_elapsed_ms,heap:x.js_heap_used_bytes})),cached_shell_document_elapsed_ms:report.cached_shell.document_elapsed_ms,checks:report.checks}));
   console.log("Controlled performance measurement passed");
- }catch(e){fs.writeFileSync(path.join(out,"partial-performance.json"),JSON.stringify(report,null,2)+"\n");throw e;}
+ }catch(e){fs.writeFileSync(path.join(out,"partial-performance.json"),JSON.stringify(report,null,2)+"\n");if(activePage&&!activePage.isClosed()){console.error("Performance fixture failure context",JSON.stringify({url:activePage.url(),body:(await activePage.locator("body").innerText()).slice(-4000),api:apiRequests.slice(-25),errors,external}));await activePage.screenshot({path:path.join(out,"failure.png"),fullPage:true}).catch(()=>{});}throw e;}
  finally{if(gate){gate=null;}await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
