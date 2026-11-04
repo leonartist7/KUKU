@@ -1,8 +1,8 @@
 # Android standalone preview build
 
-Status: successful cloud build verified on 4 November 2026 for runtime 331dc40900804a5198e81509965571c6ddd2bc32. Physical-device acceptance remains open.
+Status: successful cloud build verified on 5 November 2026 for runtime 36655ce6089ee07cf4b83cda9b54342a31406b2d. Physical-device acceptance remains open.
 
-[Download the preview ZIP](https://github.com/leonartist7/KUKU/actions/runs/41927867023/artifacts/13370108686) from run 41927867023. It contains KUKU-Preview-arm64-TEST-SIGNED.apk, SHA256SUMS.txt and build/signature evidence. Archive size: 41,231,549 bytes; retained until 11 November. APK size: 41,221,514 bytes. Version: 1.0.0-preview.58.1 (1000058). APK SHA-256: ad39dc0deec73523d9e867a78075a73f4a498550dab998531027c9f55d318a7d. The ZIP has a different digest; exact provenance is retained in docs/performance/2026-11-04-android-preview.json.
+[Download the preview ZIP](https://github.com/leonartist7/KUKU/actions/runs/41934515662/artifacts/13374117104) from run 41934515662. It contains KUKU-Preview-arm64-TEST-SIGNED.apk, SHA256SUMS.txt and build/signature evidence. Archive size: 39,054,429 bytes; retained until 11 November. APK size: 39,044,394 bytes. Version: 1.0.0-preview.62.1 (1000062). APK SHA-256: a7c96fa662eda3b85a605f26ffd0b0921949a8068cb76bba6598815751925e2f. The ZIP has a different digest; exact provenance is retained in docs/performance/2026-11-05-icons-android.json.
 
 Extract the APK, install KUKU Preview on an arm64 Android phone and use your existing KUKU account. This separate test app can be evaluated alongside the web beta. Calls and native push remain disabled. A successful build is not proof of physical microphone, playback, notifications or locked-screen behavior.
 
@@ -33,7 +33,7 @@ No Expo account, EAS credential, private signing secret, Google Play account or 
 
 The android_preview job is integrated in .github/workflows/release.yml. docs/ci/android-preview-job.yml is the reference fragment, not a second independent workflow.
 
-The job needs both backend and frontend checks to succeed. It runs for same-repository pull requests whose branch begins codex/kuku-, excluding the release review branch to avoid rebuilding an already verified preview on beta integration. The current codex/verify-kuku-performance-20261104 branch is explicitly included for this font change. Future runtime packages must receive their own native compatibility evidence. Pull-request triggers work on the review branch without requiring a workflow_dispatch file to exist on main.
+The job needs both backend and frontend checks to succeed. It runs for same-repository pull requests whose branch begins codex/kuku-, excluding the release review branch to avoid rebuilding an already verified preview on beta integration. The older codex/verify-kuku-performance-20261104 branch is explicitly included for its font change; codex/kuku-icons-20261105 uses the normal runtime-package prefix. Future runtime packages must receive their own native compatibility evidence. Pull-request triggers work on the review branch without requiring a workflow_dispatch file to exist on main.
 
 1. Check out the exact pull-request head.
 2. Use Node 22 and Eclipse Temurin JDK 17 through pinned official actions.
