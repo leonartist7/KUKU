@@ -35,12 +35,18 @@ function previewConfig(config, env, versions) {
 }
 
 function verifyGeneratedNative(gradle) {
-  assert.ok(gradle.includes('applicationId "' + PACKAGE + '"'), "Native package must remain separate from production.");
+  // Expo's generated Groovy may use either quote style or an explicit '='.
+  // Compare the parsed value exactly; accepting formatting must not accept a
+  // production package or a second applicationId override.
+  const identities = [...gradle.matchAll(/\bapplicationId\s*(?:=\s*)?(['"])([^'"\r\n]+)\1/g)].map(match => match[2]);
+  assert.deepEqual(identities, [PACKAGE], "Native package must remain separate from production. Observed applicationId values: " + JSON.stringify(identities));
   const release = gradle.match(/\brelease\s*\{([\s\S]*?)\n\s*\}/);
   assert.ok(release, "Generated release variant was not found.");
-  assert.match(release[1], /\bsigningConfig\s+signingConfigs\.debug\b/, "Preview may only use the public debug test signing configuration.");
-  assert.doesNotMatch(release[1], /\bdebuggable\s+(true|=\s*true)/, "Standalone preview must not require developer support.");
-  assert.match(gradle, /bundleCommand\s*=\s*"export:embed"/, "Use Expo's embedded JS bundling.");
+  assert.match(release[1], /\bsigningConfig\s*(?:=\s*)?signingConfigs\.debug\b/, "Preview may only use the public debug test signing configuration.");
+  assert.doesNotMatch(release[1], /\b(?:debuggable|isDebuggable)\s*(?:=\s*)?true\b/, "Standalone preview must not require developer support.");
+  const bundleCommands = [...gradle.matchAll(/\bbundleCommand\s*(?:=\s*)?(['"])([^'"\r\n]+)\1/g)].map(match => match[2]);
+  assert.deepEqual(bundleCommands, ["export:embed"], "Use Expo's embedded JS bundling.");
+  return { applicationId: identities[0], bundleCommand: bundleCommands[0] };
 }
 
 function main() {
@@ -55,6 +61,17 @@ function main() {
       reactNative: lock.packages["node_modules/react-native"].version,
     });
     fs.writeFileSync(path.join(root, "app.json"), JSON.stringify(next, null, 2) + "\n");
+    const evidenceRoot = path.join(root, "android-preview");
+    fs.mkdirSync(evidenceRoot, { recursive: true });
+    // Explicit allowlist: never dump arbitrary app config/extra/env values.
+    fs.writeFileSync(path.join(evidenceRoot, "config-summary.json"), JSON.stringify({
+      name: next.expo.name, slug: next.expo.slug, scheme: next.expo.scheme,
+      version: next.expo.version, application_id: next.expo.android.package,
+      version_code: next.expo.android.versionCode,
+      api_origin: API_ORIGIN, calls_enabled: false, native_push_enabled: false,
+      expo_version: lock.packages["node_modules/expo"].version,
+      react_native_version: lock.packages["node_modules/react-native"].version,
+    }, null, 2) + "\n");
     console.log("Prepared " + next.expo.android.package + " " + next.expo.version + "; native calls and push disabled.");
   } else if (mode === "verify-native") {
     verifyGeneratedNative(fs.readFileSync(path.join(root, "android/app/build.gradle"), "utf8"));

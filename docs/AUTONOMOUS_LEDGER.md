@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-04T15:26:53.339Z
+Updated: 2026-11-04T15:42:10.272Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -82,3 +82,11 @@ State: ACTIVE; integrating reduced-motion, browser acceptance and cloud Android 
 - Workspace transport briefly disconnected. Published source is safe on GitHub; pending owned files were preserved as Git blobs. Executor recovered; no dependency/toolchain installs were used locally.
 - Incoming fourth checkpoint adds reduced-motion across sheets/viewers, colocates JSON proxy in Frankfurt with the API, verifies decoded photo drafts, and starts a standalone arm64 Android preview job after web/backend pass. APK signing is a PUBLIC TEST key with a separate .preview app ID; production signing/push/calls and physical-device checks remain open.
 - M03/M04 chat tools are in coordinated isolated implementation; not merged or accepted yet.
+
+## Web acceptance and native build checkpoint
+- b0ece3e6119bcad3ea046d0dcb214fa43ea7e27f: backend and frontend jobs PASS in run41857864668. This includes88 backend tests,74 frontend tests, canonical TypeScript, web export, complete onboarding/chat/files/voice/emote and Spaces browser walkthroughs, plus responsive screenshots.
+- Vercel dpl_EUXNC6pLKSLBhkND3QeVUpv3dAg1 is READY in fra1. Existing public beta is still unchanged pending coordinated API-first rollout.
+- Android job reached successful Expo native prebuild; the test helper then rejected Groovy single-quoted applicationId. This is fixed semantically with seven helper regression tests; no APK or device success is claimed yet. Failure diagnostics now preserve generated public configuration.
+- The release branch disables automatic Vercel frontend deployment. This intentionally preserves the current alias until the matching Render API is LIVE and verified; the implementation branch still builds previews. Assign the existing beta alias manually after backend readiness. Do not accidentally deploy frontend ahead of API.
+- M03/M04 source packages and tests are preserved as Git blobs, not integrated yet. Initial cached-shell restoration is being hardened with an explicit non-authoritative account constraint and server-proof gate.
+

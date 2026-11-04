@@ -2,7 +2,9 @@
   "buildCommand": "npm run build:web",
   "outputDirectory": "dist",
   "framework": null,
-  "regions": ["fra1"],
+  "regions": [
+    "fra1"
+  ],
   "installCommand": "npm ci",
   "rewrites": [
     {
@@ -41,6 +43,11 @@
   "functions": {
     "api/**/*.js": {
       "maxDuration": 120
+    }
+  },
+  "git": {
+    "deploymentEnabled": {
+      "codex/kuku-release-20261027": false
     }
   }
 }

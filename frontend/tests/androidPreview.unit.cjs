@@ -38,3 +38,46 @@ test("Android generated release must bundle JS with public test signing and dist
   assert.throws(() => verifyGeneratedNative(native.replace("signingConfig signingConfigs.debug", "debuggable true\nsigningConfig signingConfigs.debug")));
   assert.throws(() => verifyGeneratedNative(native.replace('bundleCommand = "export:embed"', "")));
 });
+
+function generatedGradle(identity = "com.leonartist7.kuku.preview", quote = "'", assignment = "") {
+  return [
+    "apply plugin: 'com.android.application'",
+    "react {",
+    "  bundleCommand " + assignment + quote + "export:embed" + quote,
+    "}",
+    "android {",
+    "  namespace " + quote + identity + quote,
+    "  defaultConfig {",
+    "    applicationId " + assignment + quote + identity + quote,
+    "    minSdkVersion rootProject.ext.minSdkVersion",
+    "    targetSdkVersion rootProject.ext.targetSdkVersion",
+    "  }",
+    "  buildTypes {",
+    "    debug { signingConfig signingConfigs.debug }",
+    "    release {",
+    "      signingConfig " + assignment + "signingConfigs.debug",
+    "      minifyEnabled false",
+    "    }",
+    "  }",
+    "}"
+  ].join("\n");
+}
+test("realistic Expo single-quoted Groovy config verifies parsed identity and embedded bundle", () => {
+  const info = verifyGeneratedNative(generatedGradle());
+  assert.equal(info.applicationId, PACKAGE);
+  assert.equal(info.bundleCommand, "export:embed");
+});
+test("native verification accepts quote and assignment formatting without changing expected values", () => {
+  for (const quote of ["'", '"']) {
+    for (const assignment of ["", "= "]) {
+      assert.equal(verifyGeneratedNative(generatedGradle(PACKAGE, quote, assignment)).applicationId, PACKAGE);
+    }
+  }
+});
+test("native formatting support still rejects production or overridden identity, wrong bundle and private signing", () => {
+  assert.throws(() => verifyGeneratedNative(generatedGradle("com.leonartist7.kuku")), /Observed applicationId values/);
+  assert.throws(() => verifyGeneratedNative(generatedGradle() + "\napplicationId = 'com.leonartist7.kuku'"));
+  assert.throws(() => verifyGeneratedNative(generatedGradle().replace("export:embed", "start")));
+  assert.throws(() => verifyGeneratedNative(generatedGradle().replace("      signingConfig signingConfigs.debug", "      signingConfig = signingConfigs.production")));
+  assert.throws(() => verifyGeneratedNative(generatedGradle().replace("      minifyEnabled false", "      debuggable = true")));
+});

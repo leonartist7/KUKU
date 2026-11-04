@@ -207,5 +207,9 @@ jobs:
           path: |
             frontend/android/build/reports
             frontend/android/app/build/reports
+            frontend/android/app/build.gradle
+            frontend/android/gradle.properties
+            frontend/android/app/src/main/AndroidManifest.xml
+            frontend/android-preview/config-summary.json
           if-no-files-found: ignore
           retention-days: 3
