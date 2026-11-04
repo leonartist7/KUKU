@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 15
     services:
       source:
-        image: mongo:8.0.36
+        image: mongo:8.0@sha256:b9924c330a8bbc5800fe9c69f04a84e221eca7b28fd049a0354147d9908fa142
         env:
           MONGO_INITDB_ROOT_USERNAME: fixture_root
           MONGO_INITDB_ROOT_PASSWORD: fixture-root-only
@@ -22,7 +22,7 @@ jobs:
           --health-cmd "mongosh -u fixture_root -p fixture-root-only --authenticationDatabase admin --eval 'db.runCommand({ping:1})'"
           --health-interval 10s --health-timeout 5s --health-retries 5
       target:
-        image: mongo:8.0.36
+        image: mongo:8.0@sha256:b9924c330a8bbc5800fe9c69f04a84e221eca7b28fd049a0354147d9908fa142
         env:
           MONGO_INITDB_ROOT_USERNAME: fixture_root
           MONGO_INITDB_ROOT_PASSWORD: fixture-root-only
