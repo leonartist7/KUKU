@@ -6,7 +6,9 @@ const {performance:clock}=require("node:perf_hooks");
 const root=path.resolve("dist"),out=path.resolve("test-results/performance");fs.mkdirSync(out,{recursive:true});
 const PHOTO="/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwCxRRRXIcZ//9k=";
 const user={id:"perf-alex",name:"Alex",email_verified:true,onboarding_complete:true},other={id:"perf-sam",name:"Sam",email_verified:true};
-const history=Array.from({length:100},(_,i)=>({id:"perf-"+i,chat_id:"perf-chat",sender_id:other.id,sender_name:other.name,type:"text",text:"Performance note "+i,created_at:new Date(Date.UTC(2026,10,4,10,0,i)).toISOString(),revision:0}));
+const olderHistory=Array.from({length:50},(_,i)=>({id:"perf-old-"+i,chat_id:"perf-chat",sender_id:other.id,sender_name:other.name,type:"text",text:"Earlier performance note "+i,created_at:new Date(Date.UTC(2026,10,4,9,0,i)).toISOString(),revision:0}));
+const currentHistory=Array.from({length:100},(_,i)=>({id:"perf-"+i,chat_id:"perf-chat",sender_id:other.id,sender_name:other.name,type:"text",text:"Performance note "+i+(i%9===0?" with a longer second line to exercise variable-height rows.":""),created_at:new Date(Date.UTC(2026,10,4,10,0,i)).toISOString(),revision:0}));
+let history=[...olderHistory,...currentHistory];
 const files=Array.from({length:80},(_,i)=>({id:"file-"+i,chat_id:"perf-chat",sender_id:other.id,sender:other,type:"image",file_name:"Fixture photo "+i,attachment_id:"perf-asset-"+i,created_at:"2026-11-04T10:00:00Z",file_size:1024}));
 let gate=null,apiRequests=[],previewRequests=[],fullPhoto=PHOTO;const cache=new Map();
 const server=http.createServer(async(req,res)=>{
@@ -19,10 +21,15 @@ const server=http.createServer(async(req,res)=>{
    if(p==="/api/auth/me")return json(user);
    if(p==="/api/auth/ws-ticket")return json({detail:"Synthetic HTTP fallback"},503);
    if(p==="/api/messages/sync")return json({events:[],cursor:0,reset:false});
-   if(p==="/api/chats")return json([{id:"perf-chat",type:"direct",other,last_message:history[99],updated_at:history[99].created_at}]);
+   if(p==="/api/chats")return json([{id:"perf-chat",type:"direct",other,last_message:history[history.length-1],updated_at:history[history.length-1].created_at}]);
    if(p==="/api/chats/perf-chat")return json({id:"perf-chat",type:"direct",other});
    if(p==="/api/chats/perf-chat/messages/resolve"){let body="";for await(const chunk of req)body+=chunk;const ids=JSON.parse(body).message_ids;return json(history.filter(m=>ids.includes(m.id)));}
-   if(p==="/api/chats/perf-chat/messages")return json(url.searchParams.has("after")||url.searchParams.has("before")?[]:history);
+   if(p==="/api/chats/perf-chat/messages"){
+    const after=url.searchParams.get("after"),before=url.searchParams.get("before");
+    if(after){const index=history.findIndex(message=>message.id===after);return json(index<0?[]:history.slice(index+1,index+101));}
+    if(before){const index=history.findIndex(message=>message.id===before);return json(index<=0?[]:history.slice(Math.max(0,index-50),index));}
+    return json(history.slice(-100));
+   }
    if(p==="/api/files/status")return json({available:true,used_bytes:81920,remaining_bytes:500000000,max_file_bytes:25000000});
    if(p==="/api/files")return json(files);
    if(p==="/api/spaces/sessions"||p==="/api/spaces"||p==="/api/users")return json([]);
@@ -60,6 +67,12 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   return {ctx,page,cdp,responses};
  }
  async function settle(page){await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));}
+ async function rowPosition(page,id){
+  return page.getByTestId("message-row-"+id).evaluate(node=>{const list=document.querySelector('[data-testid="chat-message-list"]'),row=node.getBoundingClientRect(),box=list.getBoundingClientRect();return {top:row.top-box.top,bottom:row.bottom-box.top,viewport:box.height,scrollTop:list.scrollTop,bottomGap:list.scrollHeight-list.clientHeight-list.scrollTop};});
+ }
+ async function firstVisiblePerfRow(page){
+  return page.evaluate(()=>{const list=document.querySelector('[data-testid="chat-message-list"]'),box=list.getBoundingClientRect();const rows=Array.from(list.querySelectorAll('[data-testid^="message-row-perf-"]')).map(node=>{const rect=node.getBoundingClientRect();return {id:node.getAttribute("data-testid"),top:rect.top-box.top,bottom:rect.bottom-box.top};}).filter(row=>row.bottom>0&&row.top<box.height).sort((a,b)=>a.top-b.top);return rows[0]||null;});
+ }
  async function beginAction(p){p.responses.length=0;await p.page.evaluate(()=>performance.clearResourceTimings());return clock.now();}
  async function metrics(p,label,started=null){
   await settle(p.page);
@@ -84,13 +97,39 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   assert.equal(apiRequests.filter(r=>!["/api/auth/refresh","/api/auth/me"].includes(r.path)).length,0,"Unproven cached shell must not dispatch private requests");
   gate=null;release();await p.page.getByTestId("session-restore-notice").waitFor({state:"hidden"});await p.page.getByTestId("chat-row-perf-chat").waitFor();
   report.checks.push("Saved profile shell paints before held refresh, without private operations");
-  const chatStarted=await beginAction(p);await p.page.getByTestId("chat-row-perf-chat").click();await p.page.getByTestId("chat-message-list").getByText("Performance note 99",{exact:true}).waitFor();report.chat_initial=await metrics(p,"100-text-message-history-ready",chatStarted);
-  await settle(p.page);
-  report.chat=await metrics(p,"100-text-message-history-window-settled",chatStarted);
-  report.chat.rendered_action_rows=await p.page.getByTestId("chat-message-list").locator('[data-testid^="message-actions-perf-"]').count();
+  const chatStarted=await beginAction(p);await p.page.getByTestId("chat-row-perf-chat").click();await p.page.getByTestId("chat-message-list").getByText(/Performance note 99/).waitFor();
+  await p.page.waitForFunction(()=>{const list=document.querySelector('[data-testid="chat-message-list"]'),row=document.querySelector('[data-testid="message-row-perf-99"]');if(!list||!row)return false;const box=list.getBoundingClientRect(),rect=row.getBoundingClientRect();return rect.bottom>box.top&&rect.top<box.bottom&&list.scrollHeight-list.clientHeight-list.scrollTop<=80;});
+  report.chat_initial=await metrics(p,"100-variable-height-message-history-ready",chatStarted);
+  await p.page.waitForTimeout(750);await settle(p.page);
+  report.chat=await metrics(p,"100-variable-height-message-history-window-settled",chatStarted);
+  report.chat.rendered_message_rows=await p.page.getByTestId("chat-message-list").locator('[data-testid^="message-row-"]').count();
+  assert.ok(report.chat.rendered_message_rows>0&&report.chat.rendered_message_rows<100,"Settled chat window must mount fewer than the 100 loaded rows");
+  const latestInitial=await rowPosition(p.page,"perf-99");assert.ok(latestInitial.bottom>0&&latestInitial.top<latestInitial.viewport&&latestInitial.bottomGap<=80,"Initial latest message must intersect the list at its tail");
 
-  const scrollStarted=await beginAction(p);const scroll=p.page.getByTestId("chat-message-list");await scroll.evaluate(e=>{e.scrollTop=0;e.dispatchEvent(new Event("scroll"));});await settle(p.page);
-  report.chat.after_scroll=await metrics(p,"history-scroll-top",scrollStarted);
+  const scrollStarted=await beginAction(p);const scroll=p.page.getByTestId("chat-message-list");await scroll.evaluate(e=>{e.scrollTop=(e.scrollHeight-e.clientHeight)*0.45;e.dispatchEvent(new Event("scroll"));});await p.page.waitForTimeout(200);
+  const anchorBefore=await firstVisiblePerfRow(p.page);assert.ok(anchorBefore,"A middle reading anchor must be mounted");
+  history.push({id:"perf-incoming-100",chat_id:"perf-chat",sender_id:other.id,sender_name:other.name,type:"text",text:"New performance note while reading",created_at:"2026-11-04T10:02:00.000Z",revision:0});
+  await p.page.evaluate(()=>document.dispatchEvent(new Event("visibilitychange")));
+  await p.page.getByRole("button",{name:"Jump to new messages",exact:true}).waitFor();
+  const anchorAfter=await firstVisiblePerfRow(p.page);
+  assert.equal(anchorAfter.id,anchorBefore.id,"Remote append must preserve the first visible message");
+  assert.ok(Math.abs(anchorAfter.top-anchorBefore.top)<=4,"Remote append must preserve the reading anchor within four pixels");
+  await p.page.getByRole("button",{name:"Jump to new messages",exact:true}).click();
+  await p.page.getByTestId("message-row-perf-incoming-100").waitFor();
+  await p.page.waitForFunction(()=>{const list=document.querySelector('[data-testid="chat-message-list"]'),row=document.querySelector('[data-testid="message-row-perf-incoming-100"]');if(!list||!row)return false;const box=list.getBoundingClientRect(),rect=row.getBoundingClientRect();return rect.bottom>box.top&&rect.top<box.bottom&&list.scrollHeight-list.clientHeight-list.scrollTop<=80;});
+  await p.page.getByRole("button",{name:"Jump to new messages",exact:true}).waitFor({state:"hidden"});
+  const latestAfterJump=await rowPosition(p.page,"perf-incoming-100");assert.ok(latestAfterJump.bottomGap<=80);
+
+  await scroll.evaluate(e=>{e.scrollTop=0;e.dispatchEvent(new Event("scroll"));});await p.page.waitForTimeout(200);
+  const prependAnchorBefore=await rowPosition(p.page,"perf-0");
+  const olderResponse=p.page.waitForResponse(response=>new URL(response.url()).searchParams.get("before")==="perf-0"&&response.status()===200);
+  await p.page.getByRole("button",{name:"Load older messages",exact:true}).click();await olderResponse;await p.page.waitForTimeout(250);
+  const prependAnchorAfter=await rowPosition(p.page,"perf-0");
+  assert.ok(Math.abs(prependAnchorAfter.top-prependAnchorBefore.top)<=4,"Loading older messages must preserve the visible row position");
+  await scroll.evaluate(e=>{e.scrollTop=0;e.dispatchEvent(new Event("scroll"));});await p.page.getByTestId("message-row-perf-old-0").waitFor();
+  report.chat.after_scroll=await metrics(p,"remote-append-jump-and-prepend-preserved",scrollStarted);
+  report.chat.anchor={remote_before:anchorBefore,remote_after:anchorAfter,prepend_before:prependAnchorBefore,prepend_after:prependAnchorAfter};
+  report.checks.push("Latest row intersects the viewport; settled chat mounts fewer than 100 rows; remote append and 50-row prepend preserve reading position");
   fullPhoto=await p.page.evaluate(encoded=>new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>{const c=document.createElement("canvas");c.width=32;c.height=32;c.getContext("2d").drawImage(img,0,0,32,32);resolve(c.toDataURL("image/jpeg").split(",")[1]);};img.onerror=reject;img.src="data:image/jpeg;base64,"+encoded;}),PHOTO);
   const filesStarted=await beginAction(p);await p.page.goto(origin+"/files");await p.page.getByTestId("image-open-perf-asset-0").waitFor();
   await p.page.waitForFunction(()=>document.querySelector('[data-testid="image-thumbnail-perf-asset-0"] img')?.naturalWidth>0);
@@ -116,7 +155,7 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   assert.equal(apiRequests.filter(r=>r.method!=="GET"&&!["/api/auth/refresh","/api/auth/ws-ticket","/api/chats/perf-chat/messages/resolve"].includes(r.path)).length,0,"No business mutation requests");
   report.checks.push("No real accounts, outgoing business mutations or external browser requests");
   report.checked_at=new Date().toISOString();report.browser=browser.version();report.api_methods=apiRequests.reduce((a,r)=>(a[r.method]=(a[r.method]||0)+1,a),{});
-  report.summary={icon_font_files:iconFonts.length,icon_font_raw_bytes:iconFonts.reduce((n,x)=>n+x.raw_bytes,0),icon_font_paths:iconFonts.map(x=>x.path),google_font_faces:inventory.filter(x=>x.path.includes("/@expo-google-fonts/")).length,google_font_raw_bytes:inventory.filter(x=>x.path.includes("/@expo-google-fonts/")).reduce((n,x)=>n+x.raw_bytes,0),js_raw_bytes:inventory.filter(x=>x.path.endsWith(".js")).reduce((n,x)=>n+x.raw_bytes,0),js_gzip_bytes:inventory.filter(x=>x.path.endsWith(".js")).reduce((n,x)=>n+x.gzip_bytes,0),font_raw_bytes:inventory.filter(x=>!x.path.endsWith(".js")).reduce((n,x)=>n+x.raw_bytes,0),rendered_chat_rows:report.chat.rendered_action_rows,initial_thumbnails:report.files_initial.previews.length,total_preview_requests_after_cycles:previewRequests.length};
+  report.summary={icon_font_files:iconFonts.length,icon_font_raw_bytes:iconFonts.reduce((n,x)=>n+x.raw_bytes,0),icon_font_paths:iconFonts.map(x=>x.path),google_font_faces:inventory.filter(x=>x.path.includes("/@expo-google-fonts/")).length,google_font_raw_bytes:inventory.filter(x=>x.path.includes("/@expo-google-fonts/")).reduce((n,x)=>n+x.raw_bytes,0),js_raw_bytes:inventory.filter(x=>x.path.endsWith(".js")).reduce((n,x)=>n+x.raw_bytes,0),js_gzip_bytes:inventory.filter(x=>x.path.endsWith(".js")).reduce((n,x)=>n+x.gzip_bytes,0),font_raw_bytes:inventory.filter(x=>!x.path.endsWith(".js")).reduce((n,x)=>n+x.raw_bytes,0),rendered_chat_rows:report.chat.rendered_message_rows,initial_thumbnails:report.files_initial.previews.length,total_preview_requests_after_cycles:previewRequests.length};
   fs.writeFileSync(path.join(out,"performance.json"),JSON.stringify(report,null,2)+"\n");console.log("KUKU_PERFORMANCE_SUMMARY "+JSON.stringify({...report.summary,loads:report.loads.map(x=>({label:x.label,document_elapsed_ms:x.document_elapsed_ms,runner_action_elapsed_ms:x.runner_action_elapsed_ms,heap:x.js_heap_used_bytes})),cached_shell_document_elapsed_ms:report.cached_shell.document_elapsed_ms,checks:report.checks}));
   console.log("Controlled performance measurement passed");
  }catch(e){fs.writeFileSync(path.join(out,"partial-performance.json"),JSON.stringify(report,null,2)+"\n");if(activePage&&!activePage.isClosed()){console.error("Performance fixture failure context",JSON.stringify({url:activePage.url(),body:(await activePage.locator("body").innerText()).slice(-4000),api:apiRequests.slice(-25),errors,external}));await activePage.screenshot({path:path.join(out,"failure.png"),fullPage:true}).catch(()=>{});}throw e;}

@@ -81,6 +81,24 @@ function ChatConversation({id}: {id: string}) {
 
   const listRef = useRef<FlatList<Message>>(null);
   const inputRef = useRef<TextInput>(null);
+  const [compactWindow,setCompactWindow]=useState(false);
+  const tailAnchoring=useRef(true);
+  const latestVisible=useRef(false);
+  const scrollPosition=useRef({offset:0,content:0,viewport:0});
+  const preservePrepend=useRef<{scope:string;content:number;offset:number}|null>(null);
+  const viewabilityConfig=useRef({itemVisiblePercentThreshold:1}).current;
+  const settleTailAnchor=useCallback(()=>{
+    const position=scrollPosition.current;
+    const bottomGap=position.content-position.viewport-position.offset;
+    if(tailAnchoring.current&&latestVisible.current&&position.viewport>0&&bottomGap<80){
+      tailAnchoring.current=false;nearBottom.current=true;setNewMessages(false);setCompactWindow(true);
+    }
+  },[]);
+  const onViewableItemsChanged=useRef(({viewableItems}:{viewableItems:Array<{item:Message;isViewable:boolean|null}>})=>{
+    const latest=messagesRef.current[messagesRef.current.length-1];
+    latestVisible.current=!!latest&&viewableItems.some(token=>token.isViewable&&token.item.id===latest.id);
+    settleTailAnchor();
+  }).current;
   const tools=useChatTools({chatId:id,userId:user?.id,scopeRef:activeChat,messages,messagesRef,setMessages,setError});
   const {updated,reconcile,mutate,openActions,openOriginal}=tools;
   const reactTo=useCallback((messageId:string,emoji:string|null)=>{void mutate(messageId,"reaction",{emoji});},[mutate]);
@@ -127,8 +145,8 @@ function ChatConversation({id}: {id: string}) {
   useEffect(() => {
     activeChat.current = id+":"+(user?.id||"");
     setError(null);
-    setMessages([]); setChatInfo(null); setPending([]); setLoading(true);setText("");setSending(false);setDraft(null);setEmotesOpen(false);setVoiceOpen(false);setAttachmentsOpen(false);setCreatingSpace(false);nearBottom.current=true;setNewMessages(false);
-    messagesRef.current = []; loadingRef.current = false;
+    setMessages([]); setChatInfo(null); setPending([]); setLoading(true);setText("");setSending(false);setDraft(null);setEmotesOpen(false);setVoiceOpen(false);setAttachmentsOpen(false);setCreatingSpace(false);nearBottom.current=true;setNewMessages(false);setCompactWindow(false);
+    messagesRef.current = []; loadingRef.current = false; tailAnchoring.current=true;latestVisible.current=false;scrollPosition.current={offset:0,content:0,viewport:0};preservePrepend.current=null;
     chatInfoRef.current = null; reloadRequested.current = false; sendFlight.current = false; uploadFlight.current = false; creatingSpaceRef.current = false;
     olderFlight.current = false; setHasOlder(false); setLoadingOlder(false);
     load();
@@ -166,7 +184,7 @@ function ChatConversation({id}: {id: string}) {
     }, [load, user?.id, id, updated, reconcile]),
   );
 
-  function jumpToLatest(){nearBottom.current=true;setNewMessages(false);listRef.current?.scrollToEnd({animated:true});}
+  function jumpToLatest(){tailAnchoring.current=true;latestVisible.current=false;nearBottom.current=true;setNewMessages(false);setCompactWindow(false);listRef.current?.scrollToEnd({animated:true});}
   useEffect(()=>{
     const latest=messages[messages.length-1];if(!latest)return;
     if(nearBottom.current||latest.sender_id===user?.id){const timer=setTimeout(jumpToLatest,60);return()=>clearTimeout(timer);}
@@ -239,6 +257,9 @@ function ChatConversation({id}: {id: string}) {
     try {
       const older = await api.getAs<Message[]>(user.id,"/chats/" + id + "/messages?before=" + encodeURIComponent(messagesRef.current[0].id));
       if (activeChat.current !== scope) return;
+      const position=scrollPosition.current;
+      preservePrepend.current=position.content>0?{scope,content:position.content,offset:position.offset}:null;
+      tailAnchoring.current=false;latestVisible.current=false;nearBottom.current=false;setCompactWindow(true);
       const merged = mergeChatMessages(id,messagesRef.current,older);
       messagesRef.current = merged; setMessages(merged); setHasOlder(older.length === 50);
     } catch (failure) {
@@ -331,9 +352,33 @@ function ChatConversation({id}: {id: string}) {
           <View style={{flex: 1}}><Decor/><FlatList
             ref={listRef}
             testID="chat-message-list"
-            scrollEventThrottle={100}
-            onScroll={event=>{const {contentOffset,contentSize,layoutMeasurement}=event.nativeEvent;nearBottom.current=contentSize.height-layoutMeasurement.height-contentOffset.y<80;if(nearBottom.current)setNewMessages(false);}}
-            onContentSizeChange={()=>{if(nearBottom.current)listRef.current?.scrollToEnd({animated:false});}}
+            scrollEventThrottle={32}
+            onScroll={event=>{
+              const {contentOffset,contentSize,layoutMeasurement}=event.nativeEvent;
+              scrollPosition.current={offset:contentOffset.y,content:contentSize.height,viewport:layoutMeasurement.height};
+              if(tailAnchoring.current){settleTailAnchor();return;}
+              nearBottom.current=contentSize.height-layoutMeasurement.height-contentOffset.y<80;
+              if(nearBottom.current)setNewMessages(false);
+            }}
+            onScrollBeginDrag={()=>{tailAnchoring.current=false;latestVisible.current=false;setCompactWindow(true);}}
+            onContentSizeChange={(_width,height)=>{
+              const pending=preservePrepend.current;
+              scrollPosition.current={...scrollPosition.current,content:height};
+              if(pending){
+                preservePrepend.current=null;
+                if(activeChat.current===pending.scope){
+                  const offset=pending.offset+Math.max(0,height-pending.content);
+                  scrollPosition.current={...scrollPosition.current,offset};
+                  listRef.current?.scrollToOffset({offset,animated:false});
+                }
+                return;
+              }
+              if(tailAnchoring.current||nearBottom.current)listRef.current?.scrollToEnd({animated:false});
+              settleTailAnchor();
+            }}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
+            windowSize={compactWindow?7:21}
             data={messages}
             keyExtractor={(m) => m.id}
             contentContainerStyle={styles.msgList}
@@ -442,7 +487,7 @@ const MessageRow = React.memo(function MessageRow({msg,mine,userId,busy,replyMes
     (photo||msg.type==="emote") && {paddingHorizontal:0,paddingVertical:0,backgroundColor:"transparent"},
   ];
   return (
-    <View style={[styles.msgRow, mine ? styles.msgRight : styles.msgLeft]}>
+    <View testID={"message-row-"+msg.id} style={[styles.msgRow, mine ? styles.msgRight : styles.msgLeft]}>
       {mine&&!msg.deleted_at?<Pressable accessibilityRole="button" accessibilityLabel="Message actions" testID={"message-actions-"+msg.id} disabled={busy} onPress={()=>onActions(msg)} style={styles.messageAction}><Ionicons name="ellipsis-horizontal" size={17} color={c.textTertiary}/></Pressable>:null}
       <View style={bubbleStyle} testID={photo?"photo-message-"+msg.id:undefined}>
         {msg.reply_to_id&&!msg.deleted_at?<ReplyPreview message={replyMessage} onOpen={()=>onOriginal(msg.reply_to_id!)}/>:null}
