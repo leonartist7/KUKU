@@ -315,7 +315,13 @@ function ChatConversation({id}: {id: string}) {
       const added=merged.length>current.length;
       if(added&&anchor){
         const index=merged.findIndex(message=>message.id===anchor.message.id);
-        preservePrepend.current=index>=0?{scope,anchorId:anchor.message.id,index,viewOffset:anchor.layout!.y-position.offset,attempts:0}:null;
+        let viewOffset=anchor.layout!.y-position.offset;
+        if(Platform.OS==="web"){
+          const list=document.querySelector('[data-testid="chat-message-list"]') as HTMLElement|null;
+          const row=list?Array.from(list.querySelectorAll<HTMLElement>('[data-testid^="message-row-"]')).find(node=>node.dataset.testid==="message-row-"+anchor.message.id):null;
+          if(list&&row)viewOffset=row.getBoundingClientRect().top-list.getBoundingClientRect().top;
+        }
+        preservePrepend.current=index>=0?{scope,anchorId:anchor.message.id,index,viewOffset,attempts:0}:null;
         rowLayouts.current.delete(anchor.message.id);
       }else cancelPrependAnchor();
       tailAnchoring.current=false;latestVisible.current=null;nearBottom.current=false;setCompactWindow(!preservePrepend.current);
