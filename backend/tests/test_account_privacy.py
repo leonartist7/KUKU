@@ -142,6 +142,8 @@ async def test_closure_revokes_devices_and_sessions_but_does_not_claim_erasure(c
     assert closed.status_code == 200, closed.text
     assert closed.json()["status"] == "closed"
     assert closed.json()["data_deletion"] == "awaiting_operator_cleanup"
+    assert closed.json()["operational_cleanup"] == "completed"
+    assert closed.json()["retention_policy_version"] == 2
     assert closed.json()["physical_erasure_completed"] is False
     assert socket.code == 4401
     assert await server.db.sessions.count_documents({"user_id": a["user"]["id"], "revoked": False}) == 0
@@ -157,6 +159,7 @@ async def test_closure_revokes_devices_and_sessions_but_does_not_claim_erasure(c
     assert user["disabled"] and user["avatar"] is None and user["bio"] == "" and user["name"] == "Former member"
     request = await server.db.account_deletions.find_one({"_id": a["user"]["id"]})
     assert request["status"] == "awaiting_operator_cleanup"
+    assert request["cleanup_state"] == "operational_cleanup_complete"
     assert await server.db.messages.count_documents({"id": "history"}) == 1
     assert await server.db.attachments.count_documents({"id": "file"}) == 1
     assert (await server.db.invites.find_one({"_id": "unused"}))["expires_at"] <= now()

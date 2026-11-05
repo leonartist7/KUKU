@@ -26,6 +26,7 @@ from space_audio import space_audio_router
 from chat_events import ChatEvents
 from chat_actions import ChatActions, public_message as chat_message_view, request_fingerprint, same_send
 from account_privacy import account_privacy_router, account_privacy_indexes
+from account_cleanup import account_cleanup_indexes, cleanup_closed_account, reconcile_account_closures
 import settings
 from safety import safety_router, allow_direct
 from attachments import attachment_router
@@ -55,6 +56,13 @@ auth = AuthService(db)
 chat_events = ChatEvents(lambda: db, auth)
 chat_actions = ChatActions(lambda: db, auth, chat_events)
 get_current_user = auth.verified
+
+
+async def reconcile_closed_account(user_id: str):
+    return await cleanup_closed_account(
+        db, user_id, reconcile_space=_reconcile_space_lifecycle,
+        call_lock=_call_token_lock,
+    )
 
 
 async def reconcile_session_grants(batch_size: int = 500):
@@ -106,6 +114,7 @@ async def lifespan(app: FastAPI):
     await chat_events.indexes()
     await chat_actions.indexes()
     await account_privacy_indexes(db)
+    await account_cleanup_indexes(db)
     await db.calls.create_index([("status", 1), ("expires_at", 1)])
     await db.calls.create_index("id", unique=True)
     await db.calls.create_index([("members", 1), ("created_at", -1)])
@@ -128,6 +137,9 @@ async def lifespan(app: FastAPI):
     await db.push_receipts.create_index("expires_at", expireAfterSeconds=0)
     if settings.SEED_DEMO_DATA:
         await seed()
+    await reconcile_account_closures(
+        db, reconcile_space=_reconcile_space_lifecycle, call_lock=_call_token_lock,
+    )
     await reconcile_session_grants()
     await reconcile_rooms_once()
     worker = asyncio.create_task(run_worker(db)) if settings.PUSH_ENABLED or web_push_configured() else None
@@ -157,7 +169,7 @@ api.include_router(attachment_router(lambda: db, auth, chat_events))
 api.include_router(space_audio_router(lambda: db, auth))
 api.include_router(chat_events.router)
 api.include_router(chat_actions.router)
-api.include_router(account_privacy_router(lambda: db, auth))
+api.include_router(account_privacy_router(lambda: db, auth, reconcile_closed_account))
 
 
 @app.exception_handler(RequestValidationError)
@@ -517,6 +529,10 @@ async def expire_calls():
 async def room_lifecycle_worker():
     while True:
         try:
+            await reconcile_account_closures(
+                db, batch_size=20, reconcile_space=_reconcile_space_lifecycle,
+                call_lock=_call_token_lock,
+            )
             await reconcile_rooms_once()
         except Exception:
             logger.warning("Room lifecycle maintenance will retry")
