@@ -1,9 +1,8 @@
-// Calls — API helpers, WebSocket signaling client, types
-import { Platform } from "react-native";
-import { api, getToken, User } from "./api";
+import { API_ORIGIN } from "./config";
+import { api, User } from "./api";
 
+// Signaling is account-bound. An accepted call is not proof of connected media.
 export type CallStatus = "ringing" | "active" | "completed" | "missed";
-
 export type Call = {
   id: string;
   members: string[];
@@ -11,48 +10,41 @@ export type Call = {
   status: CallStatus;
   duration_sec: number;
   started_at: string | null;
+  accepted_at?: string | null;
+  media_ready_at?: string | null;
+  expires_at?: string | null;
   ended_at: string | null;
+  end_reason?: string | null;
+  can_join_media?: boolean;
   created_at: string;
   other: User | null;
 };
-
-export type CallSignal =
-  | { type: "incoming_call"; call: { id: string }; from: { id: string; name: string } }
-  | { type: "call_accepted"; call_id: string }
-  | { type: "call_declined"; call_id: string }
-  | { type: "call_missed"; call_id: string }
-  | { type: "call_ended"; call_id: string };
-
+export type CallSignal = {
+  type: "incoming_call" | "call_accepted" | "call_declined" | "call_missed" | "call_ended";
+  call_id?: string;
+  call?: Pick<Call, "id">;
+  from?: Pick<User, "id" | "name">;
+};
 export type LiveKitJoin = { url: string; room: string; token: string };
-
+const route = (id: string) => "/calls/" + encodeURIComponent(id);
 export const callsApi = {
-  list: () => api.get<Call[]>("/calls"),
-  start: (other_user_id: string) => api.post<Call>("/calls", { other_user_id }),
-  accept: (id: string) => api.post<Call>(`/calls/${id}/accept`),
-  decline: (id: string) => api.post<Call>(`/calls/${id}/decline`),
-  cancel: (id: string) => api.post<Call>(`/calls/${id}/cancel`),
-  end: (id: string) => api.post<Call>(`/calls/${id}/end`),
-  token: (id: string) => api.post<LiveKitJoin>(`/calls/${id}/token`),
+  list: (uid: string) => api.getAs<Call[]>(uid, "/calls"),
+  get: (id: string, uid: string) => api.getAs<Call>(uid, route(id)),
+  start: (other: string, uid: string) => api.postAs<Call>(uid, "/calls", { other_user_id: other }),
+  accept: (id: string, uid: string) => api.postAs<Call>(uid, route(id) + "/accept", {}),
+  decline: (id: string, uid: string) => api.postAs<Call>(uid, route(id) + "/decline", {}),
+  cancel: (id: string, uid: string) => api.postAs<Call>(uid, route(id) + "/cancel", {}),
+  end: (id: string, uid: string) => api.postAs<Call>(uid, route(id) + "/end", {}),
+  token: (id: string, uid: string) => api.postAs<LiveKitJoin>(uid, route(id) + "/token", {}),
+  heartbeat: (id: string, uid: string, mediaReady: boolean) =>
+    api.postAs<Call>(uid, route(id) + "/heartbeat", { media_ready: mediaReady }),
 };
 
-const isDev = typeof (globalThis as any).__DEV__ !== "undefined" && (globalThis as any).__DEV__;
-const DEFAULT_BACKEND = isDev
-  ? Platform.OS === "android"
-    ? "http://10.0.2.2:8000"
-    : "http://127.0.0.1:8000"
-  : "https://connect-mvp.preview.emergentagent.com";
-const BASE = (process.env.EXPO_PUBLIC_BACKEND_URL || DEFAULT_BACKEND).replace(/\/$/, "");
-
-export async function openCallSocket(onMessage: (msg: any) => void): Promise<WebSocket | null> {
-  const token = await getToken();
-  if (!token) return null;
-  const wsBase = BASE.replace(/^http/, "ws");
-  const ws = new WebSocket(`${wsBase}/api/ws/calls?token=${encodeURIComponent(token)}`);
-  ws.onmessage = (e) => {
-    try {
-      onMessage(JSON.parse(e.data));
-    } catch {}
+export async function openCallSocket(uid: string, onMessage: (msg: unknown) => void): Promise<WebSocket> {
+  const { ticket } = await api.postAs<{ ticket: string }>(uid, "/auth/ws-ticket", { scope: "calls" });
+  const ws = new WebSocket(API_ORIGIN.replace(/^http/, "ws") + "/api/ws/calls?ticket=" + encodeURIComponent(ticket));
+  ws.onmessage = (event) => {
+    try { onMessage(JSON.parse(event.data)); } catch { /* Invalid signaling payloads are ignored. */ }
   };
-  ws.onerror = () => {};
   return ws;
 }

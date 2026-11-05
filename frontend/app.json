@@ -1,31 +1,31 @@
 {
   "expo": {
-    "name": "Connect",
-    "slug": "frontend",
+    "name": "KUKU",
+    "slug": "kuku",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "kuku",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.connectmvp.me85sn"
+      "bundleIdentifier": "com.leonartist7.kuku"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000"
+        "backgroundColor": "#FBF9F6"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.connectmvp.me85sn"
+      "package": "com.leonartist7.kuku"
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png",
-      "name": "Connect",
-      "shortName": "Connect",
+      "name": "KUKU",
+      "shortName": "KUKU",
       "description": "A quieter place for the conversations you care about.",
       "themeColor": "#A98C70",
       "backgroundColor": "#FBF9F6",
@@ -40,15 +40,17 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/splash-image.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000"
+          "backgroundColor": "#FBF9F6"
         }
       ],
       "expo-web-browser",
       "expo-font",
-      "expo-audio"
+      "expo-audio",
+      "expo-secure-store",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true

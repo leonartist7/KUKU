@@ -1,0 +1,2307 @@
+{
+  "schema_version": 1,
+  "checked_out_commit": "b2bb25ebd9e9d276b691dc40d2667d5c6e6b8410",
+  "checked_out_tree": "db48d5d64c0db25069f067eae457e332d6e6b296",
+  "pr_head": "e4c25b79a14961daa2fcc8fc4e039033d46b7d7e",
+  "scope": "Local static export and synthetic HTTP fixtures; Chromium4x CPU,390x844; no production/phone/CWV/RPO claim",
+  "inventory": [
+    {
+      "path": "_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+      "raw_bytes": 2904029,
+      "gzip_bytes": 735449,
+      "brotli_bytes": 711050
+    },
+    {
+      "path": "_expo/static/js/web/index-3b573dd8cbce0a653118e74dc5b3aff8.js",
+      "raw_bytes": 132163,
+      "gzip_bytes": 35328,
+      "brotli_bytes": 35175
+    },
+    {
+      "path": "_expo/static/js/web/livekit-client-1cc8fbd84e2cbe838293b4e453f9e3c7.js",
+      "raw_bytes": 610520,
+      "gzip_bytes": 153420,
+      "brotli_bytes": 154074
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.3f78af31cca60105799838a1a7a59fbd.ttf",
+      "raw_bytes": 130484,
+      "gzip_bytes": 73971,
+      "brotli_bytes": 72624
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Entypo.31b5ffea3daddc69dd01a1f3d6cf63c5.ttf",
+      "raw_bytes": 66200,
+      "gzip_bytes": 41022,
+      "brotli_bytes": 41623
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/EvilIcons.140c53a7643ea949007aa9a282153849.ttf",
+      "raw_bytes": 13456,
+      "gzip_bytes": 8088,
+      "brotli_bytes": 8380
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ca4b48e04dc1ce10bfbddb262c8b835f.ttf",
+      "raw_bytes": 55596,
+      "gzip_bytes": 24493,
+      "brotli_bytes": 25073
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.b06871f281fee6b241d60582ae9369b9.ttf",
+      "raw_bytes": 165548,
+      "gzip_bytes": 98949,
+      "brotli_bytes": 98953
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Brands.3b89dd103490708d19a95adcae52210e.ttf",
+      "raw_bytes": 134040,
+      "gzip_bytes": 90012,
+      "brotli_bytes": 90762
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Regular.1f77739ca9ff2188b539c36f30ffa2be.ttf",
+      "raw_bytes": 33736,
+      "gzip_bytes": 16431,
+      "brotli_bytes": 16671
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Solid.605ed7926cf39a2ad5ec2d1f9d391d3d.ttf",
+      "raw_bytes": 202744,
+      "gzip_bytes": 102759,
+      "brotli_bytes": 101626
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Brands.56c8d80832e37783f12c05db7c8849e2.ttf",
+      "raw_bytes": 209376,
+      "gzip_bytes": 122172,
+      "brotli_bytes": 121909
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Regular.370dd5af19f8364907b6e2c41f45dbbf.ttf",
+      "raw_bytes": 67976,
+      "gzip_bytes": 26985,
+      "brotli_bytes": 26935
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Solid.adec7d6f310bc577f05e8fe06a5daccf.ttf",
+      "raw_bytes": 423676,
+      "gzip_bytes": 172228,
+      "brotli_bytes": 167242
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Fontisto.b49ae8ab2dbccb02c4d11caaacf09eab.ttf",
+      "raw_bytes": 313528,
+      "gzip_bytes": 169305,
+      "brotli_bytes": 170498
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Foundation.e20945d7c929279ef7a6f1db184a4470.ttf",
+      "raw_bytes": 56976,
+      "gzip_bytes": 33912,
+      "brotli_bytes": 33975
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+      "raw_bytes": 389724,
+      "gzip_bytes": 209885,
+      "brotli_bytes": 203572
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.6e435534bd35da5fef04168860a9b8fa.ttf",
+      "raw_bytes": 1307660,
+      "gzip_bytes": 594791,
+      "brotli_bytes": 593293
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.4e85bc9ebe07e0340c9c4fc2f6c38908.ttf",
+      "raw_bytes": 356840,
+      "gzip_bytes": 174067,
+      "brotli_bytes": 172542
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Octicons.871378c6eab492a3e689a9385dc45a12.ttf",
+      "raw_bytes": 69436,
+      "gzip_bytes": 34392,
+      "brotli_bytes": 34887
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/SimpleLineIcons.d2285965fe34b05465047401b8595dd0.ttf",
+      "raw_bytes": 54056,
+      "gzip_bytes": 35910,
+      "brotli_bytes": 37143
+    },
+    {
+      "path": "assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Zocial.1681f34aaca71b8dfb70756bca331eb2.ttf",
+      "raw_bytes": 25788,
+      "gzip_bytes": 17777,
+      "brotli_bytes": 18112
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/100Thin/DMSans_100Thin.aa895105c99cdda4f82dc9b5b1e26d87.ttf",
+      "raw_bytes": 56344,
+      "gzip_bytes": 31214,
+      "brotli_bytes": 30499
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/100Thin_Italic/DMSans_100Thin_Italic.bcb8399c1cd3b407c9403b6738c0279f.ttf",
+      "raw_bytes": 61324,
+      "gzip_bytes": 32974,
+      "brotli_bytes": 32169
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/200ExtraLight/DMSans_200ExtraLight.3e25a281bdb7b15be3223f3ea14a78a9.ttf",
+      "raw_bytes": 56412,
+      "gzip_bytes": 31549,
+      "brotli_bytes": 30769
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/200ExtraLight_Italic/DMSans_200ExtraLight_Italic.783b88f315f5e0d18b356e4c7f24ab49.ttf",
+      "raw_bytes": 61368,
+      "gzip_bytes": 33265,
+      "brotli_bytes": 32441
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/300Light/DMSans_300Light.df43eeda0517a2dee06925d637bd6840.ttf",
+      "raw_bytes": 56328,
+      "gzip_bytes": 29177,
+      "brotli_bytes": 28588
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/300Light_Italic/DMSans_300Light_Italic.80cec38fe494b2d8d9c1f7f1096e73f5.ttf",
+      "raw_bytes": 61336,
+      "gzip_bytes": 33159,
+      "brotli_bytes": 32298
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+      "raw_bytes": 56344,
+      "gzip_bytes": 30933,
+      "brotli_bytes": 30142
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/400Regular_Italic/DMSans_400Regular_Italic.d456fd1a58332b02c79e9bda60c4853e.ttf",
+      "raw_bytes": 61244,
+      "gzip_bytes": 34706,
+      "brotli_bytes": 33665
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+      "raw_bytes": 56376,
+      "gzip_bytes": 31277,
+      "brotli_bytes": 30560
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/500Medium_Italic/DMSans_500Medium_Italic.fc3b9297fa9ed051f7649c8e756276b7.ttf",
+      "raw_bytes": 61396,
+      "gzip_bytes": 35246,
+      "brotli_bytes": 34326
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+      "raw_bytes": 56336,
+      "gzip_bytes": 30566,
+      "brotli_bytes": 29931
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold_Italic/DMSans_600SemiBold_Italic.0f640fdba88da072848e514bf43c2b85.ttf",
+      "raw_bytes": 61232,
+      "gzip_bytes": 34766,
+      "brotli_bytes": 33864
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/700Bold/DMSans_700Bold.7a6c1a2c6196d4d0e617b57adb997b3b.ttf",
+      "raw_bytes": 56268,
+      "gzip_bytes": 31027,
+      "brotli_bytes": 30463
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/700Bold_Italic/DMSans_700Bold_Italic.5af5d01e07e369ab645cbd92c05f89d5.ttf",
+      "raw_bytes": 61168,
+      "gzip_bytes": 35242,
+      "brotli_bytes": 34358
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/800ExtraBold/DMSans_800ExtraBold.74a7c51e71e5be3e9878deb3b1dd8276.ttf",
+      "raw_bytes": 56316,
+      "gzip_bytes": 30960,
+      "brotli_bytes": 30367
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/800ExtraBold_Italic/DMSans_800ExtraBold_Italic.67790bc17c5b1ea7abef154cc8e21bc7.ttf",
+      "raw_bytes": 61272,
+      "gzip_bytes": 35362,
+      "brotli_bytes": 34380
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/900Black/DMSans_900Black.e0062779393299c3012a239746c1830c.ttf",
+      "raw_bytes": 56344,
+      "gzip_bytes": 31142,
+      "brotli_bytes": 30554
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/dm-sans/900Black_Italic/DMSans_900Black_Italic.7c78541f1ece5c832d207df0be7b447f.ttf",
+      "raw_bytes": 61232,
+      "gzip_bytes": 35170,
+      "brotli_bytes": 34355
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/100Thin/Fraunces_100Thin.2cbb9a3b3bbda5192ffe28bf04d6b29d.ttf",
+      "raw_bytes": 72128,
+      "gzip_bytes": 39469,
+      "brotli_bytes": 37541
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/100Thin_Italic/Fraunces_100Thin_Italic.6b4cab9b1863ed1cbb96c2cdd8276a26.ttf",
+      "raw_bytes": 86024,
+      "gzip_bytes": 47568,
+      "brotli_bytes": 45343
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/200ExtraLight/Fraunces_200ExtraLight.073905a75e6d90aaee9f7fe82157a0b6.ttf",
+      "raw_bytes": 72428,
+      "gzip_bytes": 40660,
+      "brotli_bytes": 38938
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/200ExtraLight_Italic/Fraunces_200ExtraLight_Italic.5b31322f6198efae6d40650ab8a3623b.ttf",
+      "raw_bytes": 86280,
+      "gzip_bytes": 49291,
+      "brotli_bytes": 47316
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/300Light/Fraunces_300Light.5e37aa8e672db18ba0f7c4d6789cf5ef.ttf",
+      "raw_bytes": 72444,
+      "gzip_bytes": 41017,
+      "brotli_bytes": 39363
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/300Light_Italic/Fraunces_300Light_Italic.f2bb3f7e850840f830024567570d5c3e.ttf",
+      "raw_bytes": 86252,
+      "gzip_bytes": 49466,
+      "brotli_bytes": 47420
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+      "raw_bytes": 72472,
+      "gzip_bytes": 41387,
+      "brotli_bytes": 39689
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/400Regular_Italic/Fraunces_400Regular_Italic.65805d7e2c7f9bad1bf1fa5ccbc7df26.ttf",
+      "raw_bytes": 86228,
+      "gzip_bytes": 49873,
+      "brotli_bytes": 48068
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/500Medium/Fraunces_500Medium.d1acf82088f232372c997dbadbc3f405.ttf",
+      "raw_bytes": 72528,
+      "gzip_bytes": 41507,
+      "brotli_bytes": 39862
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/500Medium_Italic/Fraunces_500Medium_Italic.0f15c5ff3dbf7b54423fe98d18069ab2.ttf",
+      "raw_bytes": 86364,
+      "gzip_bytes": 49932,
+      "brotli_bytes": 47888
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+      "raw_bytes": 72504,
+      "gzip_bytes": 41518,
+      "brotli_bytes": 39904
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/600SemiBold_Italic/Fraunces_600SemiBold_Italic.d3386675410283c88aedd87637eb5741.ttf",
+      "raw_bytes": 86328,
+      "gzip_bytes": 50082,
+      "brotli_bytes": 47896
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/700Bold/Fraunces_700Bold.0c859ce19af0584bccfc6941addedf34.ttf",
+      "raw_bytes": 72492,
+      "gzip_bytes": 41738,
+      "brotli_bytes": 40270
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/700Bold_Italic/Fraunces_700Bold_Italic.c051d8ea6e94f62ad79ed57304d75165.ttf",
+      "raw_bytes": 86252,
+      "gzip_bytes": 49973,
+      "brotli_bytes": 48061
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/800ExtraBold/Fraunces_800ExtraBold.1fca6eacc1fd7d8bb65c1b3c881d057a.ttf",
+      "raw_bytes": 72576,
+      "gzip_bytes": 41543,
+      "brotli_bytes": 40010
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/800ExtraBold_Italic/Fraunces_800ExtraBold_Italic.5d3601dd56349d0087980d9f2cc7d14c.ttf",
+      "raw_bytes": 86364,
+      "gzip_bytes": 50132,
+      "brotli_bytes": 48222
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/900Black/Fraunces_900Black.64dd2eb4f9509117d7047543a3b7c46a.ttf",
+      "raw_bytes": 72572,
+      "gzip_bytes": 41112,
+      "brotli_bytes": 39542
+    },
+    {
+      "path": "assets/node_modules/@expo-google-fonts/fraunces/900Black_Italic/Fraunces_900Black_Italic.6677d45b62b851f1fd8c6061ff492d9d.ttf",
+      "raw_bytes": 86232,
+      "gzip_bytes": 48759,
+      "brotli_bytes": 46692
+    },
+    {
+      "path": "register-sw.js",
+      "raw_bytes": 232,
+      "gzip_bytes": 180,
+      "brotli_bytes": 139
+    },
+    {
+      "path": "sw.js",
+      "raw_bytes": 4229,
+      "gzip_bytes": 1574,
+      "brotli_bytes": 1573
+    }
+  ],
+  "loads": [
+    {
+      "label": "fresh-0",
+      "runner_action_elapsed_ms": 1502.3535890000003,
+      "document_elapsed_ms": 1493.1999999999825,
+      "document_paint_snapshot": {
+        "lcp": 1464,
+        "cls": 0.009543303246696028,
+        "longTasks": 3
+      },
+      "resources": [
+        {
+          "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+          "transfer_bytes": 735749,
+          "encoded_bytes": 735449,
+          "decoded_bytes": 2904029,
+          "duration_ms": 89.10000000000582
+        },
+        {
+          "path": "/register-sw.js",
+          "transfer_bytes": 480,
+          "encoded_bytes": 180,
+          "decoded_bytes": 232,
+          "duration_ms": 75.5
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+          "transfer_bytes": 41687,
+          "encoded_bytes": 41387,
+          "decoded_bytes": 72472,
+          "duration_ms": 34.19999999998254
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+          "transfer_bytes": 41818,
+          "encoded_bytes": 41518,
+          "decoded_bytes": 72504,
+          "duration_ms": 33.59999999997672
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+          "transfer_bytes": 31233,
+          "encoded_bytes": 30933,
+          "decoded_bytes": 56344,
+          "duration_ms": 35.60000000000582
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+          "transfer_bytes": 31577,
+          "encoded_bytes": 31277,
+          "decoded_bytes": 56376,
+          "duration_ms": 36.79999999998836
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+          "transfer_bytes": 30866,
+          "encoded_bytes": 30566,
+          "decoded_bytes": 56336,
+          "duration_ms": 36.89999999999418
+        },
+        {
+          "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+          "transfer_bytes": 210185,
+          "encoded_bytes": 209885,
+          "decoded_bytes": 389724,
+          "duration_ms": 23.39999999999418
+        },
+        {
+          "path": "/assets/assets/images/kuku-brand.0fa95b6a5baeebedeb3ea32b6e31cb8e.png",
+          "transfer_bytes": 226369,
+          "encoded_bytes": 226069,
+          "decoded_bytes": 226069,
+          "duration_ms": 8.60000000000582
+        }
+      ],
+      "dom_nodes": 72,
+      "js_heap_used_bytes": 11477696,
+      "js_heap_total_bytes": 17801216,
+      "script_seconds": 1.117988,
+      "layout_seconds": 0.034174,
+      "responses": [
+        {
+          "path": "/login",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/register-sw.js",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/assets/images/kuku-brand.0fa95b6a5baeebedeb3ea32b6e31cb8e.png",
+          "disk_cache": false,
+          "service_worker": false
+        }
+      ]
+    },
+    {
+      "label": "repeat-0",
+      "runner_action_elapsed_ms": 644.6316419999998,
+      "document_elapsed_ms": 639,
+      "document_paint_snapshot": {
+        "lcp": 608,
+        "cls": 0.00006463026091403712,
+        "longTasks": 3
+      },
+      "resources": [
+        {
+          "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+          "transfer_bytes": 0,
+          "encoded_bytes": 735449,
+          "decoded_bytes": 2904029,
+          "duration_ms": 0
+        },
+        {
+          "path": "/register-sw.js",
+          "transfer_bytes": 0,
+          "encoded_bytes": 180,
+          "decoded_bytes": 232,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 41387,
+          "decoded_bytes": 72472,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 41518,
+          "decoded_bytes": 72504,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 30933,
+          "decoded_bytes": 56344,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 31277,
+          "decoded_bytes": 56376,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 30566,
+          "decoded_bytes": 56336,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 209885,
+          "decoded_bytes": 389724,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/assets/images/kuku-brand.0fa95b6a5baeebedeb3ea32b6e31cb8e.png",
+          "transfer_bytes": 0,
+          "encoded_bytes": 226069,
+          "decoded_bytes": 226069,
+          "duration_ms": 0
+        }
+      ],
+      "dom_nodes": 72,
+      "js_heap_used_bytes": 16839864,
+      "js_heap_total_bytes": 24293376,
+      "script_seconds": 1.453463,
+      "layout_seconds": 0.049804,
+      "responses": [
+        {
+          "path": "/login",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/register-sw.js",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/assets/images/kuku-brand.0fa95b6a5baeebedeb3ea32b6e31cb8e.png",
+          "disk_cache": false,
+          "service_worker": false
+        }
+      ]
+    },
+    {
+      "label": "fresh-1",
+      "runner_action_elapsed_ms": 1429.2929459999996,
+      "document_elapsed_ms": 1420.8999999999942,
+      "document_paint_snapshot": {
+        "lcp": 1344,
+        "cls": 0.009543303246696028,
+        "longTasks": 4
+      },
+      "resources": [
+        {
+          "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+          "transfer_bytes": 735749,
+          "encoded_bytes": 735449,
+          "decoded_bytes": 2904029,
+          "duration_ms": 18.10000000000582
+        },
+        {
+          "path": "/register-sw.js",
+          "transfer_bytes": 480,
+          "encoded_bytes": 180,
+          "decoded_bytes": 232,
+          "duration_ms": 3.2999999999883585
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+          "transfer_bytes": 41687,
+          "encoded_bytes": 41387,
+          "decoded_bytes": 72472,
+          "duration_ms": 35.39999999999418
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+          "transfer_bytes": 41818,
+          "encoded_bytes": 41518,
+          "decoded_bytes": 72504,
+          "duration_ms": 34.60000000000582
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+          "transfer_bytes": 31233,
+          "encoded_bytes": 30933,
+          "decoded_bytes": 56344,
+          "duration_ms": 33.39999999999418
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+          "transfer_bytes": 31577,
+          "encoded_bytes": 31277,
+          "decoded_bytes": 56376,
+          "duration_ms": 31.29999999998836
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+          "transfer_bytes": 30866,
+          "encoded_bytes": 30566,
+          "decoded_bytes": 56336,
+          "duration_ms": 29.29999999998836
+        },
+        {
+          "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+          "transfer_bytes": 210185,
+          "encoded_bytes": 209885,
+          "decoded_bytes": 389724,
+          "duration_ms": 8.299999999988358
+        },
+        {
+          "path": "/assets/assets/images/kuku-brand.0fa95b6a5baeebedeb3ea32b6e31cb8e.png",
+          "transfer_bytes": 226369,
+          "encoded_bytes": 226069,
+          "decoded_bytes": 226069,
+          "duration_ms": 3
+        }
+      ],
+      "dom_nodes": 72,
+      "js_heap_used_bytes": 11497288,
+      "js_heap_total_bytes": 17539072,
+      "script_seconds": 1.115482,
+      "layout_seconds": 0.027602,
+      "responses": [
+        {
+          "path": "/login",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/register-sw.js",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/assets/images/kuku-brand.0fa95b6a5baeebedeb3ea32b6e31cb8e.png",
+          "disk_cache": false,
+          "service_worker": false
+        }
+      ]
+    },
+    {
+      "label": "repeat-1",
+      "runner_action_elapsed_ms": 644.933857,
+      "document_elapsed_ms": 640.1999999999825,
+      "document_paint_snapshot": {
+        "lcp": 612,
+        "cls": 0.00006463026091403712,
+        "longTasks": 3
+      },
+      "resources": [
+        {
+          "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+          "transfer_bytes": 0,
+          "encoded_bytes": 735449,
+          "decoded_bytes": 2904029,
+          "duration_ms": 0
+        },
+        {
+          "path": "/register-sw.js",
+          "transfer_bytes": 0,
+          "encoded_bytes": 180,
+          "decoded_bytes": 232,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 41387,
+          "decoded_bytes": 72472,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 41518,
+          "decoded_bytes": 72504,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 30933,
+          "decoded_bytes": 56344,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 31277,
+          "decoded_bytes": 56376,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 30566,
+          "decoded_bytes": 56336,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 209885,
+          "decoded_bytes": 389724,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/assets/images/kuku-brand.0fa95b6a5baeebedeb3ea32b6e31cb8e.png",
+          "transfer_bytes": 0,
+          "encoded_bytes": 226069,
+          "decoded_bytes": 226069,
+          "duration_ms": 0
+        }
+      ],
+      "dom_nodes": 72,
+      "js_heap_used_bytes": 16922624,
+      "js_heap_total_bytes": 24293376,
+      "script_seconds": 1.440129,
+      "layout_seconds": 0.042291,
+      "responses": [
+        {
+          "path": "/login",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/register-sw.js",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/assets/images/kuku-brand.0fa95b6a5baeebedeb3ea32b6e31cb8e.png",
+          "disk_cache": false,
+          "service_worker": false
+        }
+      ]
+    },
+    {
+      "label": "fresh-2",
+      "runner_action_elapsed_ms": 1423.01858,
+      "document_elapsed_ms": 1413.6000000000058,
+      "document_paint_snapshot": {
+        "lcp": 1328,
+        "cls": 0.009543303246696028,
+        "longTasks": 3
+      },
+      "resources": [
+        {
+          "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+          "transfer_bytes": 735749,
+          "encoded_bytes": 735449,
+          "decoded_bytes": 2904029,
+          "duration_ms": 24.39999999999418
+        },
+        {
+          "path": "/register-sw.js",
+          "transfer_bytes": 480,
+          "encoded_bytes": 180,
+          "decoded_bytes": 232,
+          "duration_ms": 2.8999999999941792
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+          "transfer_bytes": 41687,
+          "encoded_bytes": 41387,
+          "decoded_bytes": 72472,
+          "duration_ms": 32.80000000001746
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+          "transfer_bytes": 41818,
+          "encoded_bytes": 41518,
+          "decoded_bytes": 72504,
+          "duration_ms": 30.10000000000582
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+          "transfer_bytes": 31233,
+          "encoded_bytes": 30933,
+          "decoded_bytes": 56344,
+          "duration_ms": 30.199999999982538
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+          "transfer_bytes": 31577,
+          "encoded_bytes": 31277,
+          "decoded_bytes": 56376,
+          "duration_ms": 28.10000000000582
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+          "transfer_bytes": 30866,
+          "encoded_bytes": 30566,
+          "decoded_bytes": 56336,
+          "duration_ms": 26.79999999998836
+        },
+        {
+          "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+          "transfer_bytes": 210185,
+          "encoded_bytes": 209885,
+          "decoded_bytes": 389724,
+          "duration_ms": 8.699999999982538
+        },
+        {
+          "path": "/assets/assets/images/kuku-brand.0fa95b6a5baeebedeb3ea32b6e31cb8e.png",
+          "transfer_bytes": 226369,
+          "encoded_bytes": 226069,
+          "decoded_bytes": 226069,
+          "duration_ms": 2.5
+        }
+      ],
+      "dom_nodes": 72,
+      "js_heap_used_bytes": 11513676,
+      "js_heap_total_bytes": 17539072,
+      "script_seconds": 1.099238,
+      "layout_seconds": 0.029297,
+      "responses": [
+        {
+          "path": "/login",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/register-sw.js",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/assets/images/kuku-brand.0fa95b6a5baeebedeb3ea32b6e31cb8e.png",
+          "disk_cache": false,
+          "service_worker": false
+        }
+      ]
+    },
+    {
+      "label": "repeat-2",
+      "runner_action_elapsed_ms": 640.8506479999996,
+      "document_elapsed_ms": 636.2000000000116,
+      "document_paint_snapshot": {
+        "lcp": 612,
+        "cls": 0.00006463026091403712,
+        "longTasks": 3
+      },
+      "resources": [
+        {
+          "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+          "transfer_bytes": 0,
+          "encoded_bytes": 735449,
+          "decoded_bytes": 2904029,
+          "duration_ms": 0
+        },
+        {
+          "path": "/register-sw.js",
+          "transfer_bytes": 0,
+          "encoded_bytes": 180,
+          "decoded_bytes": 232,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 41387,
+          "decoded_bytes": 72472,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 41518,
+          "decoded_bytes": 72504,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 30933,
+          "decoded_bytes": 56344,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 31277,
+          "decoded_bytes": 56376,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 30566,
+          "decoded_bytes": 56336,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+          "transfer_bytes": 0,
+          "encoded_bytes": 209885,
+          "decoded_bytes": 389724,
+          "duration_ms": 0
+        },
+        {
+          "path": "/assets/assets/images/kuku-brand.0fa95b6a5baeebedeb3ea32b6e31cb8e.png",
+          "transfer_bytes": 0,
+          "encoded_bytes": 226069,
+          "decoded_bytes": 226069,
+          "duration_ms": 0
+        }
+      ],
+      "dom_nodes": 72,
+      "js_heap_used_bytes": 16897612,
+      "js_heap_total_bytes": 24293376,
+      "script_seconds": 1.427609,
+      "layout_seconds": 0.046781,
+      "responses": [
+        {
+          "path": "/login",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/register-sw.js",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+          "disk_cache": false,
+          "service_worker": false
+        },
+        {
+          "path": "/assets/assets/images/kuku-brand.0fa95b6a5baeebedeb3ea32b6e31cb8e.png",
+          "disk_cache": false,
+          "service_worker": false
+        }
+      ]
+    }
+  ],
+  "checks": [
+    "Fresh and repeat sign-in make zero API requests",
+    "Saved profile shell paints before held refresh, without private operations",
+    "Bounded initial thumbnails, distinct full preview only on open, distant thumbnail loading on scroll",
+    "No real accounts, outgoing business mutations or external browser requests"
+  ],
+  "limitations": [
+    "Three samples are not p75/p95 or real-user data.",
+    "Compressed static fixture server is not Vercel CDN.",
+    "No network latency shaping; font/API timings are fixture-controlled.",
+    "HTTP fallback fixture does not measure real realtime delivery.",
+    "Heap snapshots are not total memory, leak proof or Android memory.",
+    "Runner action durations include automation/CDP overhead; document elapsed and paint snapshots are not action durations.",
+    "Paint snapshots stop at collection time and are not complete CWV windows.",
+    "Service workers blocked; no offline cache claims."
+  ],
+  "cached_shell": {
+    "label": "saved-profile-before-server-proof",
+    "runner_action_elapsed_ms": 1422.3553970000003,
+    "document_elapsed_ms": 1417.5999999999767,
+    "document_paint_snapshot": {
+      "lcp": 1252,
+      "cls": 0.15179402517624932,
+      "longTasks": 3
+    },
+    "resources": [
+      {
+        "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+        "transfer_bytes": 735749,
+        "encoded_bytes": 735449,
+        "decoded_bytes": 2904029,
+        "duration_ms": 20.5
+      },
+      {
+        "path": "/register-sw.js",
+        "transfer_bytes": 480,
+        "encoded_bytes": 180,
+        "decoded_bytes": 232,
+        "duration_ms": 4.099999999976717
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+        "transfer_bytes": 41687,
+        "encoded_bytes": 41387,
+        "decoded_bytes": 72472,
+        "duration_ms": 33.80000000001746
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+        "transfer_bytes": 41818,
+        "encoded_bytes": 41518,
+        "decoded_bytes": 72504,
+        "duration_ms": 31.29999999998836
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+        "transfer_bytes": 31233,
+        "encoded_bytes": 30933,
+        "decoded_bytes": 56344,
+        "duration_ms": 30.70000000001164
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+        "transfer_bytes": 31577,
+        "encoded_bytes": 31277,
+        "decoded_bytes": 56376,
+        "duration_ms": 29
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+        "transfer_bytes": 30866,
+        "encoded_bytes": 30566,
+        "decoded_bytes": 56336,
+        "duration_ms": 27.300000000017462
+      },
+      {
+        "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "transfer_bytes": 210185,
+        "encoded_bytes": 209885,
+        "decoded_bytes": 389724,
+        "duration_ms": 7.7999999999883585
+      }
+    ],
+    "dom_nodes": 87,
+    "js_heap_used_bytes": 12085316,
+    "js_heap_total_bytes": 18587648,
+    "script_seconds": 1.144873,
+    "layout_seconds": 0.029199,
+    "responses": [
+      {
+        "path": "/",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/register-sw.js",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "disk_cache": false,
+        "service_worker": false
+      }
+    ]
+  },
+  "chat": {
+    "label": "100-text-message-history",
+    "runner_action_elapsed_ms": 1207.0479889999988,
+    "document_elapsed_ms": 2707.7999999999884,
+    "document_paint_snapshot": {
+      "lcp": 1252,
+      "cls": 0.22288407256961423,
+      "longTasks": 13
+    },
+    "resources": [
+      {
+        "path": "/api/messages/sync",
+        "transfer_bytes": 338,
+        "encoded_bytes": 38,
+        "decoded_bytes": 38,
+        "duration_ms": 1.8000000000174623
+      },
+      {
+        "path": "/api/chats",
+        "transfer_bytes": 630,
+        "encoded_bytes": 330,
+        "decoded_bytes": 330,
+        "duration_ms": 5.600000000005821
+      },
+      {
+        "path": "/api/chats/perf-chat",
+        "transfer_bytes": 395,
+        "encoded_bytes": 95,
+        "decoded_bytes": 95,
+        "duration_ms": 1.6000000000058208
+      },
+      {
+        "path": "/api/chats/perf-chat/messages",
+        "transfer_bytes": 18081,
+        "encoded_bytes": 17781,
+        "decoded_bytes": 17781,
+        "duration_ms": 1.7000000000116415
+      },
+      {
+        "path": "/api/chats/perf-chat",
+        "transfer_bytes": 395,
+        "encoded_bytes": 95,
+        "decoded_bytes": 95,
+        "duration_ms": 1.2999999999883585
+      },
+      {
+        "path": "/api/chats/perf-chat/messages",
+        "transfer_bytes": 302,
+        "encoded_bytes": 2,
+        "decoded_bytes": 2,
+        "duration_ms": 1.3000000000174623
+      },
+      {
+        "path": "/api/auth/ws-ticket",
+        "transfer_bytes": 336,
+        "encoded_bytes": 36,
+        "decoded_bytes": 36,
+        "duration_ms": 2.3999999999941792
+      }
+    ],
+    "dom_nodes": 929,
+    "js_heap_used_bytes": 15858440,
+    "js_heap_total_bytes": 33792000,
+    "script_seconds": 2.099557,
+    "layout_seconds": 0.063414,
+    "responses": [
+      {
+        "path": "/api/messages/sync",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/chats",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/chats/perf-chat",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/chats/perf-chat/messages",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/chats/perf-chat",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/chats/perf-chat/messages",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/auth/ws-ticket",
+        "disk_cache": false,
+        "service_worker": false
+      }
+    ],
+    "rendered_action_rows": 100,
+    "after_scroll": {
+      "label": "history-scroll-top",
+      "runner_action_elapsed_ms": 154.94027900000037,
+      "document_elapsed_ms": 2870.6999999999825,
+      "document_paint_snapshot": {
+        "lcp": 1252,
+        "cls": 0.22288407256961423,
+        "longTasks": 13
+      },
+      "resources": [],
+      "dom_nodes": 906,
+      "js_heap_used_bytes": 17330924,
+      "js_heap_total_bytes": 34091008,
+      "script_seconds": 2.131342,
+      "layout_seconds": 0.063995,
+      "responses": []
+    }
+  },
+  "files_initial": {
+    "label": "80-image-file-list",
+    "runner_action_elapsed_ms": 1478.3137389999993,
+    "document_elapsed_ms": 1470.3000000000175,
+    "document_paint_snapshot": {
+      "lcp": 476,
+      "cls": 0.17047650806101872,
+      "longTasks": 5
+    },
+    "resources": [
+      {
+        "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+        "transfer_bytes": 0,
+        "encoded_bytes": 735449,
+        "decoded_bytes": 2904029,
+        "duration_ms": 0
+      },
+      {
+        "path": "/register-sw.js",
+        "transfer_bytes": 0,
+        "encoded_bytes": 180,
+        "decoded_bytes": 232,
+        "duration_ms": 0
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+        "transfer_bytes": 0,
+        "encoded_bytes": 41387,
+        "decoded_bytes": 72472,
+        "duration_ms": 0
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+        "transfer_bytes": 0,
+        "encoded_bytes": 41518,
+        "decoded_bytes": 72504,
+        "duration_ms": 0
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+        "transfer_bytes": 0,
+        "encoded_bytes": 30933,
+        "decoded_bytes": 56344,
+        "duration_ms": 0
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+        "transfer_bytes": 0,
+        "encoded_bytes": 31277,
+        "decoded_bytes": 56376,
+        "duration_ms": 0
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+        "transfer_bytes": 0,
+        "encoded_bytes": 30566,
+        "decoded_bytes": 56336,
+        "duration_ms": 0
+      },
+      {
+        "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "transfer_bytes": 0,
+        "encoded_bytes": 209885,
+        "decoded_bytes": 389724,
+        "duration_ms": 0
+      },
+      {
+        "path": "/api/auth/refresh",
+        "transfer_bytes": 421,
+        "encoded_bytes": 121,
+        "decoded_bytes": 121,
+        "duration_ms": 2.1000000000058208
+      },
+      {
+        "path": "/api/files/status",
+        "transfer_bytes": 391,
+        "encoded_bytes": 91,
+        "decoded_bytes": 91,
+        "duration_ms": 3.8999999999941792
+      },
+      {
+        "path": "/api/files",
+        "transfer_bytes": 20671,
+        "encoded_bytes": 20371,
+        "decoded_bytes": 20371,
+        "duration_ms": 3.3999999999941792
+      },
+      {
+        "path": "/api/space-sessions",
+        "transfer_bytes": 302,
+        "encoded_bytes": 2,
+        "decoded_bytes": 2,
+        "duration_ms": 4.300000000017462
+      },
+      {
+        "path": "/api/auth/me",
+        "transfer_bytes": 381,
+        "encoded_bytes": 81,
+        "decoded_bytes": 81,
+        "duration_ms": 3.8999999999941792
+      },
+      {
+        "path": "/api/auth/ws-ticket",
+        "transfer_bytes": 336,
+        "encoded_bytes": 36,
+        "decoded_bytes": 36,
+        "duration_ms": 1.6000000000058208
+      },
+      {
+        "path": "/api/messages/sync",
+        "transfer_bytes": 338,
+        "encoded_bytes": 38,
+        "decoded_bytes": 38,
+        "duration_ms": 2.2999999999883585
+      },
+      {
+        "path": "/api/attachments/perf-asset-0/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 2
+      },
+      {
+        "path": "/api/attachments/perf-asset-1/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 2
+      },
+      {
+        "path": "/api/attachments/perf-asset-2/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 2.7999999999883585
+      },
+      {
+        "path": "/api/attachments/perf-asset-3/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 2.900000000023283
+      },
+      {
+        "path": "/api/attachments/perf-asset-4/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 3
+      },
+      {
+        "path": "/api/chats",
+        "transfer_bytes": 630,
+        "encoded_bytes": 330,
+        "decoded_bytes": 330,
+        "duration_ms": 1.099999999976717
+      }
+    ],
+    "dom_nodes": 294,
+    "js_heap_used_bytes": 28548612,
+    "js_heap_total_bytes": 38260736,
+    "script_seconds": 2.762922,
+    "layout_seconds": 0.091464,
+    "responses": [
+      {
+        "path": "/files",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/_expo/static/js/web/entry-acb301f76e1e32cb9d4e1a614a0b63c7.js",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/register-sw.js",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.d484e2f727663ddd31e7fcebc7cc25ea.ttf",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.e995588822b0867215ce518a9a79175b.ttf",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.74f9bb7405caec741a24db735b2c5733.ttf",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.7da0c1626a365ce0164d2ae4ebb0573b.ttf",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/assets/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.b68921520b1d885dd7f854427cde3e82.ttf",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/auth/refresh",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/files/status",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/files",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/space-sessions",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/auth/me",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/auth/ws-ticket",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/messages/sync",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-0/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-1/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-2/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-3/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-4/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/chats",
+        "disk_cache": false,
+        "service_worker": false
+      }
+    ],
+    "previews": [
+      {
+        "id": "perf-asset-0",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-1",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-2",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-3",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-4",
+        "size": "thumb",
+        "format": "webp"
+      }
+    ],
+    "mounted_images": 19
+  },
+  "files_after_navigation": {
+    "label": "three-person-recent-cycles",
+    "runner_action_elapsed_ms": 1666.1609790000002,
+    "document_elapsed_ms": 3353.4000000000233,
+    "document_paint_snapshot": {
+      "lcp": 476,
+      "cls": 0.17047650806101872,
+      "longTasks": 12
+    },
+    "resources": [
+      {
+        "path": "/api/attachments/perf-asset-0/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.7999999999883585
+      },
+      {
+        "path": "/api/attachments/perf-asset-1/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.7000000000116415
+      },
+      {
+        "path": "/api/attachments/perf-asset-2/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.6000000000058208
+      },
+      {
+        "path": "/api/auth/ws-ticket",
+        "transfer_bytes": 336,
+        "encoded_bytes": 36,
+        "decoded_bytes": 36,
+        "duration_ms": 2
+      },
+      {
+        "path": "/api/attachments/perf-asset-0/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.3999999999941792
+      },
+      {
+        "path": "/api/attachments/perf-asset-1/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.8999999999941792
+      },
+      {
+        "path": "/api/attachments/perf-asset-2/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.5
+      },
+      {
+        "path": "/api/attachments/perf-asset-3/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.3999999999941792
+      },
+      {
+        "path": "/api/attachments/perf-asset-4/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.2000000000116415
+      },
+      {
+        "path": "/api/attachments/perf-asset-0/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 2.7999999999883585
+      },
+      {
+        "path": "/api/attachments/perf-asset-1/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 4.2999999999883585
+      },
+      {
+        "path": "/api/attachments/perf-asset-2/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 4.2000000000116415
+      },
+      {
+        "path": "/api/attachments/perf-asset-0/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.3999999999941792
+      },
+      {
+        "path": "/api/attachments/perf-asset-1/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.1999999999825377
+      },
+      {
+        "path": "/api/attachments/perf-asset-2/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.3000000000174623
+      },
+      {
+        "path": "/api/attachments/perf-asset-3/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.2999999999883585
+      },
+      {
+        "path": "/api/attachments/perf-asset-4/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1
+      },
+      {
+        "path": "/api/attachments/perf-asset-0/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 2.3999999999941792
+      },
+      {
+        "path": "/api/attachments/perf-asset-1/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.7999999999883585
+      },
+      {
+        "path": "/api/attachments/perf-asset-2/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 2.8999999999941792
+      },
+      {
+        "path": "/api/attachments/perf-asset-0/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.5
+      },
+      {
+        "path": "/api/attachments/perf-asset-1/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 2.3999999999941792
+      },
+      {
+        "path": "/api/attachments/perf-asset-2/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 3.7000000000116415
+      },
+      {
+        "path": "/api/attachments/perf-asset-3/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 3.6999999999825377
+      },
+      {
+        "path": "/api/attachments/perf-asset-4/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 3.5
+      }
+    ],
+    "dom_nodes": 294,
+    "js_heap_used_bytes": 13946312,
+    "js_heap_total_bytes": 55848960,
+    "script_seconds": 3.641768,
+    "layout_seconds": 0.121979,
+    "responses": [
+      {
+        "path": "/api/attachments/perf-asset-0/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-1/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-2/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/auth/ws-ticket",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-0/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-1/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-2/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-3/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-4/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-0/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-1/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-2/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-0/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-1/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-2/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-3/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-4/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-0/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-1/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-2/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-0/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-1/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-2/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-3/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-4/preview",
+        "disk_cache": false,
+        "service_worker": false
+      }
+    ],
+    "previews": [
+      {
+        "id": "perf-asset-0",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-1",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-2",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-3",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-4",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-0",
+        "size": "full",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-0",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-1",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-2",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-0",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-1",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-2",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-3",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-4",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-0",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-1",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-2",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-0",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-1",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-2",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-3",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-4",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-0",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-1",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-2",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-0",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-1",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-2",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-3",
+        "size": "thumb",
+        "format": "webp"
+      },
+      {
+        "id": "perf-asset-4",
+        "size": "thumb",
+        "format": "webp"
+      }
+    ]
+  },
+  "files_scrolled": {
+    "label": "distant-image-scroll",
+    "runner_action_elapsed_ms": 679.4418949999999,
+    "document_elapsed_ms": 4037.7000000000116,
+    "document_paint_snapshot": {
+      "lcp": 476,
+      "cls": 0.17047650806101872,
+      "longTasks": 15
+    },
+    "resources": [
+      {
+        "path": "/api/attachments/perf-asset-15/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 1.5
+      },
+      {
+        "path": "/api/attachments/perf-asset-16/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 3
+      },
+      {
+        "path": "/api/attachments/perf-asset-17/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 4.7000000000116415
+      },
+      {
+        "path": "/api/attachments/perf-asset-18/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 4
+      },
+      {
+        "path": "/api/attachments/perf-asset-19/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 3.5
+      },
+      {
+        "path": "/api/attachments/perf-asset-20/preview",
+        "transfer_bytes": 1202,
+        "encoded_bytes": 902,
+        "decoded_bytes": 902,
+        "duration_ms": 3.400000000023283
+      }
+    ],
+    "dom_nodes": 447,
+    "js_heap_used_bytes": 20237940,
+    "js_heap_total_bytes": 55848960,
+    "script_seconds": 3.912654,
+    "layout_seconds": 0.136185,
+    "responses": [
+      {
+        "path": "/api/attachments/perf-asset-15/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-16/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-17/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-18/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-19/preview",
+        "disk_cache": false,
+        "service_worker": false
+      },
+      {
+        "path": "/api/attachments/perf-asset-20/preview",
+        "disk_cache": false,
+        "service_worker": false
+      }
+    ],
+    "new_thumbnail_ids": [
+      "perf-asset-15",
+      "perf-asset-16",
+      "perf-asset-17",
+      "perf-asset-18",
+      "perf-asset-19",
+      "perf-asset-20"
+    ]
+  },
+  "checked_at": "2026-11-04T22:33:57.484Z",
+  "browser": "141.0.7390.37",
+  "api_methods": {
+    "POST": 6,
+    "GET": 50
+  },
+  "summary": {
+    "js_raw_bytes": 3651173,
+    "js_gzip_bytes": 925951,
+    "font_raw_bytes": 6563948,
+    "initial_thumbnails": 5,
+    "total_preview_requests_after_cycles": 36
+  }
+}

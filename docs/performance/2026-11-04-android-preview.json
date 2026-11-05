@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "verified_at": "2026-11-04T23:02:35.666Z",
+  "archive_bytes": 41231549,
+  "apk_bytes": 41221514,
+  "apk_sha256": "ad39dc0deec73523d9e867a78075a73f4a498550dab998531027c9f55d318a7d",
+  "provenance": {
+    "source_sha": "331dc40900804a5198e81509965571c6ddd2bc32",
+    "workflow_run_id": "41927867023",
+    "workflow_run_attempt": "1",
+    "package": "com.leonartist7.kuku.preview",
+    "version": "1.0.0-preview.58.1",
+    "version_code": 1000058,
+    "api_origin": "https://kuku-api-staging.onrender.com",
+    "calls_enabled": false,
+    "native_push_enabled": false,
+    "signing": "PUBLIC ANDROID DEBUG TEST KEY — NOT PRODUCTION SIGNING",
+    "architecture": "arm64-v8a",
+    "embedded_hermes_bytes": 3994376,
+    "device_testing": "NOT TESTED"
+  },
+  "artifact": {
+    "id": 13370108686,
+    "url": "https://github.com/leonartist7/KUKU/actions/runs/41927867023/artifacts/13370108686",
+    "zip_sha256": "8a2ef4324d4356d7f76425182539b3888f426f5955522f0e0813635c589ad2de",
+    "expires_at": "2026-11-11T23:00:31Z"
+  },
+  "checks": {
+    "cloud_job": 126918510209,
+    "result": "success",
+    "build_success": "11m59s",
+    "apk_hash_matches_manifest": true,
+    "archive_digest_verified": true,
+    "physical_device": "NOT TESTED"
+  },
+  "limitations": [
+    "PUBLIC TEST signing; not production signing",
+    "Calls and native push disabled",
+    "No physical microphone, background, notification or call-quality acceptance"
+  ]
+}

@@ -1,0 +1,354 @@
+const TEST_PHOTO="/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwCxRRRXIcZ//9k=";
+// Synthetic browser acceptance: no real accounts, invitation codes or outgoing email.
+const {chromium}=require("playwright");
+const http=require("node:http"),fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict");
+const root=path.resolve("dist"),shots=path.resolve("test-results/onboarding");
+fs.mkdirSync(shots,{recursive:true});
+const server=http.createServer((req,res)=>{
+  const pathname=decodeURIComponent(new URL(req.url,"http://localhost").pathname);
+  let file=path.resolve(root,"."+pathname);
+  if(!file.startsWith(root+path.sep)&&file!==root){res.writeHead(403);return res.end();}
+  if(!fs.existsSync(file)||fs.statSync(file).isDirectory())file=path.join(root,"index.html");
+  const type={".html":"text/html",".js":"application/javascript",".json":"application/json",".webp":"image/webp",".txt":"text/plain",".png":"image/png",".woff":"font/woff",".ttf":"font/ttf",".css":"text/css"}[path.extname(file)]||"application/octet-stream";
+  res.setHeader("content-type",type);fs.createReadStream(file).pipe(res);
+});
+(async()=>{
+  await new Promise(resolve=>server.listen(4173,"127.0.0.1",resolve));
+  const browser=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream"]});
+  const origin="http://127.0.0.1:4173",errors=[];
+  async function scenario(width,height){
+    const context=await browser.newContext({viewport:{width,height},reducedMotion:"reduce",timezoneId:"UTC",permissions:["clipboard-read","clipboard-write","microphone"]});
+    const page=await context.newPage();let voiceBytes=null;let user=null,sends=0,profiles=0,uploadedBytes=null,shared=null,inviteEmail="unset",photoSaves=0,uploadAttempts=0,statusChecks=0,fullPreviews=0;
+    const previewFormats=[];let attachmentUploads=0,history=null,refreshCalls=0;
+    const testWebp=await page.evaluate(base64=>new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>{const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);resolve(canvas.toDataURL('image/webp',0.75));};image.onerror=reject;image.src='data:image/jpeg;base64,'+base64;}),TEST_PHOTO);
+    assert.ok(testWebp.startsWith('data:image/webp;base64,'));
+    const message=()=>({...shared,id:"synthetic-message",file_name:shared?.attachment_id==="synthetic-photo"?"family-photo.jpg":"family.txt",file_size:18,sender_id:"qa-user",created_at:new Date().toISOString()});
+    page.on("pageerror",e=>errors.push(String(e)));
+    await page.clock.setFixedTime(new Date("2026-10-29T12:00:00Z"));
+    await page.route("**/api/**",async route=>{
+      const req=route.request(),endpoint=new URL(req.url()).pathname,body=req.headers()["content-type"]?.includes("application/json") ? req.postDataJSON()||{} : {};
+      if(endpoint==="/api/chats/synthetic-chat/attachments"&&req.method()==="POST")attachmentUploads++;
+      const respond=(status,data)=>route.fulfill({status,contentType:"application/json",headers:{"cache-control":"no-store","access-control-allow-origin":origin,"access-control-allow-headers":"authorization,content-type","access-control-allow-methods":"POST,GET,OPTIONS"},body:JSON.stringify(data)});
+      if(endpoint==="/api/auth/register"){user={id:"qa-user",email:body.email,name:body.name,bio:"",email_verified:false,onboarding_complete:false};return respond(200,{token:"synthetic-test-access",user});}
+      if(endpoint==="/api/auth/refresh"){refreshCalls++;return user?respond(200,{token:"synthetic-test-access",user}):respond(401,{detail:"Sign in again"});}
+      if(endpoint==="/api/auth/me")return user?respond(200,user):respond(401,{detail:"Sign in again"});
+      if(endpoint==="/api/auth/verification"){sends++;return respond(200,{ok:true});}
+      if(endpoint==="/api/auth/verify"){if(body.code!=="synthetic-email-code")return respond(400,{detail:"Invalid or expired code"});user.email_verified=true;return respond(200,{ok:true});}
+      if(endpoint==="/api/auth/profile"){profiles++;user={...user,name:body.name,bio:body.bio,onboarding_complete:true};return respond(200,user);}
+      if(endpoint==="/api/auth/photo"){photoSaves++;assert.ok(body.image_base64===null||body.image_base64.length>20);user={...user,avatar:body.image_base64===null?null:"data:image/jpeg;base64,"+TEST_PHOTO};return respond(200,user);}
+      if(endpoint==="/api/invites"){inviteEmail=body.email;return respond(200,{invite_url:origin+"/login#invite="+"synthetic-link-invitation-0123456789",invite_token:"synthetic-link-invitation-0123456789"});}
+      if(endpoint==="/api/files/status")return respond(200,{available:++statusChecks>1,used_bytes:0,remaining_bytes:500*1024*1024,max_file_bytes:25*1024*1024});
+      if(endpoint==="/api/users")return respond(200,[{id:"sister",name:"Sam",email_verified:true}]);
+      if(endpoint==="/api/chats"&&req.method()==="POST")return respond(200,{id:"synthetic-chat"});
+      if(endpoint==="/api/chats/synthetic-chat/attachments" && new URL(req.url()).searchParams.get("kind")==="voice"){voiceBytes=req.postDataBuffer();return respond(200,{id:"synthetic-voice",file_name:"voice-memo.webm",file_size:voiceBytes.length});}
+      if(endpoint==="/api/chats/synthetic-chat/attachments" && new URL(req.url()).searchParams.get("name")==="family-photo.jpg" && req.method()==="POST"){uploadedBytes=req.postDataBuffer();return respond(200,{id:"synthetic-photo",file_name:"family-photo.jpg",file_size:uploadedBytes.length});}
+      if(endpoint==="/api/attachments/synthetic-photo/preview"){const params=new URL(req.url()).searchParams;previewFormats.push(params.get('format'));if(params.get("size")==="full" && ++fullPreviews===1)return respond(503,{detail:"Please retry"});return respond(200,{image:params.get('format')==='webp'?testWebp:"data:image/jpeg;base64,"+TEST_PHOTO,width:16,height:16});}
+      if(endpoint==="/api/attachments/synthetic-photo/download")return respond(200,{url:"https://downloads.example.test/family-photo.jpg"});
+      if(endpoint==="/api/files")return respond(200,shared?.attachment_id==="synthetic-photo"?[{...message(),sender:user}]:[]);
+      if(endpoint==="/api/attachments/synthetic-voice/download")return respond(200,{url:"https://voice-downloads.example.test/memo.webm",media_type:"audio/webm"});
+      if(endpoint==="/api/chats/synthetic-chat/attachments"){if(req.method()==="OPTIONS")return respond(200,{});uploadedBytes=req.postDataBuffer();uploadAttempts++;if(uploadAttempts===1)return respond(503,{detail:"Your file couldn’t be saved. Please try again."});return respond(200,{id:"synthetic-attachment",file_name:"family.txt",file_size:uploadedBytes.length});}
+      if(endpoint==="/api/attachments/synthetic-attachment/download")return respond(200,{url:"https://downloads.example.test/family.txt"});
+      if(endpoint==="/api/chats/synthetic-chat/messages/resolve"&&req.method()==="POST"){const rows=history||(shared?[message()]:[]);return respond(200,rows.filter(item=>(body.message_ids||[]).includes(item.id)));}
+      if(endpoint==="/api/chats/synthetic-chat/messages"&&req.method()==="GET"){if(history){const after=new URL(req.url()).searchParams.get('after'),index=history.findIndex(m=>m.id===after);return respond(200,after&&index>=0?history.slice(index+1):history);}return respond(200,shared?[message()]:[]);}
+      if(endpoint==="/api/chats/synthetic-chat/messages"&&req.method()==="POST"){shared=body;return respond(200,{...body,id:"synthetic-message",sender_id:"qa-user",created_at:new Date().toISOString()});}
+      if(endpoint==="/api/chats/synthetic-chat")return respond(200,{id:"synthetic-chat",other:{id:"sister",name:"Sam"}});
+      if(endpoint==="/api/auth/logout"){user=null;return respond(200,{ok:true});}
+      return respond(200,[]);
+    });
+    await page.goto(origin+(width===320?"/":"/login"));await page.getByTestId("auth-switch").waitFor();
+    assert.equal(refreshCalls,0,"A fresh browser must reach sign-in without an API session request");
+    assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),width,"No horizontal overflow at "+width);
+    await page.screenshot({path:path.join(shots,"login-"+width+".png"),fullPage:true});
+    await page.route("https://voice-downloads.example.test/memo.webm",route=>route.fulfill({status:200,contentType:"audio/webm",headers:{"cache-control":"no-store","access-control-allow-origin":origin},body:voiceBytes}));
+    return {page,context,state:()=>({user,sends,profiles,uploadedBytes,shared,inviteEmail,photoSaves,voiceBytes,previewFormats,attachmentUploads}),receiveAsSister:async()=>{user={...user,id:"sister",name:"Sam",email:"sister-qa@example.com"};/* Fixture setup for a separately saved recipient account; never adopt a mismatched cookie. */await page.evaluate(profile=>localStorage.setItem("kuku_profile",JSON.stringify(profile)),user);},setHistory:items=>{history=items;}};
+  }
+  try {
+    const {page,context,state,receiveAsSister,setHistory}=await scenario(390,844);
+    await page.getByTestId("auth-switch").click();
+    await page.getByTestId("auth-submit").click();
+    await page.getByRole("alert").filter({hasText:"complete email address"}).waitFor();
+    await page.getByTestId("email-input").fill("onboarding-qa@example.com");
+    await page.getByTestId("invite-input").fill("synthetic-invitation-code-for-browser-tests");
+    await page.getByTestId("auth-submit").click();
+    await page.getByTestId("name-input").fill("Alex");
+    await page.getByTestId("password-input").fill("a long synthetic passphrase");
+    await page.getByRole("button",{name:"Show password",exact:true}).click();
+    assert.equal(await page.getByTestId("password-input").evaluate(input=>input.type),"text");
+    await page.screenshot({path:path.join(shots,"create-account-390.png"),fullPage:true});
+    await page.getByTestId("auth-submit").click();
+    await page.getByTestId("send-verification").waitFor();
+    assert.equal(state().sends,0,"Opening verification must not send email as an effect");
+    await page.reload();await page.getByTestId("send-verification").waitFor();
+    await page.getByTestId("send-verification").click();
+    await page.getByText("Code sent. Check your inbox or spam folder.",{exact:false}).waitFor();
+    assert.equal(state().sends,1);
+    await page.getByTestId("verification-code").fill("incorrect-email-code");
+    await page.getByTestId("verify-submit").click();
+    await page.getByRole("alert").filter({hasText:"Invalid or expired code"}).waitFor();
+    await page.screenshot({path:path.join(shots,"verification-error-390.png"),fullPage:true});
+    await page.getByTestId("verification-code").fill("synthetic-email-code");
+    await page.getByTestId("verify-submit").click();
+    await page.getByTestId("profile-name").waitFor();
+    await page.getByTestId("profile-name").fill("Alex Rivera");
+    await page.getByTestId("profile-bio").fill("Coffee, sketches, and little everyday stories.");
+    await page.getByRole("radio",{name:"Sage appearance"}).click();
+    await page.screenshot({path:path.join(shots,"profile-390.png"),fullPage:true});
+    await page.getByTestId("profile-submit").click();
+    try {await page.getByRole("button",{name:"Invite someone I care about",exact:true}).waitFor();}
+    catch(e){console.log("Onboarding failure context:",JSON.stringify({url:page.url(),state:state(),body:(await page.locator("body").innerText()).slice(-2500)}));throw e;}
+    assert.equal(state().profiles,1);
+    assert.equal(state().user.onboarding_complete,true);
+    await page.screenshot({path:path.join(shots,"welcome-390.png"),fullPage:true});
+    await page.reload();await page.getByTestId("profile-button").waitFor();
+    await page.getByTestId("profile-button").click();
+    await page.getByTestId("settings-profile").click();
+    await page.getByTestId("profile-name").waitFor();
+    assert.equal(await page.getByTestId("profile-name").inputValue(),"Alex Rivera");
+    assert.equal(await page.getByTestId("profile-bio").inputValue(),"Coffee, sketches, and little everyday stories.");
+    // Photo picker sends image content, saves without completing profile again, and supports removal.
+    const chooser=page.waitForEvent("filechooser");
+    await page.getByRole("button",{name:"Add profile photo",exact:true}).click();
+    await (await chooser).setFiles({name:"portrait.jpg",mimeType:"image/jpeg",buffer:Buffer.from(TEST_PHOTO,"base64")});
+    await page.getByRole("alert").filter({hasText:"Photo saved"}).waitFor();
+    assert.equal(state().photoSaves,1);
+    await page.reload();await page.getByRole("button",{name:"Change profile photo",exact:true}).waitFor();
+    await page.getByRole("button",{name:"Remove profile photo",exact:true}).click();
+    await page.getByRole("alert").filter({hasText:"Photo removed"}).waitFor();
+    assert.equal(state().photoSaves,2);
+    await page.goto(origin+"/appearance");
+    await page.getByRole("radio",{name:"Automatic",exact:true}).waitFor();
+    await page.clock.install({time:new Date("2026-10-29T18:59:58Z")});
+    // The clock jumps forward from noon while an efficient minute timer is
+    // already pending. Resume the app so it reschedules the exact 19:00 edge.
+    await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
+    await page.clock.runFor(1000);
+    await page.getByText("Active now: Sage.",{exact:false}).waitFor();
+    await page.clock.runFor(1100);
+    await page.getByText("Active now: Evening.",{exact:false}).waitFor();
+    await page.getByRole("radio",{name:"Night palettes",exact:true}).click();
+    await page.getByRole("radio",{name:"Forest palette",exact:true}).click();
+    await page.getByText("Active now: Forest.",{exact:false}).waitFor();
+    await page.getByRole("radio",{name:"Little garden decoration",exact:true}).click();
+    await page.screenshot({path:path.join(shots,"appearance-night-390.png"),fullPage:true});
+    await page.clock.setFixedTime(new Date("2026-10-30T07:00:00Z"));
+    // Model returning to the app at the 07:00 edge after the overnight jump.
+    await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
+    await page.clock.runFor(1000);
+    await page.getByText("Active now: Sage.",{exact:false}).waitFor();
+    await page.getByLabel("Dark starts",{exact:true}).fill("25:00");
+    await page.getByRole("button",{name:"Save schedule",exact:true}).click();
+    await page.getByRole("alert").filter({hasText:"Choose two different times"}).waitFor();
+    await page.getByLabel("Dark starts",{exact:true}).fill("20:00");
+    await page.getByRole("button",{name:"Save schedule",exact:true}).click();
+    await page.getByRole("alert").filter({hasText:"Schedule saved"}).waitFor();
+    await page.reload();await page.getByLabel("Dark starts",{exact:true}).waitFor();
+    assert.equal(await page.getByLabel("Dark starts",{exact:true}).inputValue(),"20:00");
+    await page.getByRole("radio",{name:"Always dark",exact:true}).click();
+    await page.getByText("Active now: Forest.",{exact:false}).waitFor();
+    await page.clock.resume();
+    await page.goto(origin+"/notifications");
+    await page.getByTestId("notification-sound-settings").waitFor();
+    await page.getByRole("radio",{name:"Raindrop message sound",exact:true}).click();
+    await page.getByRole("radio",{name:"Low message volume",exact:true}).click();
+    await page.getByRole("button",{name:"Preview Soft bell",exact:true}).click();
+    await page.getByRole("radio",{name:"Silent message sound",exact:true}).click();
+    await page.getByRole("alert").filter({hasText:"Silent mode saved"}).waitFor();
+    await page.reload();
+    await page.getByRole("radio",{name:"Silent message sound",exact:true}).waitFor();
+    await page.getByRole("radio",{name:"Silent message sound",exact:true,checked:true}).waitFor();
+    await page.getByRole("radio",{name:"Low message volume",exact:true,checked:true}).waitFor();
+    await page.screenshot({path:path.join(shots,"notification-sounds-390.png"),fullPage:true});
+    await page.goto(origin+"/invite");
+    await page.getByRole("button",{name:"Create invitation link",exact:true}).click();
+    await page.getByRole("button",{name:"Copy invitation link",exact:true}).click();
+    await page.getByRole("alert").filter({hasText:"Invitation link copied"}).waitFor();
+    assert.equal(state().inviteEmail,null);
+    const link=await page.evaluate(()=>navigator.clipboard.readText());
+    assert.ok(link.endsWith("#invite=synthetic-link-invitation-0123456789"));
+    await page.screenshot({path:path.join(shots,"invitation-390.png"),fullPage:true});
+    await page.goto(origin+"/files");
+    await page.getByText("File sharing is getting ready",{exact:true}).waitFor();
+    await page.getByRole("button",{name:"Check file sharing again",exact:true}).click();
+    await page.getByText("A little space to share",{exact:true}).waitFor();
+    await page.screenshot({path:path.join(shots,"files-ready-390.png"),fullPage:true});
+    await page.getByRole("button",{name:"Upload a file",exact:true}).click();
+    await page.getByTestId("contact-sister").click();
+    const filePicker=page.waitForEvent("filechooser");
+    await page.getByRole("button",{name:"Choose a file",exact:true}).click();
+    await (await filePicker).setFiles({name:"family.txt",mimeType:"text/plain",buffer:Buffer.from("A real family file.")});
+    await page.getByTestId("quick-send").click();
+    await page.getByRole("alert").filter({hasText:"Your file couldn’t be saved. Please try again."}).waitFor();
+    await page.getByText("family.txt",{exact:false}).waitFor();
+    await page.screenshot({path:path.join(shots,"file-retry-390.png"),fullPage:true});
+    await page.getByTestId("quick-send").click();
+    await page.waitForURL("**/chat/synthetic-chat");
+    await page.waitForTimeout(250);
+    assert.equal(state().uploadedBytes.toString(),"A real family file.");
+    assert.equal(state().shared.attachment_id,"synthetic-attachment");
+    assert.equal(state().shared.file_name,undefined,"No filename-only pretend upload");
+    await page.reload();
+    await page.route("https://downloads.example.test/**",route=>route.fulfill({status:200,contentType:"application/octet-stream",headers:{"content-disposition":"attachment; filename=family.txt","cache-control":"no-store"},body:"A real family file."}));
+    const downloading=page.waitForEvent("download");
+    await page.getByRole("button",{name:"Download family.txt",exact:true}).click();
+    const downloaded=await downloading;
+    assert.equal(downloaded.suggestedFilename(),"family.txt");
+    const chunks=[];for await(const chunk of await downloaded.createReadStream())chunks.push(chunk);
+    assert.equal(Buffer.concat(chunks).toString(),"A real family file.");
+    assert.ok(page.url().includes("/chat/synthetic-chat"),"Downloading must retain the conversation");
+    await page.getByTestId("mic-button").click();
+    await page.getByTestId("voice-record").click();
+    await page.getByTestId("voice-stop").waitFor();
+    await page.waitForTimeout(1300);
+    await page.getByTestId("voice-stop").click();
+    await page.getByTestId("voice-send").waitFor();
+    await page.screenshot({path:path.join(shots,"voice-preview-390.png"),fullPage:true});
+    await page.getByTestId("voice-send").click();
+    await page.waitForFunction(()=>!document.querySelector('[data-testid="voice-composer"]'));
+    await page.getByTestId("voice-play").waitFor();
+    await page.evaluate(()=>{window.qaAudio=[];const Original=window.Audio;window.Audio=function(...args){const audio=new Original(...args);window.qaAudio.push(audio);return audio;};});
+    await page.getByTestId("voice-play").click();
+    try {await page.waitForFunction(()=>window.qaAudio.some(audio=>audio.currentTime>0 && !audio.error),null,{timeout:10000});}
+    catch(error){console.log("Voice playback diagnostics:",await page.evaluate(()=>({audio:window.qaAudio.map(a=>({readyState:a.readyState,currentTime:a.currentTime,paused:a.paused,error:a.error?.message})),screen:document.body.innerText})));await page.screenshot({path:path.join(shots,"voice-failure-390.png"),fullPage:true});throw error;}
+    assert.ok(state().voiceBytes.length>50,"Recorder must upload actual encoded audio bytes");
+    assert.equal(state().shared.type,"voice");
+    assert.equal(state().shared.attachment_id,"synthetic-voice");
+    await page.screenshot({path:path.join(shots,"voice-playing-390.png"),fullPage:true});
+    await page.goto(origin+"/new-message?mode=file");
+    await page.getByTestId("contact-sister").click();
+    const imagePicker=page.waitForEvent("filechooser");
+    await page.getByRole("button",{name:"Choose a file",exact:true}).click();
+    await (await imagePicker).setFiles({name:"family-photo.jpg",mimeType:"image/jpeg",buffer:Buffer.from(TEST_PHOTO,"base64")});
+    await page.getByTestId("selected-image-preview").waitFor();
+    await page.screenshot({path:path.join(shots,"photo-before-sending-390.png"),fullPage:true});
+    await page.getByTestId("quick-send").click();
+    await page.waitForURL("**/chat/synthetic-chat");
+    await page.reload();
+    await page.getByTestId("image-thumbnail-synthetic-photo").waitFor();
+    assert.deepEqual(state().uploadedBytes,Buffer.from(TEST_PHOTO,"base64"));
+    await page.waitForFunction(()=>Array.from(document.querySelectorAll('[data-testid="image-thumbnail-synthetic-photo"] img')).some(img=>img.naturalWidth>0));
+    assert.equal(await page.getByText('family-photo.jpg',{exact:true}).count(),0,'Photos have no visible filename');
+    assert.equal(await page.getByText('Tap to view photo',{exact:true}).count(),0);
+    const photoBubble=await page.getByTestId('photo-message-synthetic-message').evaluate(node=>{const s=getComputedStyle(node);return {background:s.backgroundColor,padding:s.padding,border:s.borderWidth};});
+    assert.equal(photoBubble.background,'rgba(0, 0, 0, 0)');
+    assert.equal(photoBubble.padding,'0px');
+    assert.equal(await page.getByTestId('image-open-synthetic-photo').evaluate(node=>getComputedStyle(node).borderWidth),'0px');
+    assert.ok(state().previewFormats.every(format=>format==='webp'));
+    await page.screenshot({path:path.join(shots,"photo-chat-390.png"),fullPage:true});
+    await page.getByRole("button",{name:"View family-photo.jpg",exact:true}).click();
+    await page.getByRole("button",{name:"Retry image preview",exact:true}).click();
+    await page.getByTestId("image-enlarged").waitFor();
+    await page.waitForFunction(()=>Array.from(document.querySelectorAll('[data-testid="image-enlarged"] img')).some(img=>img.naturalWidth>0));
+    await page.waitForTimeout(350);
+    assert.equal(await page.getByText('family-photo.jpg',{exact:true}).count(),0);
+    await page.screenshot({path:path.join(shots,"photo-enlarged-390.png"),fullPage:true});
+    await page.route("https://downloads.example.test/family-photo.jpg",route=>route.fulfill({status:200,contentType:"application/octet-stream",headers:{"content-disposition":"attachment; filename=family-photo.jpg","cache-control":"no-store"},body:Buffer.from(TEST_PHOTO,"base64")}));
+    const photoDownload=page.waitForEvent("download");
+    await page.getByRole("button",{name:"Download original family-photo.jpg",exact:true}).click();
+    const original=await photoDownload,photoChunks=[];
+    for await(const chunk of await original.createReadStream())photoChunks.push(chunk);
+    assert.deepEqual(Buffer.concat(photoChunks),Buffer.from(TEST_PHOTO,"base64"));
+    await page.getByRole("button",{name:"Close image preview",exact:true}).click();
+    await page.goto(origin+"/files");
+    await page.getByTestId("image-thumbnail-synthetic-photo").waitFor();
+    await page.getByTestId("files-segment-Categories").click();
+    await page.getByTestId("category-image").click();
+    await page.getByRole("button",{name:"View family-photo.jpg",exact:true}).waitFor();
+    assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),390);
+    await page.screenshot({path:path.join(shots,"photo-files-390.png"),fullPage:true});
+    await page.goto(origin+"/chat/synthetic-chat");
+    await page.getByTestId("attachment-menu-button").waitFor();
+    await page.getByTestId("attachment-menu-button").click();
+    await page.getByRole("button",{name:"Choose a photo to share",exact:true}).waitFor();
+    const uploadsBefore=state().attachmentUploads;
+    let pick=page.waitForEvent("filechooser");
+    await page.getByRole("button",{name:"Choose a photo to share",exact:true}).click();
+    await (await pick).setFiles({name:"family-photo.jpg",mimeType:"image/jpeg",buffer:Buffer.from(TEST_PHOTO,"base64")});
+    await page.getByTestId("chat-attachment-preview").waitFor();
+    await page.waitForFunction(()=>{const photo=document.querySelector('[data-testid="chat-attachment-preview"] img');return photo?.complete && photo.naturalWidth>0;});
+    assert.equal(state().attachmentUploads,uploadsBefore,"Choosing a photo must not upload or send it");
+    await page.getByRole("button",{name:"Cancel attachment",exact:true}).click();
+    assert.equal(await page.getByTestId("attachment-draft").count(),0);
+    assert.equal(state().attachmentUploads,uploadsBefore);
+    pick=page.waitForEvent("filechooser");
+    await page.getByTestId("attachment-menu-button").click();
+    await page.getByRole("button",{name:"Choose a photo to share",exact:true}).click();
+    await (await pick).setFiles({name:"family-photo.jpg",mimeType:"image/jpeg",buffer:Buffer.from(TEST_PHOTO,"base64")});
+    await page.waitForFunction(()=>{const photo=document.querySelector('[data-testid="chat-attachment-preview"] img');return photo?.complete && photo.naturalWidth>0;});
+    await page.screenshot({path:path.join(shots,"chat-photo-draft-390.png"),fullPage:true});
+    const sentPhoto=page.waitForResponse(response=>response.request().method()==="POST"&&new URL(response.url()).pathname.endsWith("/messages"));
+    await page.getByRole("button",{name:"Send attachment",exact:true}).click();
+    await sentPhoto;
+    assert.equal(state().attachmentUploads,uploadsBefore+1);
+    await page.getByRole("button",{name:"Open emotes",exact:true}).click();
+    await page.getByRole("button",{name:"Choose Hug emote",exact:true}).click();
+    assert.notEqual(state().shared.type,"emote");
+    await page.getByRole("button",{name:"Cancel emote",exact:true}).click();
+    assert.notEqual(state().shared.type,"emote","Choosing/canceling an emote must not send it");
+    await page.getByRole("button",{name:"Open emotes",exact:true}).click();
+    await page.getByRole("button",{name:"Choose Hug emote",exact:true}).click();
+    await page.waitForFunction(()=>{const p=document.querySelector('[data-testid="emote-selected-preview"]'),f=p?.querySelector('[data-testid="emote-image-hug"]'),i=f?.querySelector('img');return !!(f&&i&&i.complete&&i.naturalWidth>0&&i.naturalHeight>0&&i.src.split('?')[0].endsWith('/emotes/hug.png')&&getComputedStyle(f).opacity==='1'&&f.getBoundingClientRect().width>=140&&!p.querySelector('[data-testid="emote-fallback-hug"]'));});
+    await page.screenshot({path:path.join(shots,"emote-picker-390.png"),fullPage:true});
+    const sentEmote=page.waitForResponse(response=>response.request().method()==="POST"&&response.request().postDataJSON()?.type==="emote");
+    await page.getByRole("button",{name:"Send emote",exact:true}).click();
+    await sentEmote;
+    assert.equal(state().shared.emote_id,"fluent:hug");
+    await page.reload();
+    await page.getByTestId("emote-image-hug").waitFor();
+    await page.waitForFunction(()=>document.querySelector('[data-testid="emote-image-hug"] img')?.src.includes(".png"));
+    await page.screenshot({path:path.join(shots,"emote-reduced-motion-390.png"),fullPage:true});
+    await page.emulateMedia({reducedMotion:"no-preference"});
+    await page.waitForFunction(()=>{const image=document.querySelector('[data-testid="emote-image-hug"] img');return image?.src.includes(".webp")&&image.naturalWidth>0;});
+    const animated=page.getByTestId("emote-image-hug");
+    const firstFrame=await animated.screenshot({animations:"allow"});
+    let changed=false;
+    for(let sample=0;sample<8&&!changed;sample++){await page.waitForTimeout(160);changed=!firstFrame.equals(await animated.screenshot({animations:"allow"}));}
+    assert.ok(changed,"The visible downloaded emote must animate");
+    await page.screenshot({path:path.join(shots,"emote-playing-390.png"),fullPage:true});
+    await receiveAsSister();await page.reload();
+    await page.getByTestId("emote-image-hug").waitFor();
+    await page.getByRole("button",{name:/Hug emote/}).click();
+    await page.goto(origin+"/credits");
+    await page.getByText("Copyright (c) Microsoft Corporation.",{exact:false}).waitFor();
+    const history=Array.from({length:80},(_,i)=>({id:"history-"+i,chat_id:"synthetic-chat",type:"text",text:"History "+i,sender_id:"qa-user",created_at:new Date(Date.UTC(2026,9,29,12,0,i)).toISOString()}));
+    setHistory(history);await page.goto(origin+"/chat/synthetic-chat");
+    await page.getByText("History 79",{exact:true}).waitFor();
+    const scroller=page.getByTestId("chat-message-list");
+    await scroller.evaluate(node=>{node.scrollTop=0;node.dispatchEvent(new Event("scroll"));});
+    await page.waitForTimeout(250);
+    setHistory([...history,{id:"incoming-80",chat_id:"synthetic-chat",type:"text",text:"Arrived while reading",sender_id:"qa-user",created_at:"2026-10-30T12:00:00Z"}]);
+    await page.getByRole("button",{name:"Jump to new messages",exact:true}).waitFor({timeout:12000});
+    assert.ok(await scroller.evaluate(node=>node.scrollTop<80),"Incoming messages must preserve reading position");
+    await page.screenshot({path:path.join(shots,"new-messages-reading-390.png"),fullPage:true});
+    await page.getByRole("button",{name:"Jump to new messages",exact:true}).click();
+    await page.getByText("Arrived while reading",{exact:true}).waitFor();
+    await page.waitForTimeout(350);
+    assert.ok(await scroller.evaluate(node=>node.scrollTop>200));
+    await page.setViewportSize({width:320,height:844});
+    assert.equal(await page.locator("html").evaluate(node=>node.scrollWidth),320,"Chat composer must fit a small phone");
+
+    await page.goto(origin+"/");
+    await page.setViewportSize({width:320,height:844});
+    await page.getByRole("button",{name:"Open quick actions",exact:true}).click();
+    for(const key of ["share-file","share-photo","invite"]) await page.getByTestId("radial-"+key).waitFor();
+    assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),320);
+    await page.waitForTimeout(350);
+    await page.screenshot({path:path.join(shots,"quick-actions-320.png"),fullPage:true});
+    await context.close();
+    const invited=await scenario(390,844);
+    await invited.page.goto(link);
+    await invited.page.getByTestId("invite-input").waitFor();
+    assert.equal(await invited.page.getByTestId("invite-input").inputValue(),"synthetic-link-invitation-0123456789");
+    assert.equal(new URL(invited.page.url()).hash,"");
+    await invited.context.close();
+    for(const width of [320,768,1440]){const s=await scenario(width,900);await s.context.close();}
+    assert.deepEqual(errors,[],"No uncaught browser errors");
+    console.log("Onboarding, profile photo, local-time schedule, saved themes/decor, invitation links, file bytes and quick action browser checks passed: signup, visibility, resume, verification, profile persistence/editing, and 320/390/768/1440px layouts.");
+  } finally {
+    for(const name of ["emote-picker-390.png","emote-playing-390.png","chat-photo-draft-390.png","new-messages-reading-390.png"]){
+      const file=path.join(shots,name);if(!fs.existsSync(file))continue;
+      const encoded=fs.readFileSync(file).toString("base64"),count=Math.ceil(encoded.length/3000);
+      for(let i=0;i<count;i++)console.log("KUKU_REVIEW "+name+" "+i+"/"+count+" "+encoded.slice(i*3000,(i+1)*3000));
+    }
+    await browser.close();server.close();
+  }
+})().catch(e=>{console.error(e);server.close();process.exitCode=1;});

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,9 +9,10 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
-import { api, User } from "../../src/api";
+import { api, getSessionUserId, User } from "../../src/api";
+import { useAuth } from "../../src/AuthContext";
 import { spacesApi } from "../../src/spaces";
 import { useTheme } from "../../src/ThemeContext";
 import { Palette, radius, spacing } from "../../src/theme";
@@ -19,22 +20,35 @@ import Avatar from "../../src/Avatar";
 
 export default function CreateSpaceScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const uid = user?.id || "";
+  const currentUid = useRef(uid); currentUid.current = uid;
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const { c, f } = useTheme();
   const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
   const [name, setName] = useState("");
   const [users, setUsers] = useState<User[]>([]);
+  const [usersOwner, setUsersOwner] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => { setName(""); setSelected(new Set()); setCreateError(null); }, [uid]);
 
   useEffect(() => {
-    api
-      .get<User[]>("/users")
-      .then(setUsers)
-      .catch(() => setError("Couldn't load people"))
-      .finally(() => setLoading(false));
-  }, []);
+    let active = true;
+    setUsers([]); setLoading(true); setError(null);
+    if (!uid) { setLoading(false); return; }
+    void api.getAs<User[]>(uid, "/users")
+      .then(people => { if (active && currentUid.current === uid) { setUsers(people); setUsersOwner(uid); } })
+      .catch(() => { if (active) setError("Couldn't load your contacts. Go back and try again."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [uid, reload]);
 
   function toggle(id: string) {
     const next = new Set(selected);
@@ -44,15 +58,16 @@ export default function CreateSpaceScreen() {
   }
 
   async function create() {
-    if (creating) return;
+    if (creating || !uid || usersOwner !== uid) return;
     setCreating(true);
-    setError(null);
+    setCreateError(null);
     try {
-      const space = await spacesApi.create(name.trim() || null, Array.from(selected));
-      router.replace(`/space/${space.id}`);
+      const space = await spacesApi.create(name.trim() || null, Array.from(selected), uid);
+      if (mounted.current && currentUid.current === uid && getSessionUserId() === uid) router.replace(`/space/${space.id}`);
     } catch {
-      setError("Couldn't create the space — try again");
-      setCreating(false);
+      if (mounted.current && currentUid.current === uid) setCreateError("Couldn't create the Space. Your choices are kept; try again.");
+    } finally {
+      if (mounted.current && currentUid.current === uid) setCreating(false);
     }
   }
 
@@ -86,12 +101,12 @@ export default function CreateSpaceScreen() {
             <ActivityIndicator color={c.primary} />
           </View>
         ) : error ? (
-          <Pressable onPress={() => setError(null)} style={{ paddingVertical: spacing.lg, alignItems: "center" }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Retry loading contacts" onPress={() => setReload(value => value + 1)} style={{ paddingVertical: spacing.lg, alignItems: "center" }}>
             <Text style={styles.errorText}>{error}</Text>
           </Pressable>
         ) : (
           <View style={styles.peopleList}>
-            {users.map((u) => {
+            {(usersOwner === uid ? users : []).map((u) => {
               const on = selected.has(u.id);
               return (
                 <Pressable
@@ -104,7 +119,7 @@ export default function CreateSpaceScreen() {
                   ]}
                   testID={`pick-${u.id}`}
                 >
-                  <Avatar name={u.name} seed={u.id} size={42} />
+                  <Avatar name={u.name} seed={u.id} photo={u.avatar} size={42} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.personName}>{u.name}</Text>
                     <Text style={styles.personEmail}>{u.email}</Text>
@@ -120,9 +135,11 @@ export default function CreateSpaceScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
+        {createError ? <Text accessibilityRole="alert" style={[styles.errorText, { color: c.error, marginBottom: 12 }]}>{createError}</Text> : null}
         <Pressable
           onPress={create}
-          disabled={creating}
+          accessibilityRole="button"
+          disabled={creating || loading || usersOwner !== uid || !!error}
           style={({ pressed }) => [
             styles.cta,
             pressed && { transform: [{ scale: 0.98 }] },
@@ -155,15 +172,15 @@ const makeStyles = (c: Palette, f: any) =>
       paddingVertical: spacing.sm,
     },
     backBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       backgroundColor: c.surface,
       alignItems: "center",
       justifyContent: "center",
     },
     title: { fontFamily: f.heading, fontSize: 18, color: c.text },
-    scroll: { padding: spacing.lg, paddingBottom: 100 },
+    scroll: { padding: spacing.lg, paddingBottom: 100, width: "100%", maxWidth: 760, alignSelf: "center" },
     heroTitle: {
       fontFamily: f.heading,
       fontSize: 28,
@@ -171,7 +188,7 @@ const makeStyles = (c: Palette, f: any) =>
       letterSpacing: -0.5,
       marginBottom: 6,
     },
-    heroBody: { fontFamily: f.body, fontSize: 14, color: c.textSecondary, marginBottom: spacing.lg, lineHeight: 20 },
+    heroBody: { fontFamily: f.body, fontSize: 16, color: c.textSecondary, marginBottom: spacing.lg, lineHeight: 24 },
     sectionLabel: {
       fontFamily: f.bodyBold,
       fontSize: 11,

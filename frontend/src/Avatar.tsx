@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Image } from "react-native";
 import { colors, fonts } from "./theme";
 
 const PALETTE = ["#C3AB95", "#A98C70", "#8C7158", "#B89A7E", "#D4BFA6", "#9C8268"];
@@ -20,10 +20,12 @@ export default function Avatar({
   name,
   size = 48,
   seed,
+  photo,
 }: {
   name?: string | null;
   size?: number;
   seed?: string | null;
+  photo?: string | null;
 }) {
   const bg = colorFor(seed || name);
   return (
@@ -34,6 +36,7 @@ export default function Avatar({
       ]}
     >
       <Text style={[styles.txt, { fontSize: size * 0.36 }]}>{initials(name)}</Text>
+      {photo?.startsWith("data:image/jpeg;base64,") ? <Image accessibilityLabel={name ? name + " profile photo" : "Profile photo"} source={{uri: photo}} style={{position: "absolute", width: size, height: size, borderRadius: size / 2}}/> : null}
     </View>
   );
 }

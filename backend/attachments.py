@@ -1,0 +1,322 @@
+"""Private R2 storage. Uploads stream through API with a strict byte limit."""
+import os
+import uuid
+import tempfile
+import secrets
+import asyncio
+import logging
+from typing import Literal
+from datetime import timedelta
+from contextlib import AsyncExitStack
+from urllib.parse import quote
+import boto3
+from botocore.config import Config
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from starlette.concurrency import run_in_threadpool
+from auth_service import now, digest
+from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
+from private_blob import PrivateBlobStore
+from safety import allow_direct
+from image_previews import cached_preview, remember_preview, discard_previews, render_preview
+
+MAX_BYTES = 25 * 1024 * 1024
+USER_QUOTA_BYTES = 500 * 1024 * 1024
+TOTAL_QUOTA_BYTES = 750 * 1024 * 1024
+logger = logging.getLogger("kuku.attachments")
+
+class ObjectStore:
+    def list_inventory_page(self, prefix, cursor=None, limit=200):
+        """Return one read-only provider page for the offline inventory command."""
+        self.require_config()
+        if prefix not in ("attachments/", "space-audio/") or not 1 <= limit <= 1000:
+            raise ValueError("Invalid inventory listing request")
+        request = {"Bucket": os.environ["R2_BUCKET"], "Prefix": prefix, "MaxKeys": limit}
+        if cursor:
+            request["ContinuationToken"] = cursor
+        response = self.client().list_objects_v2(**request)
+        items = [{
+            "key": item.get("Key"), "size": item.get("Size"),
+            "uploaded_at": item.get("LastModified"), "etag": item.get("ETag"),
+        } for item in response.get("Contents", [])]
+        has_more = response.get("IsTruncated") is True
+        return {
+            "items": items,
+            "has_more": has_more,
+            "next_cursor": response.get("NextContinuationToken") if has_more else None,
+        }
+
+    def read_preview_source(self, key):
+        response = self.client().get_object(Bucket=os.environ["R2_BUCKET"], Key=key)
+        body = response["Body"]
+        try:
+            raw = body.read(MAX_BYTES + 1)
+            if len(raw) > MAX_BYTES:
+                raise HTTPException(413, "This file is too large to preview")
+            return raw
+        finally:
+            body.close()
+    def ready(self):
+        return all(os.getenv(k) for k in ["R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"])
+    def require_config(self):
+        if not self.ready():
+            raise HTTPException(503, "File sharing is getting ready. Please try again later.")
+    def client(self):
+        required = ["R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"]
+        if not all(os.getenv(k) for k in required):
+            raise HTTPException(503, "File sharing is getting ready. Please try again later.")
+        return boto3.client("s3", endpoint_url=os.environ["R2_ENDPOINT"],
+            aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"], aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+            region_name="auto", config=Config(signature_version="s3v4"))
+    def put(self, key, file):
+        self.client().upload_fileobj(file, os.environ["R2_BUCKET"], key,
+            ExtraArgs={"ContentType": "application/octet-stream"})
+    def delete(self, key):
+        self.client().delete_object(Bucket=os.environ["R2_BUCKET"], Key=key)
+    def download(self, doc):
+        return self.client().generate_presigned_url("get_object", Params={
+            "Bucket": os.environ["R2_BUCKET"], "Key": doc["key"],
+            "ResponseContentType": "application/octet-stream",
+            "ResponseContentDisposition": "attachment; filename*=UTF-8''" + quote(doc["name"], safe=""),
+        }, ExpiresIn=60)
+
+store = ObjectStore()
+blob_store = PrivateBlobStore()
+
+def provider():
+    value = os.getenv("FILE_STORAGE_PROVIDER", "r2")
+    if value not in ("r2", "vercel"):
+        raise HTTPException(503, "File sharing is getting ready. Please try again later.")
+    return value
+
+def storage_for(name):
+    return blob_store if name == "vercel" else store
+
+
+async def authorized_chunks(stream, auth, issued, visible):
+    """Recheck private-file access before each provider chunk is released."""
+    async for chunk in stream:
+        active = await auth.session_user(issued["session_id"], issued["user_id"])
+        if not active.get("email_verified"):
+            raise HTTPException(403, "Verify your email before downloading files")
+        await visible(active)
+        yield chunk
+
+
+def attachment_router(db_getter, auth, events=None):
+    router = APIRouter()
+    preview_gate = asyncio.Semaphore(1)
+    async def member(chat_id, user):
+        if not await db_getter().chats.find_one({"id": chat_id, "members": user["id"]}):
+            raise HTTPException(404, "Chat not found")
+
+    async def visible_file(attachment_id, user):
+        doc = await db_getter().attachments.find_one({"id": attachment_id})
+        if not doc:
+            raise HTTPException(404, "File not found")
+        await member(doc["chat_id"], user)
+        if doc["owner_id"] != user["id"] and not await db_getter().messages.find_one({"attachment_id": attachment_id, "chat_id": doc["chat_id"]}):
+            raise HTTPException(404, "File not found")
+        return doc
+
+    async def release_quota(user_id, size):
+        await db_getter().users.update_one({"id": user_id}, {"$inc": {"storage_bytes": -size}})
+        await db_getter().storage_usage.update_one({"_id": "files"}, {"$inc": {"bytes": -size}})
+
+    @router.get("/files/status")
+    async def file_status(user=Depends(auth.verified)):
+        selected = storage_for(provider())
+        usage = await db_getter().storage_usage.find_one({"_id": "files"}) or {}
+        return {"available": bool(selected.ready()), "max_file_bytes": MAX_BYTES,
+            "used_bytes": user.get("storage_bytes", 0), "quota_bytes": USER_QUOTA_BYTES,
+            "remaining_bytes": max(0, min(USER_QUOTA_BYTES - user.get("storage_bytes", 0), TOTAL_QUOTA_BYTES - usage.get("bytes", 0)))}
+
+    @router.post("/chats/{chat_id}/attachments")
+    async def upload(chat_id: str, request: Request, name: str, kind: str = "file", user=Depends(auth.verified)):
+        if kind not in ("file", "voice"):
+            raise HTTPException(400, "Unsupported attachment kind")
+        await member(chat_id, user)
+        chat = await db_getter().chats.find_one({"id": chat_id})
+        for other_id in chat["members"]:
+            if other_id != user["id"]:
+                await allow_direct(db_getter(), user["id"], other_id)
+        await auth.limit("upload:" + user["id"], 30, 3600)
+        storage_provider = provider()
+        selected_store = storage_for(storage_provider)
+        if hasattr(selected_store, "require_config"):
+            selected_store.require_config()
+        name = name.replace("\\", "/").split("/")[-1].strip()
+        if not name or len(name) > 180 or any(ord(c) < 32 for c in name):
+            raise HTTPException(400, "Invalid filename")
+        key = "attachments/" + str(uuid.uuid4())
+        size = 0
+        with tempfile.TemporaryFile() as file:
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > MAX_BYTES:
+                    raise HTTPException(413, "Files must be 25 MB or smaller")
+                file.write(chunk)
+            if not size:
+                raise HTTPException(400, "The file is empty")
+            media_type = "application/octet-stream"
+            if kind == "voice":
+                if size > 10 * 1024 * 1024:
+                    raise HTTPException(413, "Voice memos must be 10 MB or smaller")
+                file.seek(0)
+                prefix = file.read(32)
+                if prefix.startswith(b"\x1a\x45\xdf\xa3"):
+                    media_type = "audio/webm"
+                elif prefix.startswith(b"OggS"):
+                    media_type = "audio/ogg"
+                elif prefix[4:8] == b"ftyp":
+                    media_type = "audio/mp4"
+                elif prefix.startswith(b"RIFF") and prefix[8:12] == b"WAVE":
+                    media_type = "audio/wav"
+                else:
+                    raise HTTPException(400, "This recording format is not supported")
+            file.seek(0)
+            reserved = await db_getter().users.update_one({"id": user["id"],
+                "$or": [{"storage_bytes": {"$exists": False}}, {"storage_bytes": {"$lte": USER_QUOTA_BYTES - size}}]},
+                {"$inc": {"storage_bytes": size}})
+            if not reserved.matched_count:
+                raise HTTPException(413, "Your file storage limit has been reached")
+            try:
+                await db_getter().storage_usage.update_one({"_id": "files"}, {"$setOnInsert": {"bytes": 0}}, upsert=True)
+                total = await db_getter().storage_usage.update_one({"_id": "files", "bytes": {"$lte": TOTAL_QUOTA_BYTES - size}}, {"$inc": {"bytes": size}})
+            except Exception:
+                await db_getter().users.update_one({"id": user["id"]}, {"$inc": {"storage_bytes": -size}})
+                raise
+            if not total.matched_count:
+                await db_getter().users.update_one({"id": user["id"]}, {"$inc": {"storage_bytes": -size}})
+                raise HTTPException(413, "KUKU’s shared file space is full. Remove an older file and try again.")
+            try:
+                await run_in_threadpool(selected_store.put, key, file)
+            except Exception:
+                await release_quota(user["id"], size)
+                raise
+        doc = {"id": str(uuid.uuid4()), "key": key, "chat_id": chat_id,
+            "owner_id": user["id"], "name": name, "size": size, "created_at": now(),
+            "storage_provider": storage_provider, "quota_version": 1, "kind": kind, "media_type": media_type}
+        try:
+            await db_getter().attachments.insert_one(doc)
+        except Exception:
+            try:
+                await run_in_threadpool(selected_store.delete, key)
+            finally:
+                await release_quota(user["id"], size)
+            raise
+        return {"id": doc["id"], "file_name": name, "file_size": size}
+
+    @router.get("/attachments/{attachment_id}/preview")
+    async def preview(attachment_id: str, size: Literal["thumb", "full"] = "thumb", format: Literal["jpeg", "webp"] = "jpeg", user=Depends(auth.verified)):
+        await visible_file(attachment_id, user)
+        await auth.limit("preview:" + user["id"], 300, 3600)
+        key = (attachment_id, size, format)
+        result = cached_preview(key)
+        if result is None:
+            async with preview_gate:
+                doc = await visible_file(attachment_id, user)
+                result = cached_preview(key)
+                if result is None:
+                    selected = storage_for(doc.get("storage_provider", "r2"))
+                    try:
+                        if doc.get("storage_provider", "r2") == "vercel":
+                            data = bytearray()
+                            async with selected.stream(doc["key"]) as chunks:
+                                async for chunk in chunks:
+                                    data.extend(chunk)
+                                    if len(data) > MAX_BYTES:
+                                        raise HTTPException(413, "This file is too large to preview")
+                            raw = bytes(data)
+                        else:
+                            raw = await run_in_threadpool(selected.read_preview_source, doc["key"])
+                    except HTTPException:
+                        raise
+                    except Exception:
+                        raise HTTPException(503, "The image preview could not be opened. Try again shortly.") from None
+                    result = await run_in_threadpool(render_preview, raw, size, format)
+                    remember_preview(key, result)
+        current = await auth.session_user(user["_session_id"], user["id"])
+        if not current.get("email_verified"):
+            raise HTTPException(403, "Verify your email before viewing images")
+        await visible_file(attachment_id, user)
+        return result
+
+    @router.get("/attachments/{attachment_id}/download")
+    async def download(attachment_id: str, user=Depends(auth.verified)):
+        doc = await visible_file(attachment_id, user)
+        await auth.limit("download:" + user["id"], 120, 3600)
+        if doc.get("storage_provider", "r2") != "vercel":
+            return {"url": await run_in_threadpool(store.download, doc), "expires_in": 60, "media_type": doc.get("media_type", "application/octet-stream")}
+        origin = os.getenv("PUBLIC_API_ORIGIN", "").rstrip("/")
+        if not origin.startswith("https://") or "/" in origin[8:] or "?" in origin or "#" in origin:
+            raise HTTPException(503, "Downloads are getting ready. Please try again later.")
+        token = secrets.token_urlsafe(32)
+        await db_getter().file_tickets.insert_one({"_id": digest(token), "attachment_id": attachment_id,
+            "user_id": user["id"], "session_id": user["_session_id"], "expires_at": now() + timedelta(seconds=60)})
+        return {"url": origin + "/api/attachments/" + attachment_id + "/content?ticket=" + token, "expires_in": 60, "media_type": doc.get("media_type", "application/octet-stream")}
+
+    @router.get("/attachments/{attachment_id}/content")
+    async def content(attachment_id: str, ticket: str = Query(min_length=32, max_length=128)):
+        issued = await db_getter().file_tickets.find_one_and_delete({"_id": digest(ticket),
+            "attachment_id": attachment_id, "expires_at": {"$gt": now()}})
+        if not issued:
+            raise HTTPException(401, "This download link has expired. Open the file in KUKU again.")
+        user = await auth.session_user(issued["session_id"], issued["user_id"])
+        if not user.get("email_verified"):
+            raise HTTPException(403, "Verify your email before downloading files")
+        doc = await visible_file(attachment_id, user)
+        if doc.get("storage_provider") != "vercel":
+            raise HTTPException(404, "File not found")
+        stack = AsyncExitStack()
+        try:
+            stream = await stack.enter_async_context(blob_store.stream(doc["key"]))
+            # Provider startup can outlive the request's first authorization check.
+            # Revalidate before returning any private bytes.
+            active = await auth.session_user(issued["session_id"], issued["user_id"])
+            if not active.get("email_verified"):
+                raise HTTPException(403, "Verify your email before downloading files")
+            await visible_file(attachment_id, active)
+            stream = authorized_chunks(stream, auth, issued,
+                lambda current: visible_file(attachment_id, current))
+        except HTTPException:
+            await stack.aclose()
+            raise
+        except Exception:
+            await stack.aclose()
+            raise HTTPException(503, "Your file couldn’t be opened. Please try again.") from None
+        return StreamingResponse(stream, media_type="application/octet-stream",
+            headers={"Content-Length": str(doc["size"]), "Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
+                "X-Content-Type-Options": "nosniff", "Content-Disposition": "attachment; filename*=UTF-8''" + quote(doc["name"], safe="")},
+            background=BackgroundTask(stack.aclose))
+
+    @router.delete("/attachments/{attachment_id}")
+    async def delete(attachment_id: str, user=Depends(auth.verified)):
+        doc = await db_getter().attachments.find_one({"id": attachment_id, "owner_id": user["id"]})
+        if not doc:
+            raise HTTPException(404, "File not found")
+        await run_in_threadpool(storage_for(doc.get("storage_provider", "r2")).delete, doc["key"])
+        removed = await db_getter().attachments.delete_one({"id": attachment_id, "owner_id": user["id"]})
+        discard_previews(attachment_id)
+        if removed.deleted_count:
+            if doc.get("quota_version") == 1:
+                await release_quota(user["id"], doc["size"])
+            else:
+                await db_getter().users.update_one({"id": user["id"]}, {"$inc": {"storage_bytes": -doc["size"]}})
+        await db_getter().messages.update_many({"attachment_id": attachment_id}, {
+            "$set": {"attachment_deleted": True, "sync_pending": True}, "$inc": {"revision": 1}})
+        affected = await db_getter().messages.find({"attachment_id": attachment_id}).limit(100).to_list(100)
+        if events:
+            chats = {}
+            for message in affected:
+                chat_id = message["chat_id"]
+                if chat_id not in chats:
+                    chats[chat_id] = await db_getter().chats.find_one({"id": chat_id})
+                if not chats[chat_id]:
+                    continue
+                try:
+                    await events.publish_message(chats[chat_id], message)
+                except Exception:
+                    logger.warning("Attachment deletion is waiting for realtime synchronization")
+        return {"ok": True}
+    return router
