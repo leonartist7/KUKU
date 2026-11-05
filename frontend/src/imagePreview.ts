@@ -73,7 +73,7 @@ export function loadPrivateImagePreview(scope:PrivateImagePreviewScope,attachmen
   if(!scopeCurrent(scope))return Promise.reject(new Error("Preview session changed."));
   const hit=getCachedPrivateImagePreview(scope,attachmentId,size,format);if(hit)return Promise.resolve(hit);
   const key=privateImagePreviewKey(scope,attachmentId,size,format),existing=flights.get(key);if(existing)return existing.promise;
-  let promise:Promise<ImagePreview>;
+  let promise!:Promise<ImagePreview>;
   promise=(async()=>{
     const data=await loader();
     if(!validImagePreview(data))throw new Error("Preview unavailable. Download the original instead.");

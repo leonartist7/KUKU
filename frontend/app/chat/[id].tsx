@@ -457,7 +457,7 @@ function ChatConversation({id}: {id: string}) {
             renderItem={({ item, index }) => <View onLayout={event=>{const {y,height}=event.nativeEvent.layout;rowLayouts.current.set(item.id,{y,height});if(preservePrepend.current?.anchorId===item.id)requestPrependAnchor();}}>
               {index === 0 || new Date(messages[index - 1].created_at).toLocaleDateString() !== new Date(item.created_at).toLocaleDateString()
                 ? <Text style={styles.dateLabel}>{new Date(item.created_at).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}</Text> : null}
-              <MessageRow msg={item} mine={item.sender_id === user?.id} userId={user?.id||""} busy={tools.busy} replyMessage={item.reply_to_id?tools.lookup(item.reply_to_id):null} onActions={openActions} onOriginal={openOriginal} onReact={reactTo}/>
+              <MessageRow msg={item} mine={item.sender_id === user?.id} userId={user?.id||""} previewScope={previewScope} busy={tools.busy} replyMessage={item.reply_to_id?tools.lookup(item.reply_to_id):null} onActions={openActions} onOriginal={openOriginal} onReact={reactTo}/>
             </View>}
             ListHeaderComponent={hasOlder ? <Pressable accessibilityRole="button" accessibilityLabel="Load older messages" disabled={loadingOlder} onPress={()=>void loadOlder()}><Text style={{color:c.primary,padding:16,textAlign:"center",fontFamily:f.bodyMedium}}>{loadingOlder ? "Loading earlier messages…" : "Load older messages"}</Text></Pressable> : null}
             ListFooterComponent={<View>{pending.filter(p => !messages.some(m=>m.client_message_id===p.id)).map(p => <View key={p.id} style={{padding:12,alignSelf:"flex-end"}}>
