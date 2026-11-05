@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-04T23:48:32.736Z
+Updated: 2026-11-05T02:27:21.476Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: none; P01 icon-assets checkpoint handed off, 5 November 2026.
+Current controller: root P01 chat-list checkpoint, 5 November 2026.
 Work was performed through connected GitHub/provider APIs and cloud CI; never assume a prior local worktree exists.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -97,10 +97,10 @@ Do not mark a full phase complete when a release gate is still outstanding.
 An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
 
 ## Active controller lease
-Controller: none.
-Lease recorded at: 2026-11-04T23:48:32.736Z
-Lease expires at: 2026-11-04T23:48:32.736Z
-State: IDLE; P01 icon import/export/native/beta checkpoint accepted.
+Controller: root P01 chat-list.
+Lease recorded at: 2026-11-05T02:27:21.476Z
+Lease expires at: 2026-11-05T03:57:21.476Z
+State: ACTIVE; initial/latest/load-older/new-message anchoring and bounded rendering.
 
 
 ## Verified implementation checkpoint
