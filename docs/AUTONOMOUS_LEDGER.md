@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-05T18:27:03Z
+Updated: 2026-11-05T19:12:00Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: root P06 report-only provider inventory, 5 November 2026.
+Current controller: none. Root completed P06 report-only provider inventory on 5 November 2026.
 Work was performed through connected GitHub/provider APIs and cloud CI; never assume a prior local worktree exists.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -49,11 +49,19 @@ Initial package owners (all returned; no agent has an outstanding write):
 | 3 Chat/performance | CHAT TOOLS + BOUNDED CHAT LIST + PRIVATE MEDIA CACHE DEPLOYED | Controlled anchoring/render/cache evidence recorded; physical/CWV memory budgets remain open |
 | 4 Spaces | BETA DEPLOYED; DEVICE SYNC OPEN | Roles/private audio/reconnect checks pass; real drift walkthrough open |
 | 5 Calls | AUDIO FOUNDATION IMPLEMENTED; OFF | Provider and audible two-device checks required; native/video incomplete |
-| 6 Android/release | TEST APK + STATEFUL RECOVERY REHEARSAL VERIFIED; PRODUCTION GATED | Physical install/push/signing, live backup/media recovery and full erasure still open |
+| 6 Android/release | TEST APK + RECOVERY REHEARSAL + REPORT-ONLY PROVIDER INVENTORY VERIFIED; PRODUCTION GATED | Physical install/push/signing, live backup/media recovery and full erasure still open |
 
 
 ## Current authoritative checkpoint
 This section supersedes historical pending statements below.
+- P06 accepted source `a20bdf7354c8c93eea9ee98de2ea2de3eabeb5bb`. [PR #12](https://github.com/leonartist7/KUKU/pull/12) was squash-merged into the review release branch as runtime tree-equivalent commit `bd1f9490bdd30779128975051e2f7363cc4a9c96`; both commits point to tree `33cb1928d4c4b312c29270c2dbd4e5aeda9d6de2`. Main is unchanged.
+- The provider-only object inventory is an explicit offline operator command, not an API route or lifecycle task. It accepts only `attachments/` and `space-audio/`, requires explicit database settings and required metadata collections, and treats any exact metadata key as present regardless of a missing or malformed provider field. Invalid entries, provider/database errors, repeated cursors and page/object budgets make a pass incomplete.
+- Reports contain HMAC digests, coarse age buckets and bounded counts only; raw keys, URLs, ETags, cursors and error messages remain out of the report. A comparison requires the same provider, HMAC key, schema, minimum age and prefixes plus two complete observations at least 24 hours apart. Confirmation does not attribute ownership or authorize deletion, quota work, retention jobs or a physical-erasure claim.
+- Exact-head [release run 42087043112](https://github.com/leonartist7/KUKU/actions/runs/42087043112) PASS: backend job 127457520428 has 145 isolated Mongo-backed tests; frontend job 127457516824 has 116/116 unit/release tests, TypeScript, web export, onboarding, Spaces, chat-tools and controlled-performance journeys. The first onboarding attempt timed out waiting for the unchanged synthetic scroll-anchor button; the exact-head failed-job rerun passed it and every remaining gate without a source change.
+- Android job 127459639282 passed standalone arm64/SDK 36/Hermes/public-test-signing provenance. Artifact [13444183381](https://github.com/leonartist7/KUKU/actions/runs/42087043112/artifacts/13444183381) is 39,063,557 bytes with ZIP SHA256 `68265d91c53642b5245b9c15a717a28993166dffa9b4ff3e5b49483ef060ed29`. This is not physical Android, microphone/background/push or production-signing acceptance.
+- Exact-source Vercel implementation deployment `dpl_62nM8jYfrE6YwFEN4SZmbcnZ9b76` is READY at `https://kuku-ohe0g90sz-lionovart.vercel.app`; authenticated provider fetch of `/login` returned expected KUKU HTML with HTTP 200. The feature-only deployment failed closed because that branch has no backend URL, while the implementation deployment used the review configuration.
+- Render deploy `dep-dbmd750m7kps73fnr740` is LIVE on accepted release source `bd1f9490bdd30779128975051e2f7363cc4a9c96`. The replacement instance completed application startup at 2026-11-05T19:07:04.187072419Z before the previous instance shut down at 19:07:09.086433475Z. The service remains one API worker, manual deploy, free plan and without a configured Render health-check path.
+- The existing beta `/login` returned expected KUKU HTML with HTTP 200 after rollout. The frontend source and beta alias did not change. No live provider inventory was run; no provider object, live database row, quota, retention job, account, billing, DNS, access protection or personal message/invitation changed.
 - Beta: https://kuku-git-codex-kuku-release-20261027-lionovart.vercel.app/login
 - Accepted runtime source `d8004c44f0104b46d4067e49e242004216516c73`. [PR #11](https://github.com/leonartist7/KUKU/pull/11) was squash-merged into the review release branch after exact-head checks on source `429cef1cab251c91963a7760fc245c3a6ca2ff22`; main is unchanged.
 - Render deploy `dep-dbm9j6u417fc73boo3jg` is LIVE on the accepted runtime. The replacement instance completed application startup at 2026-11-05T14:59:55.300428093Z before the old instance shut down at 15:00:05.807543007Z; Render announced the service live at 15:00:06.572118844Z. The service remains one API worker, manual deploy, free plan and no configured provider health-check path.
@@ -96,10 +104,11 @@ Do not mark a full phase complete when a release gate is still outstanding.
 An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
 
 ## Active controller lease
-Controller: root P06 report-only provider inventory.
+Controller: none.
 Lease recorded at: 2026-11-05T18:27:03Z
-Lease expires at: 2026-11-05T19:57:03Z
-State: ACTIVE; two-pass inventory evidence only, with deletion and quota mutation prohibited.
+Lease closed at: 2026-11-05T19:12:00Z
+State: COMPLETE; P06 report-only implementation and review rollout accepted. No live inventory,
+deletion, quota mutation or retention-job creation occurred.
 
 
 ## Verified implementation checkpoint
@@ -129,7 +138,7 @@ State: ACTIVE; two-pass inventory evidence only, with deletion and quota mutatio
 - Integrator verified unchanged server/chat_events/CallContext base blobs before overlay and spliced only the Message type additions into the newer API runtime. Original local worktrees may be stale; remote refs and the latest accepted commit remain authoritative.
 
 ## Next bounded work
-1. Authenticated export, closure, operational cleanup and metadata-backed closed-account orphan retention are accepted. The next independently executable B01 package is a non-destructive, two-pass provider inventory/quarantine report for objects stranded before metadata insertion. It must remain report-only until owner attribution, retention policy and an explicit operator approval path are reviewable.
+1. Authenticated export, closure, operational cleanup, metadata-backed retention and the report-only provider inventory are accepted. A real inventory pass now requires an explicit read-only database identity, the most restricted available provider listing credential, a stable HMAC key, a provider-cost decision and operator-controlled report storage. It remains report-only; a second complete pass must wait at least 24 hours. Do not infer ownership or delete from either pass.
 2. Keep authored shared-history policy, live database/media backup, live RPO/RTO, provider delivery, physical erasure, production signing and real-device checks as explicit external gates. Do not use personal content as fixtures.
 3. Keep calls disabled. C03/A01 require configured LiveKit/FCM, production signing and representative physical phones; C04 video waits for the real audio gate.
 4. Preserve one API worker until shared fan-out exists. R02 always-on compute and live health-check configuration require a provider/billing decision.
@@ -154,8 +163,8 @@ State: ACTIVE; two-pass inventory evidence only, with deletion and quota mutatio
 - Latest Android preview for the accepted runtime is still compiling in run 41864811206; the earlier 20d4cd79 test-signed build passed. Do not claim physical Android or native notification acceptance.
 
 ## Next controller handoff
-1. Fetch fresh implementation/release refs, PR #1, master plan and this ledger; preserve newer work and acquire a lease. Accepted runtime source is `d8004c44f0104b46d4067e49e242004216516c73`; PR #11 records the accepted P05 package; PR #1 against main remains draft.
-2. P05 metadata-backed closed-account orphan retention is accepted and deployed with its live worker disabled. The earliest dependency-ready package is a report-only two-pass provider inventory/quarantine design for objects stranded before metadata insertion. Keep live deletion disabled and use synthetic provider inventory fixtures until owner attribution, retention policy and operator approval are explicit.
+1. Fetch fresh implementation/release refs, PR #1, master plan and this ledger; preserve newer work and acquire a lease. Accepted runtime source is `bd1f9490bdd30779128975051e2f7363cc4a9c96`; PR #12 records the accepted P06 package; PR #1 against main remains draft.
+2. P06 report-only provider inventory is accepted and deployed inertly. No independently executable deletion package follows without owner attribution, authored-history/retention policy and an explicit operator approval design. A live first pass additionally requires the operator credentials, HMAC key, report storage and provider-cost decision documented above; remain quiet while those external inputs are unchanged.
 3. Live backup/media recovery, exact live FCV/PIT consistency, physical erasure, real provider/device acceptance, production signing and billing choices remain external gates.
 4. Dependency changes must follow DEPENDENCY_REVIEW, cloud lockfile regeneration and Expo/web/native checks. Preserve CommonJS decoder compatibility.
 5. N01/C03/A01 need real phones/provider/signing setup; calls stay false. C04 video depends on actual audio acceptance. R02 always-on hosting/live readiness settings need a billing/configuration decision.
