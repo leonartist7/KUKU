@@ -86,12 +86,15 @@ function ChatConversation({id}: {id: string}) {
   const latestVisible=useRef(false);
   const scrollPosition=useRef({offset:0,content:0,viewport:0});
   const preservePrepend=useRef<{scope:string;content:number;offset:number}|null>(null);
+  const tailRetryTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const tailRetryCount=useRef(0);
   const viewabilityConfig=useRef({itemVisiblePercentThreshold:1}).current;
   const settleTailAnchor=useCallback(()=>{
     const position=scrollPosition.current;
     const bottomGap=position.content-position.viewport-position.offset;
     if(tailAnchoring.current&&latestVisible.current&&position.viewport>0&&bottomGap<80){
       tailAnchoring.current=false;nearBottom.current=true;setNewMessages(false);setCompactWindow(true);
+      if(tailRetryTimer.current)clearTimeout(tailRetryTimer.current);tailRetryTimer.current=null;
     }
   },[]);
   const onViewableItemsChanged=useRef(({viewableItems}:{viewableItems:Array<{item:Message;isViewable:boolean|null}>})=>{
@@ -99,6 +102,14 @@ function ChatConversation({id}: {id: string}) {
     latestVisible.current=!!latest&&viewableItems.some(token=>token.isViewable&&token.item.id===latest.id);
     settleTailAnchor();
   }).current;
+  function requestTailAnchor(animated=false){
+    if(!tailAnchoring.current)return;
+    listRef.current?.scrollToEnd({animated});
+    if(tailRetryTimer.current)clearTimeout(tailRetryTimer.current);
+    if(tailRetryCount.current<24){
+      tailRetryTimer.current=setTimeout(()=>{tailRetryCount.current+=1;requestTailAnchor(false);},80);
+    }
+  }
   const tools=useChatTools({chatId:id,userId:user?.id,scopeRef:activeChat,messages,messagesRef,setMessages,setError});
   const {updated,reconcile,mutate,openActions,openOriginal}=tools;
   const reactTo=useCallback((messageId:string,emoji:string|null)=>{void mutate(messageId,"reaction",{emoji});},[mutate]);
@@ -146,11 +157,11 @@ function ChatConversation({id}: {id: string}) {
     activeChat.current = id+":"+(user?.id||"");
     setError(null);
     setMessages([]); setChatInfo(null); setPending([]); setLoading(true);setText("");setSending(false);setDraft(null);setEmotesOpen(false);setVoiceOpen(false);setAttachmentsOpen(false);setCreatingSpace(false);nearBottom.current=true;setNewMessages(false);setCompactWindow(false);
-    messagesRef.current = []; loadingRef.current = false; tailAnchoring.current=true;latestVisible.current=false;scrollPosition.current={offset:0,content:0,viewport:0};preservePrepend.current=null;
+    messagesRef.current = []; loadingRef.current = false; tailAnchoring.current=true;latestVisible.current=false;scrollPosition.current={offset:0,content:0,viewport:0};preservePrepend.current=null;tailRetryCount.current=0;if(tailRetryTimer.current)clearTimeout(tailRetryTimer.current);tailRetryTimer.current=null;
     chatInfoRef.current = null; reloadRequested.current = false; sendFlight.current = false; uploadFlight.current = false; creatingSpaceRef.current = false;
     olderFlight.current = false; setHasOlder(false); setLoadingOlder(false);
     load();
-    return () => { activeChat.current = ""; };
+    return () => { activeChat.current = "";if(tailRetryTimer.current)clearTimeout(tailRetryTimer.current);tailRetryTimer.current=null; };
   }, [load]);
 
   useEffect(() => {
@@ -184,7 +195,7 @@ function ChatConversation({id}: {id: string}) {
     }, [load, user?.id, id, updated, reconcile]),
   );
 
-  function jumpToLatest(){tailAnchoring.current=true;latestVisible.current=false;nearBottom.current=true;setNewMessages(false);setCompactWindow(false);listRef.current?.scrollToEnd({animated:true});}
+  function jumpToLatest(){tailAnchoring.current=true;latestVisible.current=false;tailRetryCount.current=0;nearBottom.current=true;setNewMessages(false);setCompactWindow(false);requestTailAnchor(true);}
   useEffect(()=>{
     const latest=messages[messages.length-1];if(!latest)return;
     if(nearBottom.current||latest.sender_id===user?.id){const timer=setTimeout(jumpToLatest,60);return()=>clearTimeout(timer);}
@@ -360,7 +371,8 @@ function ChatConversation({id}: {id: string}) {
               nearBottom.current=contentSize.height-layoutMeasurement.height-contentOffset.y<80;
               if(nearBottom.current)setNewMessages(false);
             }}
-            onScrollBeginDrag={()=>{tailAnchoring.current=false;latestVisible.current=false;setCompactWindow(true);}}
+            onScrollBeginDrag={()=>{tailAnchoring.current=false;latestVisible.current=false;if(tailRetryTimer.current)clearTimeout(tailRetryTimer.current);tailRetryTimer.current=null;setCompactWindow(true);}}
+            onLayout={()=>requestTailAnchor(false)}
             onContentSizeChange={(_width,height)=>{
               const pending=preservePrepend.current;
               scrollPosition.current={...scrollPosition.current,content:height};
@@ -373,7 +385,7 @@ function ChatConversation({id}: {id: string}) {
                 }
                 return;
               }
-              if(tailAnchoring.current||nearBottom.current)listRef.current?.scrollToEnd({animated:false});
+              if(tailAnchoring.current)requestTailAnchor(false);else if(nearBottom.current)listRef.current?.scrollToEnd({animated:false});
               settleTailAnchor();
             }}
             onViewableItemsChanged={onViewableItemsChanged}
