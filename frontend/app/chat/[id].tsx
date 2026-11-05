@@ -119,7 +119,7 @@ function ChatConversation({id}: {id: string}) {
   function cancelPrependAnchor(){
     preservePrepend.current=null;
     if(prependRetryTimer.current)clearTimeout(prependRetryTimer.current);
-    prependRetryTimer.current=null;
+    prependRetryTimer.current=null;setCompactWindow(true);
   }
   function requestPrependAnchor(){
     const pending=preservePrepend.current;
@@ -309,7 +309,7 @@ function ChatConversation({id}: {id: string}) {
         preservePrepend.current=index>=0?{scope,anchorId:anchor.message.id,index,viewOffset:anchor.layout!.y-position.offset,attempts:0}:null;
         rowLayouts.current.delete(anchor.message.id);
       }else cancelPrependAnchor();
-      tailAnchoring.current=false;latestVisible.current=null;nearBottom.current=false;setCompactWindow(true);
+      tailAnchoring.current=false;latestVisible.current=null;nearBottom.current=false;setCompactWindow(!preservePrepend.current);
       messagesRef.current = merged; setMessages(merged); setHasOlder(older.length === 50);
     } catch (failure) {
       if (activeChat.current === scope) setError(failure instanceof Error ? failure.message : "Could not load older messages");
