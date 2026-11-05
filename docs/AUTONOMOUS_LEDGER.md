@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-05T06:25:32Z
+Updated: 2026-11-05T06:57:03Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: root P03 synthetic recovery state, 5 November 2026.
+Current controller: none. The P03 synthetic recovery-state package completed on 5 November 2026.
 Work was performed through connected GitHub/provider APIs and cloud CI; never assume a prior local worktree exists.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -49,19 +49,22 @@ Initial package owners (all returned; no agent has an outstanding write):
 | 3 Chat/performance | CHAT TOOLS + BOUNDED CHAT LIST + PRIVATE MEDIA CACHE DEPLOYED | Controlled anchoring/render/cache evidence recorded; physical/CWV memory budgets remain open |
 | 4 Spaces | BETA DEPLOYED; DEVICE SYNC OPEN | Roles/private audio/reconnect checks pass; real drift walkthrough open |
 | 5 Calls | AUDIO FOUNDATION IMPLEMENTED; OFF | Provider and audible two-device checks required; native/video incomplete |
-| 6 Android/release | TEST APK BUILT; PRODUCTION GATED | Physical install/push/signing, full erasure and restore still open |
+| 6 Android/release | TEST APK + STATEFUL RECOVERY REHEARSAL VERIFIED; PRODUCTION GATED | Physical install/push/signing, live backup/media recovery and full erasure still open |
 
 
 ## Current authoritative checkpoint
 This section supersedes historical pending statements below.
 - Beta: https://kuku-git-codex-kuku-release-20261027-lionovart.vercel.app/login
-- Accepted app source 7708c4ea6472a29c2870463867862e5e4bc715df. PR #8 was accepted by guarded fast-forward into the review release branch; main is unchanged. Vercel dpl_6ZfhQDGvNJReixX4tsE2ta1VPqJF is READY on that exact source and the existing beta alias UID was moved from dpl_F7WZXifiU9HYLCKNgyiPaXyEYS3E without changing access protection. Render dep-dbm0279srm7s73ekv4e0 is LIVE on the exact source. Preserve one API worker.
-- Release run 41964670875 PASS: backend job 127038793876 has 120 isolated Mongo-backed tests. Frontend job 127038794081 has 116/116 unit/release tests, TypeScript, web export, onboarding, Spaces, chat-tools and controlled performance. The review-release push also passed release checks 41965854953, credential-free beta probes 41965855054 and synthetic restore rehearsal 41965855025.
+- Accepted app source `b0e04c617956ccb83aed720cbd02b89b0ac6cab2`. PR #9 was squash-merged into the review release branch after guarded source checks; main is unchanged. Render deploy `dep-dbm2fkuc6qcc73fplfi0` is LIVE on that exact commit. Its replacement instance reported application startup complete at 2026-11-05T06:54:14.774300927Z and Render reported the service live at 06:54:21.774860757Z. Preserve one API worker.
+- The frontend did not change. Vercel deployment `dpl_6ZfhQDGvNJReixX4tsE2ta1VPqJF` remains READY at accepted frontend source `7708c4ea6472a29c2870463867862e5e4bc715df`, and the release alias still resolves to it. An authenticated provider fetch of `/login` returned HTTP 200 with the expected KUKU HTML on 5 November. No frontend redeployment or protection change was needed.
+- Release run [41981806879](https://github.com/leonartist7/KUKU/actions/runs/41981806879) PASS: backend job 127093378822 has 120 isolated Mongo-backed tests; frontend job 127093378684 has 116/116 unit/release tests, TypeScript, web export, onboarding, Spaces, chat-tools and controlled performance; Android job 127094442820 completed `BUILD SUCCESSFUL` in 8m45s.
+- Stateful recovery run [41981806891](https://github.com/leonartist7/KUKU/actions/runs/41981806891) / job 127093377795 PASS on the exact implementation tree later accepted as `b0e04c6`. It archives and restores nonempty native/browser grants, websocket/file tickets, nested Space state, private audio, one accepted call and two leases; then runs the actual app lifespan. Revoked grants are removed, a healthy control session remains, Space version advances 2 to 3 with one summary, the call ends `session_ended`, both leases clear, private attachment/audio streaming and range authorization pass, and intercepted HTTPX/LiveKit attempt counts remain zero.
+- Checksum-only recovery artifact [13394122481](https://github.com/leonartist7/KUKU/actions/runs/41981806891/artifacts/13394122481) has ZIP SHA256 `da681e832723eb84a1c722c70a94189353967aaede818d14a9d81ee69f49384e`; its durable report is `docs/recovery/2026-11-05-synthetic-restore-state.json`. Fixture archive SHA256 is `7db4c05f30074d1bfc9d483e0caa046eedfde379e1a6526759d7befabece2a59`. Dump/restore/total times were 124/584/3646 ms and are not live RPO/RTO evidence.
 - Private thumbnails are retained only in memory for a proven session and are keyed by session epoch, account, focus scope, attachment, size and format. The cache is 60-second TTL, 64 entries and an estimated 4 MiB of encoded JavaScript strings. Identical in-flight thumbnail requests coalesce; full previews are never retained. Navigation, relogin/logout, account replacement, delete, unavailable state and durable attachment-deletion events revoke matching memory.
 - Controlled synthetic browser evidence used 80 private image fixtures: five thumbnails were initially requested; three Recent/By-person cycles held every same-scope thumbnail key to one request; reopening the full preview produced a second request; leaving and returning to Files refetched the first thumbnail; distant images remained lazy. It used no real accounts, family content or outgoing business mutations. The same run kept 44 mounted rows for 100 loaded chat messages.
 - Browser artifact 13387565047 ZIP 2,134,127 bytes, SHA256:981a517b54d78ca27c48e07ac8b44c253f33381461cae2f6754eb753432bf247, expires 2026-11-12T03:58:41Z. Controlled static inventory: one Ionicons face, five brand-font faces and 793,047 gzip bytes of JavaScript. These are synthetic runner measurements, not real-user CWV or total decoded-memory evidence.
-- Android run 41964670875/job 127039608771 PASS (BUILD SUCCESSFUL in 11m). Artifact 13386829097 ZIP 39,063,553 bytes, SHA256:71a25f45a0d84b4c3055f7f1ed2a4472377cf1f02449fe438fcb6910f774045d, expires 2026-11-12T04:11:12Z. Package com.leonartist7.kuku.preview, target SDK36, arm64-v8a, non-debuggable check, embedded Hermes and PUBLIC DEBUG TEST signature pass. Download: https://github.com/leonartist7/KUKU/actions/runs/41964670875/artifacts/13386829097 . This is not physical Android, microphone/background/push or production-signing acceptance.
-- Post-switch checks: Vercel authenticated fetch returns /login 200 with the expected KUKU HTML and a fresh cloud browser visibly renders the email/password login at the beta alias. Render reports the exact-source deploy live. Credential-free beta probes and the isolated restore rehearsal pass. The free API can still cold-start and has no configured Render health-check path.
+- Android artifact [13394209404](https://github.com/leonartist7/KUKU/actions/runs/41981806879/artifacts/13394209404) has ZIP size 39,063,557 bytes and SHA256 `5ff6a535d2882c8c879639c41493cbef658eae90cd281aecd94a21e03a985a34`. Package `com.leonartist7.kuku.preview`, target SDK 36, arm64-v8a, embedded bundle and PUBLIC DEBUG TEST signature pass. This is not physical Android, microphone/background/push or production-signing acceptance.
+- The free API can still cold-start and has no configured Render health-check path. The provider log confirms the new process completed startup before the prior instance shut down.
 - Calls and native push remain off. LiveKit/two-device media, production signing, physical notification/install/accessibility checks, live backup/media recovery and full erasure remain external gates. KUKU is not end-to-end encrypted.
 - Main, billing, DNS, access protection and live data remain unchanged. No family messages/invitations or personal-content test reads were used.
 ## B01 verified synthetic recovery — 4 November 2026
@@ -93,10 +96,10 @@ Do not mark a full phase complete when a release gate is still outstanding.
 An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
 
 ## Active controller lease
-Controller: root P03 synthetic recovery state.
-Lease recorded at: 2026-11-05T06:25:32Z
-Lease expires at: 2026-11-05T07:55:32Z
-State: ACTIVE; nonempty device/ticket cleanup, nested Space/call recovery and provider-double stream isolation.
+Controller: none.
+Lease recorded at: 2026-11-05T06:57:03Z
+Lease expires at: 2026-11-05T06:57:03Z
+State: IDLE; P03 accepted, deployed and verified.
 
 
 ## Verified implementation checkpoint
@@ -126,10 +129,10 @@ State: ACTIVE; nonempty device/ticket cleanup, nested Space/call recovery and pr
 - Integrator verified unchanged server/chat_events/CallContext base blobs before overlay and spliced only the Message type additions into the newer API runtime. Original local worktrees may be stale; remote refs and the latest accepted commit remain authoritative.
 
 ## Next bounded work
-1. Run the combined cloud backend, frontend, three browser journeys and Android preview checks; repair observed failures before claiming acceptance.
-2. Once the web gates pass, follow docs/RELEASE_RUNBOOK.md for an API-first update of the existing beta. Keep release-branch automatic Vercel deployment disabled; never move main or weaken access protection.
-3. Finish standalone Android compilation/provenance. A test-signed APK does not prove physical Android microphone/playback, notification delivery or production signing.
-4. Continue independently useful dependency maintenance and a synthetic backup/restore rehearsal. Real provider/device acceptance and billing choices remain external gates.
+1. Implement the next independently executable B01 package: authenticated account export, account-deletion workflow and documented retention enforcement with isolated synthetic tests. Preserve closure tombstones and make deletion retry-safe.
+2. Keep live database/media backup, live RPO/RTO, provider delivery, physical erasure, production signing and real-device checks as explicit external gates. Do not use personal content as fixtures.
+3. Keep calls disabled. C03/A01 require configured LiveKit/FCM, production signing and representative physical phones; C04 video waits for the real audio gate.
+4. Preserve one API worker until shared fan-out exists. R02 always-on compute and live health-check configuration require a provider/billing decision.
 
 - Emote previews now have a visible loading poster and correct PNG/WebP failure recovery, including six component-handler tests. Browser screenshots wait for the selected preview to decode.
 - Missing or removed reply originals preserve text and memo drafts; voice replies revalidate their captured target before queueing. A separate 404-original browser regression is included.
@@ -151,9 +154,9 @@ State: ACTIVE; nonempty device/ticket cleanup, nested Space/call recovery and pr
 - Latest Android preview for the accepted runtime is still compiling in run 41864811206; the earlier 20d4cd79 test-signed build passed. Do not claim physical Android or native notification acceptance.
 
 ## Next controller handoff
-1. Fetch fresh implementation/release refs, PR #1, master plan and this ledger; preserve newer work and acquire a lease. Accepted app source is 7708c4ea6472a29c2870463867862e5e4bc715df with a documentation-only descendant on implementation/release. PR #8 records the accepted P02 package; PR #1 against main remains draft.
-2. P02 private-media isolation is accepted. The earliest dependency-ready reliability extension is B01: seed nonempty device/ticket grants and actual nested Space/call state in the isolated restore rehearsal, then prove startup reconciliation and provider-double streaming. Keep live provider data and media out of fixtures.
-3. Account export/deletion, retention enforcement and live backup/media recovery remain later packages. Real provider/device acceptance, production signing and billing choices remain external gates.
+1. Fetch fresh implementation/release refs, PR #1, master plan and this ledger; preserve newer work and acquire a lease. Accepted app source is `b0e04c617956ccb83aed720cbd02b89b0ac6cab2`; PR #9 records the accepted P03 package; PR #1 against main remains draft.
+2. P03 stateful startup recovery and provider-double streaming are accepted. The earliest dependency-ready independent package is the remaining B01 account export/deletion and retention workflow. Keep live provider data and personal content out of fixtures.
+3. Live backup/media recovery, exact live FCV/PIT consistency, physical erasure, real provider/device acceptance, production signing and billing choices remain external gates.
 4. Dependency changes must follow DEPENDENCY_REVIEW, cloud lockfile regeneration and Expo/web/native checks. Preserve CommonJS decoder compatibility.
 5. N01/C03/A01 need real phones/provider/signing setup; calls stay false. C04 video depends on actual audio acceptance. R02 always-on hosting/live readiness settings need a billing/configuration decision. Continue independent work without repeatedly reporting unchanged external gates.
 6. Follow RELEASE_RUNBOOK for beta rollouts. The manual beta alias is authoritative; deploy API first when the frontend requires it. Do not redeploy for documentation only or create duplicate builds/keepalive schedules. Preserve main, protection, billing and live data.

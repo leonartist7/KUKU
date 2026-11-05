@@ -1,0 +1,93 @@
+{
+  "scope": "SYNTHETIC ONLY; no live database or media recovery claim",
+  "source_sha": "da8bdc40bcdead96924902309c4b72076da0c2db",
+  "checked_at": "2026-11-05T06:39:44.102365+00:00",
+  "runner_kernel": "6.8.0-1070-azure",
+  "mongo_source": "8.0.34",
+  "mongo_target": "8.0.34",
+  "dump_tool": "mongodump version: 100.20.0",
+  "restore_tool": "mongorestore version: 100.20.0",
+  "archive_bytes": 4513,
+  "archive_sha256": "7db4c05f30074d1bfc9d483e0caa046eedfde379e1a6526759d7befabece2a59",
+  "dump_ms": 124,
+  "restore_ms": 584,
+  "elapsed_ms": 3646,
+  "collection_counts": {
+    "attachments": 1,
+    "audio_uploads": 1,
+    "call_leases": 2,
+    "calls": 1,
+    "chat_events": 4,
+    "chats": 1,
+    "devices": 1,
+    "event_counters": 1,
+    "file_tickets": 2,
+    "fixture_schema": 1,
+    "invites": 0,
+    "messages": 2,
+    "sessions": 4,
+    "space_messages": 1,
+    "spaces": 1,
+    "users": 4,
+    "web_devices": 1,
+    "ws_tickets": 1
+  },
+  "seeded_session_grants": {
+    "devices": 1,
+    "web_devices": 1,
+    "ws_tickets": 1,
+    "file_tickets": 2
+  },
+  "remaining_session_grants_after_startup": {
+    "devices": 0,
+    "web_devices": 0,
+    "ws_tickets": 0,
+    "file_tickets": 0
+  },
+  "startup_lifespan_exercised": true,
+  "space_recovery": {
+    "version_before": 2,
+    "version_after": 3,
+    "session_summaries": 1,
+    "presence_connections_after": 0
+  },
+  "call_recovery": {
+    "status": "completed",
+    "end_reason": "session_ended",
+    "leases_after": 0
+  },
+  "provider_double": {
+    "stream_opens": 3,
+    "opened_keys": [
+      "objects/fixture.bin",
+      "objects/fixture-audio.bin",
+      "objects/fixture.bin"
+    ],
+    "range_status": 206
+  },
+  "checks": [
+    "restore identity cannot write outside the generated target database",
+    "documents, counts, indexes and collection validators match",
+    "separate fixture media store: valid bytes pass; missing/corrupt bytes fail",
+    "actual app startup removed revoked grants and reconciled nested Space/call state",
+    "newer closure reconciled and old sessions revoked",
+    "startup cleanup preserves grants for a healthy account session",
+    "private attachment streams recheck authorization between provider chunks",
+    "restored private attachment/audio APIs stream exact provider-double bytes with access checks",
+    "actual restored API: sign-in, session revocation, membership, retry, Space and closed-account denial"
+  ],
+  "intercepted_async_httpx_attempts": 0,
+  "intercepted_livekit_attempts": 0,
+  "live_restore_verified": false,
+  "limits": [
+    "provider-double bytes are not a real Blob/R2 restore",
+    "no FCV/PIT consistency or RPO/RTO guarantee",
+    "no physical erasure proof",
+    "no real device/provider delivery, LiveKit media or call-quality test",
+    "only async HTTPX and LiveKit construction are instrumented; other network clients are not"
+  ],
+  "workflow_run_id": 41981806891,
+  "job_id": 127093377795,
+  "artifact_id": 13394122481,
+  "artifact_zip_sha256": "da681e832723eb84a1c722c70a94189353967aaede818d14a9d81ee69f49384e"
+}

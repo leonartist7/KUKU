@@ -121,6 +121,33 @@ before changing the runner/image; do not bypass MongoDB's kernel safety check.
 [MongoDB kernel compatibility](https://www.mongodb.com/docs/v8.0/release-notes/8.0/).
 **Live restore gate below remains NOT VERIFIED.**
 
+## Stateful startup rehearsal completed — 5 November 2026
+
+The follow-up isolated rehearsal passes at source da8bdc40bcdead96924902309c4b72076da0c2db.
+[Verification run](https://github.com/leonartist7/KUKU/actions/runs/41981806891);
+[checksum-only evidence](https://github.com/leonartist7/KUKU/actions/runs/41981806891/artifacts/13394122481).
+The durable report is `docs/recovery/2026-11-05-synthetic-restore-state.json`.
+
+- The archive contains nonempty native/browser device grants, websocket/file tickets,
+  nested two-member Space presence and playback, a Space message, private audio metadata,
+  an accepted 1:1 call and two participant leases.
+- The restored app's actual lifespan runs before readiness. Revoked, expired, orphaned or
+  mismatched session grants are removed while a separately created healthy session keeps all
+  four grant types. Occupied Spaces are reconciled in bounded pages.
+- Startup removes both restored presence leases, closes one Space session summary, pauses
+  playback and advances its state version from 2 to 3. The restored active call ends with
+  `session_ended` and both call leases are removed. Calls remain disabled in the beta.
+- An in-memory fail-closed provider double streams the restored attachment exactly, returns an
+  exact `206` byte range for private audio, rejects the reused one-shot ticket and denies an
+  outsider. Attachment access is rechecked after provider startup and between chunks.
+- Zero intercepted asynchronous HTTPX requests and zero LiveKit constructions occurred.
+  No provider credential, real account, family message or raw archive was used or uploaded.
+
+Observed fixture timings: dump 124 ms, restore 584 ms, overall 3646 ms. These measurements still
+do not establish live FCV/PIT consistency, RPO/RTO, Blob/R2 durability, provider delivery,
+physical-device behavior, LiveKit media quality or physical erasure. The live gate below remains
+unchanged.
+
 ## Live backup and restore gate
 
 Before claiming recoverability, identify the actual application database and an existing private,
