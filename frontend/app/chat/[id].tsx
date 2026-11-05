@@ -127,7 +127,16 @@ function ChatConversation({id}: {id: string}) {
     if(pending.attempts>=24){cancelPrependAnchor();return;}
     pending.attempts+=1;pending.ignoreNext=true;pending.target=undefined;
     const layout=rowLayouts.current.get(pending.anchorId);
-    if(layout){
+    if(Platform.OS==="web"){
+      const list=document.querySelector('[data-testid="chat-message-list"]') as HTMLElement|null;
+      const row=list?Array.from(list.querySelectorAll<HTMLElement>('[data-testid^="message-row-"]')).find(node=>node.dataset.testid==="message-row-"+pending.anchorId):null;
+      if(list){
+        pending.target=row?Math.max(0,list.scrollTop+(row.getBoundingClientRect().top-list.getBoundingClientRect().top)-pending.viewOffset):Math.max(0,(list.scrollHeight-list.clientHeight)*(pending.index/Math.max(1,messagesRef.current.length-1)));
+        pending.stable=row&&Math.abs(list.scrollTop-pending.target)<=2?(pending.stable||0)+1:0;
+        list.scrollTop=pending.target;list.dispatchEvent(new Event("scroll"));
+        if(pending.stable>=3){cancelPrependAnchor();return;}
+      }
+    }else if(layout){
       pending.target=Math.max(0,layout.y-pending.viewOffset);
       pending.stable=Math.abs(scrollPosition.current.offset-pending.target)<=2?(pending.stable||0)+1:0;
       listRef.current?.scrollToOffset({offset:pending.target,animated:false});
