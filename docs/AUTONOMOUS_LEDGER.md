@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-05T14:24:30Z
+Updated: 2026-11-05T15:01:04Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: root P05 provider-safe retention and operator evidence, 5 November 2026.
+Current controller: none; P05 provider-safe retention checkpoint completed 5 November 2026.
 Work was performed through connected GitHub/provider APIs and cloud CI; never assume a prior local worktree exists.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -55,13 +55,16 @@ Initial package owners (all returned; no agent has an outstanding write):
 ## Current authoritative checkpoint
 This section supersedes historical pending statements below.
 - Beta: https://kuku-git-codex-kuku-release-20261027-lionovart.vercel.app/login
-- Accepted runtime source `5e08d34f1890c272364d3420136a9f9aaea80e3a`. [PR #10](https://github.com/leonartist7/KUKU/pull/10) was squash-merged into the review release branch after exact-head checks; main is unchanged.
-- Render deploy `dep-dbm61t3m8hqs73erc5u0` is LIVE on that exact commit. The replacement instance completed application startup at 2026-11-05T10:58:05.594851826Z before the old instance shut down at 10:58:15.279558108Z; Render announced the service live at 10:58:16.112338343Z. The service remains one API worker, manual deploy, free plan and no configured provider health-check path.
+- Accepted runtime source `d8004c44f0104b46d4067e49e242004216516c73`. [PR #11](https://github.com/leonartist7/KUKU/pull/11) was squash-merged into the review release branch after exact-head checks on source `429cef1cab251c91963a7760fc245c3a6ca2ff22`; main is unchanged.
+- Render deploy `dep-dbm9j6u417fc73boo3jg` is LIVE on the accepted runtime. The replacement instance completed application startup at 2026-11-05T14:59:55.300428093Z before the old instance shut down at 15:00:05.807543007Z; Render announced the service live at 15:00:06.572118844Z. The service remains one API worker, manual deploy, free plan and no configured provider health-check path.
+- Closed-account retention now has a separate restart-safe stage for metadata-backed unreferenced attachments and Space audio. It requires an independently disabled account, completed operational cleanup, policy version 2 and an operator approval at least five minutes old. Shared message attachments plus current and historical Space audio are preserved. Source reservations and final message/Space checks fail closed on late references.
+- Object jobs reclaim expired leases, record provider completion before quota work, release user/global quota with per-counter idempotency tokens and keep compact tombstones without provider keys or error text. Invalid provider/key/size metadata, reactivated users, revoked approval and counter underflow block or retry without claiming completion. Indexed scans have separate row/object budgets and the optional worker is isolated from realtime room maintenance.
+- `STORAGE_RETENTION_ENABLED=false` remains the default and was not enabled in Render. No real account received a cleanup approval and no live provider object or quota counter was changed. `physical_erasure_completed` remains false. Provider-only objects stranded before metadata insertion, authored shared history and backup erasure remain outside this stage.
 - Account closure now has an expiring compare-and-set operational cleanup lease that runs immediately, at startup and every 15 seconds from the bounded lifecycle worker. Cleanup requires an independently confirmed disabled user; active or missing users are blocked without destructive work.
 - Restart-safe cleanup revokes sessions and ephemeral grants, removes recovery codes, expires unused invitations, ends ringing/active calls and participant leases under the per-call token lock, removes per-device Space presence with compare-and-set retries, and repairs Space lifecycle. Shared history, provider objects, the disabled user/tombstone and backups remain retained. Retention policy version 2 records `physical_erasure_pending`; it does not claim provider or backup erasure.
-- Exact-head [release run 42013014400](https://github.com/leonartist7/KUKU/actions/runs/42013014400) PASS on candidate `b34a357222e4de2511681d7f600ae2a3a3429bc3`: backend job 127196499520 has 124 isolated Mongo-backed tests; frontend job 127196499803 has 116/116 unit/release tests, TypeScript, web export, onboarding, Spaces, chat-tools and controlled-performance journeys; Android job 127197606200 completed `BUILD SUCCESSFUL` in 8m53s.
-- Android artifact [13408522476](https://github.com/leonartist7/KUKU/actions/runs/42013014400/artifacts/13408522476) is 39,063,561 bytes with ZIP SHA256 `e979c46f289d867c8fd5af6d43d07212c6c31f219b645f23ebfc7f9e49ccedbb`. Package `com.leonartist7.kuku.preview`, target SDK 36, arm64-v8a, embedded Hermes bytecode and PUBLIC DEBUG TEST signature pass. This is not physical Android, microphone/background/push or production-signing acceptance.
-- The frontend did not change. Vercel deployment `dpl_6ZfhQDGvNJReixX4tsE2ta1VPqJF` remains READY at frontend source `7708c4ea6472a29c2870463867862e5e4bc715df`. An authenticated provider fetch of the release alias `/login` returned HTTP 200 with the expected KUKU HTML at 2026-11-05T10:57:20Z; no frontend deployment or alias/protection change was needed.
+- Exact-head [release run 42047850803](https://github.com/leonartist7/KUKU/actions/runs/42047850803) PASS on candidate `429cef1cab251c91963a7760fc245c3a6ca2ff22`: backend job 127315610634 has 131 isolated Mongo-backed tests; frontend job 127315610481 has 116/116 unit/release tests, TypeScript, web export, onboarding, Spaces, chat-tools and controlled-performance journeys; Android job 127317676821 completed `BUILD SUCCESSFUL` in 8m39s.
+- Android artifact [13427325083](https://github.com/leonartist7/KUKU/actions/runs/42047850803/artifacts/13427325083) is 39,063,557 bytes with ZIP SHA256 `22bf7b98be2548538b61b8150cc71fde47c93229dd917e5c8f02599d56428aa4`. Package `com.leonartist7.kuku.preview`, target SDK 36, arm64-v8a, embedded Hermes bytecode and PUBLIC DEBUG TEST signature pass. This is not physical Android, microphone/background/push or production-signing acceptance.
+- The frontend source did not change. Exact-source Vercel implementation deployment `dpl_5anXLdqRX1cEgfjGyraAcGuqs4zn` is READY at `https://kuku-x5us4bbp9-lionovart.vercel.app`; an authenticated provider fetch of its `/login` and the release beta `/login` returned HTTP 200 with expected KUKU HTML at 2026-11-05T15:00Z. The feature-only branch deployment failed closed because that branch has no `EXPO_PUBLIC_BACKEND_URL`; the verified implementation deployment carries the review configuration. No alias/protection change was needed.
 - Stateful recovery evidence from run 41981806891 remains applicable. Live database/media backup, exact live FCV/PIT consistency, physical erasure, configured LiveKit/FCM, production signing and representative-device acceptance remain external gates.
 - Calls and native push remain off. KUKU is not end-to-end encrypted. Main, billing, DNS, access protection and live data remain unchanged. No family messages/invitations or personal-content test reads were used.
 ## B01 verified synthetic recovery — 4 November 2026
@@ -93,10 +96,10 @@ Do not mark a full phase complete when a release gate is still outstanding.
 An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
 
 ## Active controller lease
-Controller: root P05 provider-safe retention and operator evidence.
-Lease recorded at: 2026-11-05T14:24:30Z
-Lease expires at: 2026-11-05T15:54:30Z
-State: ACTIVE; orphaned upload/account-object retention, idempotent quota accounting and operator progress.
+Controller: none.
+Lease recorded at: 2026-11-05T15:01:04Z
+Lease expires at: —
+State: IDLE; P05 accepted and deployed with live deletion disabled.
 
 
 ## Verified implementation checkpoint
@@ -126,7 +129,7 @@ State: ACTIVE; orphaned upload/account-object retention, idempotent quota accoun
 - Integrator verified unchanged server/chat_events/CallContext base blobs before overlay and spliced only the Message type additions into the newer API runtime. Original local worktrees may be stale; remote refs and the latest accepted commit remain authoritative.
 
 ## Next bounded work
-1. The authenticated export, account closure and retry-safe operational cleanup slice of B01 is accepted. The next independently executable B01 package is provider-safe orphaned upload/account-object retention enforcement with idempotent quota accounting, bounded retries and operator progress/error visibility, exercised only with synthetic provider doubles.
+1. Authenticated export, closure, operational cleanup and metadata-backed closed-account orphan retention are accepted. The next independently executable B01 package is a non-destructive, two-pass provider inventory/quarantine report for objects stranded before metadata insertion. It must remain report-only until owner attribution, retention policy and an explicit operator approval path are reviewable.
 2. Keep authored shared-history policy, live database/media backup, live RPO/RTO, provider delivery, physical erasure, production signing and real-device checks as explicit external gates. Do not use personal content as fixtures.
 3. Keep calls disabled. C03/A01 require configured LiveKit/FCM, production signing and representative physical phones; C04 video waits for the real audio gate.
 4. Preserve one API worker until shared fan-out exists. R02 always-on compute and live health-check configuration require a provider/billing decision.
@@ -151,8 +154,8 @@ State: ACTIVE; orphaned upload/account-object retention, idempotent quota accoun
 - Latest Android preview for the accepted runtime is still compiling in run 41864811206; the earlier 20d4cd79 test-signed build passed. Do not claim physical Android or native notification acceptance.
 
 ## Next controller handoff
-1. Fetch fresh implementation/release refs, PR #1, master plan and this ledger; preserve newer work and acquire a lease. Accepted runtime source is `5e08d34f1890c272364d3420136a9f9aaea80e3a`; PR #10 records the accepted P04 package; PR #1 against main remains draft.
-2. P04 authenticated export, closure and restart-safe operational cleanup are accepted. The earliest dependency-ready independent package is the remaining B01 provider-safe orphan upload/account-object retention worker and operator evidence. Keep live provider data and personal content out of fixtures.
+1. Fetch fresh implementation/release refs, PR #1, master plan and this ledger; preserve newer work and acquire a lease. Accepted runtime source is `d8004c44f0104b46d4067e49e242004216516c73`; PR #11 records the accepted P05 package; PR #1 against main remains draft.
+2. P05 metadata-backed closed-account orphan retention is accepted and deployed with its live worker disabled. The earliest dependency-ready package is a report-only two-pass provider inventory/quarantine design for objects stranded before metadata insertion. Keep live deletion disabled and use synthetic provider inventory fixtures until owner attribution, retention policy and operator approval are explicit.
 3. Live backup/media recovery, exact live FCV/PIT consistency, physical erasure, real provider/device acceptance, production signing and billing choices remain external gates.
 4. Dependency changes must follow DEPENDENCY_REVIEW, cloud lockfile regeneration and Expo/web/native checks. Preserve CommonJS decoder compatibility.
 5. N01/C03/A01 need real phones/provider/signing setup; calls stay false. C04 video depends on actual audio acceptance. R02 always-on hosting/live readiness settings need a billing/configuration decision.
