@@ -3,6 +3,18 @@ import os
 from fastapi import HTTPException
 
 class PrivateBlobStore:
+    def iter_inventory(self, prefix, page_size=200):
+        """Yield read-only catalog entries for the offline inventory command."""
+        self.require_config()
+        if prefix not in ("attachments/", "space-audio/") or not 1 <= page_size <= 1000:
+            raise ValueError("Invalid inventory listing request")
+        from vercel.blob import sync as blob
+        for item in blob.query_blobs(prefix=prefix, page_size=page_size):
+            yield {
+                "key": item.pathname, "size": item.size,
+                "uploaded_at": item.uploaded_at, "etag": item.etag,
+            }
+
     def ready(self):
         return bool(os.getenv("BLOB_READ_WRITE_TOKEN"))
 

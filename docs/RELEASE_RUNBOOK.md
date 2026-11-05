@@ -69,6 +69,13 @@ Do not test erasure on live accounts or delete orphaned provider objects without
 ownership, leases, idempotency and retention rules. Confirm backups and an actual restore
 procedure before destructive migration; synthetic CI databases do not prove Atlas restore.
 
+Provider-only object inventory is an offline operator command documented in
+docs/PROVIDER_INVENTORY.md. Never add it to API startup, a request route or lifecycle maintenance.
+A live scan requires the most restricted available listing credential, an explicit read-only
+database identity, stable HMAC key, provider-cost decision and two complete passes at least 24
+hours apart. Its output cannot authorize deletion,
+quota changes, retention jobs or a physical-erasure claim.
+
 ## Calls and Android
 Keep calls off until verified provider setup and physical two-device acceptance.
 The Android preview uses a separate .preview identity and public TEST signing, with calls
