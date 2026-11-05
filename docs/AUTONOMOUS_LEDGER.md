@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-05T02:59:14.792Z
+Updated: 2026-11-05T03:29:17Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: root P01 chat-list checkpoint, 5 November 2026.
+Current controller: IDLE after the verified P01 chat-list release, 5 November 2026.
 Work was performed through connected GitHub/provider APIs and cloud CI; never assume a prior local worktree exists.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -46,7 +46,7 @@ Initial package owners (all returned; no agent has an outstanding write):
 |---|---|---|
 | 1 Reliability | FOUNDATIONS DEPLOYED | Account-bound restore/reconnect pass; cold-device and always-on gates open |
 | 2 Design and interaction | FOUNDATIONS DEPLOYED | Responsive browser/theme checks pass; physical accessibility review open |
-| 3 Chat/performance | CHAT TOOLS + FONT TRIM DEPLOYED | Controlled traces recorded; physical/CWV budgets and further list/media work open |
+| 3 Chat/performance | CHAT TOOLS + BOUNDED CHAT LIST DEPLOYED | Controlled anchoring/render evidence recorded; physical/CWV and private-media cache work open |
 | 4 Spaces | BETA DEPLOYED; DEVICE SYNC OPEN | Roles/private audio/reconnect checks pass; real drift walkthrough open |
 | 5 Calls | AUDIO FOUNDATION IMPLEMENTED; OFF | Provider and audible two-device checks required; native/video incomplete |
 | 6 Android/release | TEST APK BUILT; PRODUCTION GATED | Physical install/push/signing, full erasure and restore still open |
@@ -55,19 +55,14 @@ Initial package owners (all returned; no agent has an outstanding write):
 ## Current authoritative checkpoint
 This section supersedes historical pending statements below.
 - Beta: https://kuku-git-codex-kuku-release-20261027-lionovart.vercel.app/login
-- Frontend source 36655ce6089ee07cf4b83cda9b54342a31406b2d, READY/assigned Vercel dpl_8ifAa1qUazomgDcJzuS1RNmZhq1h in fra1. Backend remains LIVE dep-dbllk5m1egvs73autn6g/source d3366883fb0b2f8ae67236f4e17014447d923bb0. This package changes only 29 icon-import lines in app runtime; backend, API/config and proxy are unchanged. Preserve one API worker.
-- Release run 41934515662: backend126939496025/frontend 126939496479 PASS:119 isolated Mongo-backed tests,110 frontend unit tests, TypeScript, web export, onboarding/media, Spaces, chat-tools and controlled performance. Actual tested merge b6a8af8fe512931810d30bc5730c43a70fa2ffaf/treec5f57206b1c02f7ffc2638526415d02d0ed13975 has zero changed files against accepted source.
-- P01 icon fonts19→1 and4,076,840→389,724 raw bytes:18 unused font files/3,687,116 bytes removed. Complete Ionicons asset matches the prior path/sizes; all five brand fonts retained. All emitted JS3,634,581→3,206,880 raw bytes; gzip923,007→790,360. Entry gzip732,496→599,851. Unused font bytes were not initial requests; no 3.69MB initial-download or causal latency claim.
-- Browser artifact 13373706112 SHA256:290a6389b1ee655bbdb5f687693488fb160322db9937bd5c57d8544e4c8a8b4f. Before baseline remains docs/performance/2026-11-04-controlled-after.json; new report/import inventory/native evidence are under docs/performance/2026-11-05-icons*.json/md.
-- All brand fonts and ionicons load; welcome/files screenshots reviewed. Login makes zero API calls, account-proof gating persists, repeat entry JS transfers zero bytes,80-image list initially requests 5 thumbnails and full image waits for open.100-message list still mounts 100 rows; no list/cache/JSX behavior changed.
-- Android run 41934515662/job 126941189511 PASS (BUILD SUCCESSFUL,8m3s); exact source, package/signature/non-debuggable/Hermes checks pass. Artifact 13374117104 ZIP39,054,429 bytes, SHA256:d1853edb146ef7a05b824707569d408184b226f972fe01505e37def23e905b5b, expires 2026-11-11T23:45:29Z. APK 39,044,394 bytes, SHA256:a7c96fa662eda3b85a605f26ffd0b0921949a8068cb76bba6598815751925e2f. Independent downloaded checksums/provenance match; all six used font hashes are preserved. Native fonts25→7, raw4,394,188→707,072 bytes; APK shrinks2,177,120 bytes. Detailed manifests are retained in 2026-11-05-icons-android.json.
-- Download: https://github.com/leonartist7/KUKU/actions/runs/41934515662/artifacts/13374117104 . Separate .preview arm64 package, version 1.0.0-preview.62.1/code1000062, PUBLIC TEST signing. Calls/native push stay off; physical-device/production-signing acceptance is not claimed.
-- Pre-switch HTTP job 126939865459 in run 41930504327 PASS:live/ready200/ok, private account/chats401/no-store with approved origin, publiclogin200, proxy401/no-store. First liveness request39,563ms; free API cold-start remains a hosting gate. Post-switch run 41936451616/job 126945999557 PASS after alias assignment23:47:20Z; checks finish 23:47:27Z.
-- PR6 is integrated into the review release branch; PR1 against main remains draft. Final documentation commit descends from accepted36655ce6 and does not change runtime.
-- Prior P01 brand-font trimming and B01 synthetic recovery evidence remain valid. Runtime dependency audit findings are still triaged in DEPENDENCY_REVIEW.
-- Main, billing, DNS, access protection and live data remain unchanged. No family messages/invitations or personal-content test reads were used.
-
-
+- Accepted app source fc11a4ef80c2d418f30605238dc13b4c1edff46f; PR7 is merged into the review release branch. Vercel dpl_F7WZXifiU9HYLCKNgyiPaXyEYS3E is READY in fra1 and the existing beta alias is assigned to it. Render remains unchanged and LIVE at dep-dbllk5m1egvs73autn6g/source d3366883fb0b2f8ae67236f4e17014447d923bb0. Preserve one API worker.
+- Release run 41960159514 PASS: backend job 127024375981 has 119 isolated Mongo-backed tests; frontend job 127024375580 has 110 unit tests, TypeScript, web export, onboarding/media, Spaces, chat-tools and controlled performance. Tested PR merge 4de8252fe79312cb6f1967696da40f9ec4ac8767 is one metadata commit ahead of accepted source with zero changed files.
+- Controlled synthetic chat fixture starts with 100 variable-height messages, verifies the latest row in the viewport, then settles at 44 mounted message rows. A remote append preserves visible perf-40 at top -37px. Loading 50 older rows while a second remote append arrives preserves perf-0 at top 114px before and after; the list remains reachable to the oldest row. No fixed row heights or live accounts/content were used.
+- Browser artifact 13385391866 ZIP 2,125,417 bytes, SHA256:d18c6fd2754ed0ccb2ed18d23fdeb35d05aa065af10b09c3c7e732a0e956a87d, expires 2026-11-12T03:16:46Z. Login makes zero API requests in the controlled fixture; saved-account proof gating, private operations and account/navigation isolation remain covered.
+- Android run 41960159514/job 127025770094 PASS (BUILD SUCCESSFUL in 8m44s). Artifact 13385786468 ZIP 39,057,909 bytes, SHA256:adbf99c8d8106aae5ab3e7d2aa6ee9ab389e3ca1671cdc5a494a9468a171d283, expires 2026-11-12T03:26:54Z. APK 39,047,874 bytes, SHA256:45ea5a63645c8b782a680f6ede268da0bc946ffa69643ce8c449b918a8378a9c. Package com.leonartist7.kuku.preview, version 1.0.0-preview.73.1/code1000073, target SDK36, arm64, v2 PUBLIC DEBUG TEST signature, non-debuggable check and embedded Hermes 3,668,328 bytes pass.
+- Download: https://github.com/leonartist7/KUKU/actions/runs/41960159514/artifacts/13385786468 . Calls and native push remain off. Physical install, microphone/background/push behavior and production signing are not claimed.
+- Post-switch provider checks: the alias resolves to dpl_F7WZXifiU9HYLCKNgyiPaXyEYS3E; /login and /manifest.json return 200 and the deployed entry is entry-a673b63373fb365319c9a53612ae40e3.js. A fresh cloud-browser reload visibly renders the email/password KUKU login. Backend remains LIVE. The free API can still cold-start and has no configured Render health-check path.
+- Prior font trimming, synthetic recovery and dependency-review evidence remain valid. Main, billing, DNS, access protection and live data remain unchanged. No family messages/invitations or personal-content test reads were used.
 ## B01 verified synthetic recovery — 4 November 2026
 - Tested source: a78c1d399c0b4157507c2d57f521da0a277e2dea, draft PR #4. Restore run 41887901603/job 126777197318 passes on separate authenticated MongoDB8.0.34 services, Database Tools100.20.0 and runner kernel6.8.0-1070-azure. This does not establish exact live Atlas8.0.36/FCV compatibility.
 - Target identity is denied a write to another fixture namespace. Quiescent source archive restores only to an empty generated target, preserving canonical document/count/index/validator manifests.
@@ -97,10 +92,10 @@ Do not mark a full phase complete when a release gate is still outstanding.
 An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
 
 ## Active controller lease
-Controller: root P01 chat-list.
-Lease recorded at: 2026-11-05T02:59:14.792Z
-Lease expires at: 2026-11-05T04:29:14.792Z
-State: ACTIVE; P01 chat-list final visible-row prepend correction and full release verification.
+Controller: none.
+Last controller: root P01 chat-list.
+Completed at: 2026-11-05T03:29:17Z
+State: IDLE; P01 bounded chat rendering and visible-row preservation are verified and deployed to the review beta.
 
 
 ## Verified implementation checkpoint
@@ -155,8 +150,8 @@ State: ACTIVE; P01 chat-list final visible-row prepend correction and full relea
 - Latest Android preview for the accepted runtime is still compiling in run 41864811206; the earlier 20d4cd79 test-signed build passed. Do not claim physical Android or native notification acceptance.
 
 ## Next controller handoff
-1. Fetch fresh implementation/release refs, PR1, master plan and this ledger; preserve newer work and acquire a lease. Accepted app source 36655ce6 has a documentation-only descendant on both refs. PR4/PR5/PR6 are merged into review release; PR1 against main remains draft. Open a new bounded incremental draft PR for future code/CI.
-2. Continue dependency-ready P01 with chat-list latest-message anchoring tests before revisiting a smaller render window. The controlled 100-message fixture still mounts 100 rows; the previous reduced-window attempt was reverted after History79 failed to remain visible. Preserve account/navigation, scroll-to-latest, load-older and new-message behavior; measure render counts before/after. Icon trimming is accepted in docs/performance/2026-11-05-icons.md. Private-thumbnail dedup/cache changes need removal/revocation/account isolation. Physical/CWV/memory budgets remain unverified.
+1. Fetch fresh implementation/release refs, PR1, master plan and this ledger; preserve newer work and acquire a lease. Accepted app source fc11a4ef80c2d418f30605238dc13b4c1edff46f has a documentation-only descendant on both refs. PR7 is merged into review release; PR1 against main remains draft. Open a new bounded incremental draft PR for future code/CI.
+2. P01 bounded chat rendering is accepted. Next dependency-ready work is account-isolated private thumbnail/media caching with explicit removal, revocation and navigation/account-switch invalidation; measure request and memory behavior with synthetic fixtures. B01 can then extend restore coverage with nonempty device/ticket grants and nested Space/call state. Physical/CWV/memory budgets remain unverified.
 3. B01 synthetic restore passes; next independent extension can seed nonempty device/ticket grants, actual nested Space/call state, full isolated startup and provider-double streaming. Preserve synthetic-only isolation; live backup/media restore/physical erasure require explicit separate evidence.
 4. Dependency changes must follow DEPENDENCY_REVIEW, cloud lockfile regeneration and Expo/web/native checks. Preserve CommonJS decoder compatibility.
 5. N01/C03/A01 need real phones/provider/signing setup; calls stay false. C04 video depends on actual audio acceptance. R02 always-on hosting/live readiness settings need a billing/configuration decision. Continue independent work without repeatedly reporting unchanged external gates.
