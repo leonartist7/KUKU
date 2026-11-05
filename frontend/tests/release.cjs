@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 test("image previews accept only bounded JPEG/WebP data and recognize legacy photo files",()=>{
   const ts=require("typescript"),exports={};
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync("src/imagePreview.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports});
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync("src/imagePreview.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports,Map,Set,Promise,Error,Number,JSON,RegExp,Date,require:name=>{assert.equal(name,"./api");return {getSessionEpoch:()=>0,getSessionUserId:()=>null,onSessionBoundary:()=>()=>{}};}});
   for(const name of ["family.jpg","portrait.JPEG","photo.PNG","animated.gif","camera.HEIC"])assert.equal(exports.isImageFilename(name),true);
   for(const name of [null,"notes.txt","fake.jpg.exe","image.svg"])assert.equal(exports.isImageFilename(name),false);
   const good={image:"data:image/jpeg;base64,YWJj",width:512,height:200};
