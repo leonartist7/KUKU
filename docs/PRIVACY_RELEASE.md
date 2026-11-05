@@ -69,6 +69,34 @@ messages, upload metadata/provider objects, the disabled user record and the clo
 retained for the still-gated operator erasure policy. Completion therefore records
 `retention_state=physical_erasure_pending` and keeps `physical_erasure_completed=false`.
 
+### Provider-object retention worker (implemented, gated off)
+
+KUKU now has a second restart-safe stage for metadata-backed objects that are proven unreferenced
+and owned by an independently confirmed disabled account. It is intentionally disabled by default
+with `STORAGE_RETENTION_ENABLED=false`, and an account is ineligible until an operator records
+`retention_object_cleanup_approved_at`. Deploying this code does not approve a real account or
+delete any live object.
+
+Approval must remain recorded for at least five minutes after operational session cleanup before
+an account becomes eligible. Provider calls run in a separate optional maintenance task and are
+awaited to termination so a timed-out worker thread cannot overlap a retry. Scans have supporting
+indexes and a separate per-pass row budget so referenced libraries cannot delay ordinary lifecycle
+maintenance.
+
+The bounded worker scans attachments and private Space audio with resumable cursors. Immediately
+before provider deletion it rechecks chat messages, current Spaces and historical Space sessions.
+It reserves the source metadata while deleting, and message/Space writes perform a final source
+check so a late reference is rejected or rolled back before it becomes visible. Any established
+reference preserves the object. Each deletion has its own expiring lease and durable tombstone;
+provider success is recorded before quota work so a restart can converge without repeating later
+steps. User and global quota counters use the same job ID as an atomic per-document release fence,
+and a mismatch stops for operator review instead of making a counter negative.
+
+Operator status records counts, bytes and exception classes only. Provider keys and provider error
+messages are not copied into account-deletion status. Completed object tombstones remove the key.
+Shared media, authored history, the disabled user/tombstone and backups remain outside this stage,
+and `physical_erasure_completed` remains false.
+
 The disabled-account check is the primary access boundary, including if later cleanup is
 interrupted. Session-bound APIs and downloads reject the closed identity. Call records and
 participant leases are ended immediately, but provider removal remains `revocation_pending` when
@@ -104,7 +132,8 @@ Do not run cleanup automatically against real accounts merely to test it. A futu
 - A documented policy for authored shared history and historical names.
 - Private object deletion through the exact stored storage provider, with retries and proof of
   deletion before releasing quota. Never delete another account's object or decrement quota twice.
-- Cleanup of orphaned uploads and account-scoped durable events under the agreed retention policy.
+- Provider-only objects stranded before metadata insertion and account-scoped durable events under
+  the agreed retention policy.
 - Verified provider-side call/media removal for issued tokens; the database revocation request is
   durable, but real LiveKit completion still needs configured-provider evidence.
 - A minimal tombstone retained according to policy so backup restores cannot silently reactivate
@@ -114,6 +143,10 @@ Do not run cleanup automatically against real accounts merely to test it. A futu
 
 Until those gates pass, keep physical_erasure_completed false. Do not convert queued/recorded
 requests into a “data deleted” badge.
+
+The implemented retention worker covers only database-metadata-backed closed-account orphans.
+Provider inventory for bytes stranded before metadata insertion still needs a separate two-pass
+inventory/quarantine design. Never enable the worker merely to test it against real accounts.
 
 ## Verification
 
@@ -128,6 +161,9 @@ requests into a “data deleted” badge.
   with requirements-dev.txt must supply the execution result.
 - A real browser/native account-screen walkthrough, LiveKit revocation timing and physical
   backup/erasure evidence are not established by those tests.
+- backend/tests/test_storage_retention.py uses provider doubles to cover referenced-media
+  preservation, current and historical Space references, other-account isolation, restart after
+  provider deletion, exactly-once quota release, concurrent claims and active-account blocking.
 
 No live user data was exported, closed or erased while implementing this package.
 
