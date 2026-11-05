@@ -542,8 +542,8 @@ function ChatConversation({id}: {id: string}) {
   );
 }
 
-const MessageRow = React.memo(function MessageRow({msg,mine,userId,busy,replyMessage,onActions,onOriginal,onReact}:{
-  msg:Message;mine:boolean;userId:string;busy:boolean;replyMessage:Message|null;
+const MessageRow = React.memo(function MessageRow({msg,mine,userId,previewScope,busy,replyMessage,onActions,onOriginal,onReact}:{
+  msg:Message;mine:boolean;userId:string;previewScope:string;busy:boolean;replyMessage:Message|null;
   onActions:(message:Message)=>void;onOriginal:(messageId:string)=>void;onReact:(messageId:string,emoji:string|null)=>void;
 }) {
   const { c, f } = useTheme();
