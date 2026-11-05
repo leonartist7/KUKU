@@ -11,7 +11,8 @@ import {spacesApi, SpaceSession} from "../../src/spaces";
 import {openPrivateDownload} from "../../src/downloads";
 import FileSharingStatus from "../../src/FileSharingStatus";
 import PrivateImageCard from "../../src/PrivateImageCard";
-import {isImageFilename} from "../../src/imagePreview";
+import {clearPrivateImagePreviewScope,isImageFilename} from "../../src/imagePreview";
+import {subscribeChatEvents} from "../../src/chatRealtime";
 import {ContentFrame, PageHeader, ScreenState} from "../../src/ScreenUI";
 
 type FileMsg = Message & {sender: User | null};
@@ -43,6 +44,8 @@ export default function FilesScreen() {
   const [sessionsError, setSessionsError] = useState(false);
   const [activeCat, setActiveCat] = useState<Category | null>(null); const [personId, setPersonId] = useState<string | null>(null);
   const request = useRef(0); const visible = useRef(false);
+  const previewScopeCounter=useRef(0),eventTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const [previewScope,setPreviewScope]=useState(()=>`files:${uid||"none"}:0`);
   const load = useCallback(async () => {
     if (!uid) return;
     const current = ++request.current; setError("");
@@ -60,10 +63,21 @@ export default function FilesScreen() {
     }
   }, [uid]);
   useFocusEffect(useCallback(() => {
+    const scope=`files:${uid||"none"}:${++previewScopeCounter.current}`;setPreviewScope(scope);
     visible.current = true; setFiles([]); setSessions([]); setLoading(true); setSessionsError(false);
     setActiveCat(null); setPersonId(null); void load();
-    return () => {visible.current = false; request.current++;};
-  }, [load]));
+    const stop=uid?subscribeChatEvents(uid,event=>{
+      if(event.type!=="chat_changed")return;
+      clearPrivateImagePreviewScope(uid,scope);
+      if(eventTimer.current)clearTimeout(eventTimer.current);
+      eventTimer.current=setTimeout(()=>{if(visible.current)void load();},60);
+    }):()=>{};
+    return () => {
+      visible.current=false;request.current++;stop();
+      if(eventTimer.current)clearTimeout(eventTimer.current);eventTimer.current=null;
+      if(uid)clearPrivateImagePreviewScope(uid,scope);
+    };
+  }, [load,uid]));
   const retry = () => {setLoading(true); void load();};
   const byPerson = useMemo(() => {
     const groups = new Map<string, {user: User; items: FileMsg[]}>();
@@ -104,7 +118,7 @@ export default function FilesScreen() {
   else if (section === "By person" && !personId) content = <FlatList data={byPerson} keyExtractor={person => person.user.id} contentContainerStyle={styles.list}
     renderItem={({item}) => <View style={styles.personCard}>
       <Text style={styles.personName}>{item.user.name}</Text><Text style={styles.personMeta}>{item.items.length} shared items</Text>
-      <View style={styles.personFiles}>{item.items.slice(0, 3).map(file => <FileRow key={file.id} file={file}/>)}</View>
+      <View style={styles.personFiles}>{item.items.slice(0, 3).map(file => <FileRow key={file.id} file={file} cacheScope={previewScope}/>)}</View>
       {item.items.length > 3 ? <Pressable accessibilityRole="button" accessibilityLabel={"View all files from " + item.user.name} onPress={() => setPersonId(item.user.id)} style={styles.backLink}>
         <Text style={styles.backText}>View all {item.items.length} items</Text><Ionicons name="arrow-forward" size={16} color={c.primaryDark}/>
       </Pressable> : null}
@@ -114,7 +128,7 @@ export default function FilesScreen() {
     renderItem={({item}) => <SessionRow session={item}/>} ListEmptyComponent={<EmptyHint sessions label="Past shared sessions will collect here."/>}/>;
   else content = <FlatList data={filtered} keyExtractor={item => item.id} contentContainerStyle={styles.list}
     initialNumToRender={12} maxToRenderPerBatch={12} windowSize={7}
-    renderItem={({item}) => <FileRow file={item} showSender/>} ListEmptyComponent={<EmptyHint label="Nothing here yet."/>}
+    renderItem={({item}) => <FileRow file={item} showSender cacheScope={previewScope}/>} ListEmptyComponent={<EmptyHint label="Nothing here yet."/>}
     ListHeaderComponent={back ? <Pressable accessibilityRole="button" accessibilityLabel={back.label} onPress={back.action} style={styles.backLink}>
       <Ionicons name="chevron-back" size={16} color={c.primaryDark}/><Text style={styles.backText}>{back.label}</Text>
     </Pressable> : null}/>;
@@ -142,12 +156,12 @@ export default function FilesScreen() {
   </ContentFrame></SafeAreaView>;
 }
 
-function FileRow({file, showSender = false}: {file: FileMsg; showSender?: boolean}) {
+function FileRow({file, showSender = false,cacheScope}: {file: FileMsg; showSender?: boolean;cacheScope:string}) {
   const {c, f} = useTheme(); const {user} = useAuth(); const styles = useMemo(() => makeStyles(c, f), [c, f]);
   const title = file.file_name || (file.type === "voice" ? "Voice message" : file.type === "image" ? "Image" : "File");
   const subtitle = [showSender ? file.sender?.name : null, fmtBytes(file.file_size), dateLabel(file.created_at)].filter(Boolean).join(" · ");
   if (fileCategory(file) === "image" && file.attachment_id) return <PrivateImageCard compact attachmentId={file.attachment_id} fileName={title}
-    unavailable={file.attachment_deleted} canDelete={file.sender_id === user?.id} subtitle={subtitle}/>;
+    unavailable={file.attachment_deleted} canDelete={file.sender_id === user?.id} subtitle={subtitle} cacheScope={cacheScope}/>;
   const disabled = !file.attachment_id || !!file.attachment_deleted;
   return <Pressable disabled={disabled} accessibilityRole="button" accessibilityState={{disabled}}
     accessibilityLabel={(file.attachment_deleted ? "Unavailable: " : "Download ") + title}

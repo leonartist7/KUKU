@@ -30,7 +30,7 @@ import Avatar from "../../src/Avatar";
 import { useAuth } from "../../src/AuthContext";
 import { VoiceMessageBubble, FilePreviewCard } from "../../src/MessageParts";
 import PrivateImageCard from "../../src/PrivateImageCard";
-import {isImageFilename} from "../../src/imagePreview";
+import {clearPrivateImagePreviewScope,isImageFilename} from "../../src/imagePreview";
 import {subscribeChatEvents} from "../../src/chatRealtime";
 import {useChatConnection} from "../../src/ChatRealtimeProvider";
 import {mergeChatMessages,messageRemoved,replyFields} from "../../src/chatTools";
@@ -77,6 +77,8 @@ function ChatConversation({id}: {id: string}) {
   chatInfoRef.current = chatInfo;
   const activeChat = useRef(id);
   const focused = useRef(false);
+  const previewScopeCounter=useRef(0);
+  const [previewScope,setPreviewScope]=useState(()=>`chat:${user?.id||"none"}:${id}:0`);
   activeChat.current = id+":"+(user?.id||"");
 
   const listRef = useRef<FlatList<Message>>(null);
@@ -224,6 +226,7 @@ function ChatConversation({id}: {id: string}) {
   // The account provider owns one connection; views only subscribe while focused.
   useFocusEffect(
     useCallback(() => {
+      const scope=`chat:${user?.id||"none"}:${id}:${++previewScopeCounter.current}`;setPreviewScope(scope);
       focused.current = true;
       void load();void reconcile();
       const stop = user ? subscribeChatEvents(user.id, event => {
@@ -232,7 +235,7 @@ function ChatConversation({id}: {id: string}) {
           if(event.change==="updated")updated(event.message_id);else void load();
         }else{void load();void reconcile();}
       }) : () => {};
-      return () => { focused.current = false; stop(); };
+      return () => { focused.current = false; stop(); if(user)clearPrivateImagePreviewScope(user.id,scope); };
     }, [load, user?.id, id, updated, reconcile]),
   );
 
@@ -575,10 +578,10 @@ const MessageRow = React.memo(function MessageRow({msg,mine,userId,busy,replyMes
             resizeMode="cover"
           />
         ) : msg.type === "image" ? (
-          <PrivateImageCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} />
+          <PrivateImageCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} cacheScope={previewScope} />
         ) : null}
         {msg.type === "file" && (
-          isImageFilename(msg.file_name) ? <PrivateImageCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} /> : <FilePreviewCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="file" />
+          isImageFilename(msg.file_name) ? <PrivateImageCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} cacheScope={previewScope} /> : <FilePreviewCard unavailable={msg.attachment_deleted} canDelete={mine} attachmentId={msg.attachment_id} fileName={msg.file_name} fileSize={msg.file_size} type="file" />
         )}
         {msg.type === "space_invite" && (
           <Pressable

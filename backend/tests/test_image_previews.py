@@ -94,3 +94,32 @@ async def test_private_previews_require_sharing_and_recheck_access_on_warm_cache
     assert (await client.get(endpoint, headers=headers(a))).status_code == 404
     await client.post('/api/auth/logout', headers=headers(a))
     assert (await client.get(endpoint, headers=headers(a))).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_attachment_delete_publishes_durable_preview_revocation(client, private_files):
+    sender, recipient, _, chat_id = await pair(client)
+    uploaded = await client.post('/api/chats/'+chat_id+'/attachments?name=revoked.jpg',
+        headers=headers(sender), content=photo((640, 480)))
+    assert uploaded.status_code == 200
+    attachment_id = uploaded.json()['id']
+    sent = await client.post('/api/chats/'+chat_id+'/messages', headers=headers(sender),
+        json={'chat_id':chat_id,'type':'image','attachment_id':attachment_id})
+    assert sent.status_code == 200
+    message_id = sent.json()['id']
+    baseline = await client.get('/api/messages/sync', headers=headers(recipient))
+    assert baseline.status_code == 200
+    cursor = baseline.json()['cursor']
+
+    removed = await client.delete('/api/attachments/'+attachment_id, headers=headers(sender))
+    assert removed.status_code == 200
+    replay = (await client.get('/api/messages/sync?after='+str(cursor), headers=headers(recipient))).json()
+    matching = [event for event in replay['events'] if event['message_id'] == message_id]
+    assert len(matching) == 1
+    assert matching[0]['change'] == 'updated' and matching[0]['privacy_removal'] is True
+    resolved = await client.post('/api/chats/'+chat_id+'/messages/resolve', headers=headers(recipient),
+        json={'message_ids':[message_id]})
+    assert resolved.status_code == 200
+    assert resolved.json()[0]['attachment_deleted'] is True
+    assert resolved.json()[0]['revision'] == 1
+    assert (await client.get('/api/attachments/'+attachment_id+'/preview', headers=headers(recipient))).status_code == 404

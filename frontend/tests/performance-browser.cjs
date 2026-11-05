@@ -144,21 +144,36 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   await p.page.getByTestId("image-open-perf-asset-0").click();await fullResponse;await p.page.getByTestId("image-enlarged").waitFor();
   await p.page.waitForFunction(()=>document.querySelector('[data-testid="image-enlarged"] img')?.naturalWidth===32);
   assert.equal(previewRequests.filter(r=>r.size==="full").length,1);await p.page.getByRole("button",{name:"Close image preview",exact:true}).click();
+  const previewCount=(id,size)=>previewRequests.filter(request=>request.id===id&&request.size===size).length;
   const cyclesStarted=await beginAction(p);for(let i=0;i<3;i++){await p.page.getByTestId("files-segment-By person").click();await p.page.getByText("Sam",{exact:true}).first().waitFor();await p.page.getByTestId("files-segment-Recent").click();await p.page.getByTestId("image-open-perf-asset-0").waitFor();}
   await p.page.waitForTimeout(500);report.files_after_navigation=await metrics(p,"three-person-recent-cycles",cyclesStarted);
   report.files_after_navigation.previews=previewRequests.slice();
+  const sameScopeCounts=new Map();for(const request of previewRequests.filter(request=>request.size==="thumb")){const key=request.id+":"+request.format;sameScopeCounts.set(key,(sameScopeCounts.get(key)||0)+1);}
+  assert.ok([...sameScopeCounts.values()].every(count=>count===1),"Thumbnail requests must be coalesced and reused within one Files focus scope");
+  const secondFull=p.page.waitForResponse(r=>{const u=new URL(r.url());return u.pathname==="/api/attachments/perf-asset-0/preview"&&u.searchParams.get("size")==="full"&&r.status()===200;});
+  await p.page.getByTestId("image-open-perf-asset-0").click();await secondFull;await p.page.getByTestId("image-enlarged").waitFor();
+  assert.equal(previewCount("perf-asset-0","full"),2,"Full previews must be released and fetched again after close");
+  await p.page.getByRole("button",{name:"Close image preview",exact:true}).click();
+  const thumbBeforeRoute=previewCount("perf-asset-0","thumb");
+  await p.page.getByTestId("tab-home").click();await p.page.getByTestId("chat-row-perf-chat").waitFor();
+  const returnedThumb=p.page.waitForResponse(r=>{const u=new URL(r.url());return u.pathname==="/api/attachments/perf-asset-0/preview"&&u.searchParams.get("size")==="thumb"&&r.status()===200;});
+  await p.page.getByTestId("tab-files").click();await returnedThumb;await p.page.getByTestId("image-open-perf-asset-0").waitFor();
+  assert.equal(previewCount("perf-asset-0","thumb"),thumbBeforeRoute+1,"Leaving Files must invalidate its private thumbnail scope");
+  report.files_after_navigation.same_scope_max_thumbnail_requests=Math.max(...sameScopeCounts.values());
+  report.files_after_navigation.full_requests_after_reopen=previewCount("perf-asset-0","full");
+  report.files_after_navigation.route_return_thumbnail_requests=previewCount("perf-asset-0","thumb");
   const previousIds=new Set(previewRequests.map(r=>r.id));const distant=p.page.waitForResponse(r=>{const u=new URL(r.url()),parts=u.pathname.split("/");return parts[2]==="attachments"&&parts[4]==="preview"&&u.searchParams.get("size")==="thumb"&&!previousIds.has(parts[3]);});
   const filesScrollStarted=await beginAction(p);const scrolled=await p.page.getByTestId("image-open-perf-asset-0").evaluate(e=>{for(let p=e.parentElement;p;p=p.parentElement){if(p.scrollHeight>p.clientHeight&&/auto|scroll/.test(getComputedStyle(p).overflowY)){p.scrollTop=p.scrollHeight;p.dispatchEvent(new Event("scroll"));return true;}}return false;});
   assert.equal(scrolled,true,"Files must expose a scrollable list");await distant;await p.page.waitForTimeout(500);
   report.files_scrolled=await metrics(p,"distant-image-scroll",filesScrollStarted);report.files_scrolled.new_thumbnail_ids=Array.from(new Set(previewRequests.filter(r=>r.size==="thumb"&&!previousIds.has(r.id)).map(r=>r.id)));
-  assert.ok(report.files_scrolled.new_thumbnail_ids.length>0,"Distant images must load after scrolling");assert.equal(previewRequests.filter(r=>r.size==="full").length,1);
-  report.checks.push("Bounded initial thumbnails, distinct full preview only on open, distant thumbnail loading on scroll");
+  assert.ok(report.files_scrolled.new_thumbnail_ids.length>0,"Distant images must load after scrolling");assert.equal(previewRequests.filter(r=>r.size==="full").length,2);
+  report.checks.push("Bounded lazy thumbnails; same-scope requests coalesce; full previews release on close; route and account boundaries invalidate private memory");
   await p.page.screenshot({path:path.join(out,"files-390.png"),fullPage:true});await p.ctx.close();
   assert.deepEqual(errors,[],"No uncaught page errors");assert.deepEqual(external,[],"No external browser requests");
   assert.equal(apiRequests.filter(r=>r.method!=="GET"&&!["/api/auth/refresh","/api/auth/ws-ticket","/api/chats/perf-chat/messages/resolve"].includes(r.path)).length,0,"No business mutation requests");
   report.checks.push("No real accounts, outgoing business mutations or external browser requests");
   report.checked_at=new Date().toISOString();report.browser=browser.version();report.api_methods=apiRequests.reduce((a,r)=>(a[r.method]=(a[r.method]||0)+1,a),{});
-  report.summary={icon_font_files:iconFonts.length,icon_font_raw_bytes:iconFonts.reduce((n,x)=>n+x.raw_bytes,0),icon_font_paths:iconFonts.map(x=>x.path),google_font_faces:inventory.filter(x=>x.path.includes("/@expo-google-fonts/")).length,google_font_raw_bytes:inventory.filter(x=>x.path.includes("/@expo-google-fonts/")).reduce((n,x)=>n+x.raw_bytes,0),js_raw_bytes:inventory.filter(x=>x.path.endsWith(".js")).reduce((n,x)=>n+x.raw_bytes,0),js_gzip_bytes:inventory.filter(x=>x.path.endsWith(".js")).reduce((n,x)=>n+x.gzip_bytes,0),font_raw_bytes:inventory.filter(x=>!x.path.endsWith(".js")).reduce((n,x)=>n+x.raw_bytes,0),rendered_chat_rows:report.chat.rendered_message_rows,initial_thumbnails:report.files_initial.previews.length,total_preview_requests_after_cycles:previewRequests.length};
+  report.summary={icon_font_files:iconFonts.length,icon_font_raw_bytes:iconFonts.reduce((n,x)=>n+x.raw_bytes,0),icon_font_paths:iconFonts.map(x=>x.path),google_font_faces:inventory.filter(x=>x.path.includes("/@expo-google-fonts/")).length,google_font_raw_bytes:inventory.filter(x=>x.path.includes("/@expo-google-fonts/")).reduce((n,x)=>n+x.raw_bytes,0),js_raw_bytes:inventory.filter(x=>x.path.endsWith(".js")).reduce((n,x)=>n+x.raw_bytes,0),js_gzip_bytes:inventory.filter(x=>x.path.endsWith(".js")).reduce((n,x)=>n+x.gzip_bytes,0),font_raw_bytes:inventory.filter(x=>!x.path.endsWith(".js")).reduce((n,x)=>n+x.raw_bytes,0),rendered_chat_rows:report.chat.rendered_message_rows,initial_thumbnails:report.files_initial.previews.length,total_preview_requests_after_cycles:previewRequests.length,same_scope_max_thumbnail_requests:report.files_after_navigation.same_scope_max_thumbnail_requests,full_requests_after_reopen:report.files_after_navigation.full_requests_after_reopen};
   fs.writeFileSync(path.join(out,"performance.json"),JSON.stringify(report,null,2)+"\n");console.log("KUKU_PERFORMANCE_SUMMARY "+JSON.stringify({...report.summary,loads:report.loads.map(x=>({label:x.label,document_elapsed_ms:x.document_elapsed_ms,runner_action_elapsed_ms:x.runner_action_elapsed_ms,heap:x.js_heap_used_bytes})),cached_shell_document_elapsed_ms:report.cached_shell.document_elapsed_ms,checks:report.checks}));
   console.log("Controlled performance measurement passed");
  }catch(e){fs.writeFileSync(path.join(out,"partial-performance.json"),JSON.stringify(report,null,2)+"\n");if(activePage&&!activePage.isClosed()){console.error("Performance fixture failure context",JSON.stringify({url:activePage.url(),body:(await activePage.locator("body").innerText()).slice(-4000),api:apiRequests.slice(-25),errors,external}));await activePage.screenshot({path:path.join(out,"failure.png"),fullPage:true}).catch(()=>{});}throw e;}

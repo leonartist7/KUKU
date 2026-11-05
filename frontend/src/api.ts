@@ -21,9 +21,17 @@ export function setExpectedRestoredUser(uid: string | null, expectedEpoch: numbe
   return true;
 }
 const expiredListeners = new Set<() => void>();
+const sessionBoundaryListeners = new Set<(epoch:number,userId:string|null) => void>();
 export function onSessionExpired(listener: () => void) {
   expiredListeners.add(listener);
   return () => { expiredListeners.delete(listener); };
+}
+export function onSessionBoundary(listener:(epoch:number,userId:string|null)=>void) {
+  sessionBoundaryListeners.add(listener);
+  return () => { sessionBoundaryListeners.delete(listener); };
+}
+function emitSessionBoundary() {
+  sessionBoundaryListeners.forEach(listener=>{try{listener(sessionEpoch,sessionUserId);}catch{}});
 }
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
@@ -50,7 +58,10 @@ function storeRefresh(value: string | null) {
 }
 export async function setToken(value: string | null) {
   accessToken = value;
-  if (!value) { sessionUserId = null; expectedRestoredUser = null; sessionEpoch++; refreshFlight = null; }
+  if (!value) {
+    sessionUserId = null; expectedRestoredUser = null; sessionEpoch++; refreshFlight = null;
+    emitSessionBoundary();
+  }
   if (!value && Platform.OS !== "web") await storeRefresh(null);
 }
 export async function acceptSession(data: { token: string; refresh_token?: string; user: {id:string} }) {
@@ -58,6 +69,7 @@ export async function acceptSession(data: { token: string; refresh_token?: strin
   expectedRestoredUser = null;
   accessToken = data.token;
   sessionUserId = data.user.id;
+  emitSessionBoundary();
   if (Platform.OS !== "web" && data.refresh_token) {
     await storeRefresh(data.refresh_token);
   }

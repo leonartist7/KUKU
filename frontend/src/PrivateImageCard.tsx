@@ -1,43 +1,54 @@
 import React,{useCallback,useEffect,useRef,useState} from "react";
 import {View,Text,Pressable,Image,Modal,ActivityIndicator,Platform,Alert} from "react-native";
 import {SafeAreaView} from "react-native-safe-area-context";
+import {useIsFocused} from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import {useAuth} from "./AuthContext";
 import {useTheme} from "./ThemeContext";
 import {useReducedMotion} from "./useReducedMotion";
 import {api,ApiError} from "./api";
 import {openPrivateDownload} from "./downloads";
-import {ImagePreview,validImagePreview} from "./imagePreview";
+import {ImagePreview,invalidatePrivateImagePreview,loadPrivateImagePreview,privateImagePreviewInvalidationMatches,privateImagePreviewKey,privateImagePreviewScope,subscribePrivateImagePreviewInvalidation} from "./imagePreview";
 
-function usePreview(id:string|undefined,size:"thumb"|"full",enabled:boolean){
-  const {user}=useAuth();const key=(user?.id||"")+":"+id+":"+size;
+function usePreview(id:string|undefined,size:"thumb"|"full",enabled:boolean,screenScope:string){
+  const {user,restoring}=useAuth();
+  const scope=!restoring&&user?.email_verified?privateImagePreviewScope(user.id,screenScope):null;
+  const format=Platform.OS==="web"?"webp":"jpeg";
+  const key=scope&&id?privateImagePreviewKey(scope,id,size,format):"";
   const [attempt,retry]=useState(0);
   const [state,setState]=useState<{key:string;data?:ImagePreview;error?:string}>({key:""});
   useEffect(()=>{
-    if(!id || !user?.email_verified || !enabled)return;
+    if(!id||!scope||!enabled){setState({key:""});return;}
     let active=true;setState({key});
-    const format=Platform.OS==="web"?"webp":"jpeg";
-    void api.get<ImagePreview>("/attachments/"+encodeURIComponent(id)+"/preview?size="+size+"&format="+format).then(result=>{
-      if(!validImagePreview(result))throw new Error("Preview unavailable. Download the original instead.");
+    const stop=subscribePrivateImagePreviewInvalidation(event=>{
+      if(active&&privateImagePreviewInvalidationMatches(event,scope,id))setState({key:""});
+    });
+    void loadPrivateImagePreview(scope,id,size,format,()=>api.getAs<ImagePreview>(scope.accountId,
+      "/attachments/"+encodeURIComponent(id)+"/preview?size="+size+"&format="+format)).then(result=>{
       if(active)setState({key,data:result});
-    }).catch(error=>{if(active)setState({key,error:error instanceof ApiError && error.status===404?"Image no longer available.":"Preview unavailable. Try again or download the original."});});
-    return()=>{active=false;};
-  },[key,enabled,attempt,user?.email_verified]);
-  const result=state.key===key && enabled?state:{key};
+    }).catch(error=>{
+      if(error instanceof ApiError&&[401,403,404].includes(error.status))invalidatePrivateImagePreview(scope.accountId,id);
+      if(active)setState({key,error:error instanceof ApiError&&error.status===404?"Image no longer available.":"Preview unavailable. Try again or download the original."});
+    });
+    return()=>{active=false;stop();};
+  },[key,enabled,attempt,user?.email_verified,restoring]);
+  const result=state.key===key&&enabled?state:{key};
   return {...result,retry:()=>retry(value=>value+1)};
 }
 
-export default function PrivateImageCard({attachmentId,fileName="Photo",unavailable=false,canDelete=false,compact=false,subtitle}: {
-  attachmentId?:string;fileName?:string|null;unavailable?:boolean;canDelete?:boolean;compact?:boolean;subtitle?:string;
+export default function PrivateImageCard({attachmentId,fileName="Photo",unavailable=false,canDelete=false,compact=false,subtitle,cacheScope}: {
+  attachmentId?:string;fileName?:string|null;unavailable?:boolean;canDelete?:boolean;compact?:boolean;subtitle?:string;cacheScope?:string;
 }){
   const {c,f}=useTheme(),{user}=useAuth();const account=useRef(user?.id);account.current=user?.id;
-  const reducedMotion=useReducedMotion();
+  const reducedMotion=useReducedMotion(),focused=useIsFocused();
+  const previewScope=cacheScope||"private-card:"+(attachmentId||"missing");
   const [open,setOpen]=useState(false),[deleted,setDeleted]=useState(false),[visible,setVisible]=useState(Platform.OS!=="web");
   const [actionError,setActionError]=useState("");const container=useRef<View>(null);
   const gone=unavailable||deleted;const title=fileName||"Photo";
-  const thumb=usePreview(attachmentId,"thumb",visible&&!gone);
-  const full=usePreview(attachmentId,"full",open&&!gone);
+  const thumb=usePreview(attachmentId,"thumb",focused&&visible&&!gone,previewScope);
+  const full=usePreview(attachmentId,"full",focused&&open&&!gone,previewScope);
   useEffect(()=>{setOpen(false);setDeleted(false);setActionError("");},[attachmentId,user?.id]);
+  useEffect(()=>{if(gone&&attachmentId&&user?.id)invalidatePrivateImagePreview(user.id,attachmentId);},[gone,attachmentId,user?.id]);
   useEffect(()=>{
     if(Platform.OS!=="web" || typeof IntersectionObserver==="undefined"){setVisible(true);return;}
     const node=container.current as unknown as Element;
@@ -48,12 +59,12 @@ export default function PrivateImageCard({attachmentId,fileName="Photo",unavaila
   const close=useCallback(()=>{setOpen(false);setActionError("");},[]);
   async function download(){
     const uid=account.current;setActionError("");
-    try{const result=await api.get<{url:string}>("/attachments/"+attachmentId+"/download");if(account.current===uid)await openPrivateDownload(result.url);}
+    try{if(!uid||!attachmentId)return;const result=await api.getAs<{url:string}>(uid,"/attachments/"+attachmentId+"/download");if(account.current===uid)await openPrivateDownload(result.url);}
     catch{setActionError("Could not download this image. Please try again.");}
   }
   function remove(){
     const uid=account.current;
-    const perform=async()=>{try{await api.delete("/attachments/"+attachmentId);if(account.current===uid){setDeleted(true);setOpen(false);}}catch{setActionError("Could not delete this image. Try again.");}};
+    const perform=async()=>{if(!uid||!attachmentId)return;try{await api.deleteAs(uid,"/attachments/"+attachmentId);invalidatePrivateImagePreview(uid,attachmentId);if(account.current===uid){setDeleted(true);setOpen(false);}}catch{setActionError("Could not delete this image. Try again.");}};
     if(Platform.OS==="web"){if(window.confirm("Delete this image for everyone in this chat?"))void perform();}
     else Alert.alert("Delete image","This removes the image for everyone in this chat.",[{text:"Cancel",style:"cancel"},{text:"Delete",style:"destructive",onPress:()=>void perform()}]);
   }

@@ -197,3 +197,20 @@ test("a pending connection ticket cannot open after its owner switches accounts"
   } finally { connection.stop(); }
 });
 
+
+test("session boundary listeners revoke private memory on login, relogin and logout but not token refresh", async () => {
+  const api=apiHarness(async()=>new Response(JSON.stringify({token:"rotated",user:{id:"alice"}})));
+  let boundaries=0;
+  const stop=api.onSessionBoundary(()=>boundaries++);
+  await api.acceptSession({token:"first",user:{id:"alice"}});
+  assert.equal(boundaries,1);
+  assert.equal(await api.refreshSession(),"rotated");
+  assert.equal(boundaries,1);
+  await api.acceptSession({token:"second",user:{id:"alice"}});
+  assert.equal(boundaries,2);
+  await api.setToken(null);
+  assert.equal(boundaries,3);
+  stop();
+  await api.acceptSession({token:"third",user:{id:"bob"}});
+  assert.equal(boundaries,3);
+});

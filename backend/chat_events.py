@@ -61,7 +61,7 @@ class ChatEvents:
         notified = set()
         revision = message.get("revision", 0)
         change = "created" if revision == 0 else "updated"
-        privacy_removal = bool(message.get("deleted_at")) or message.get("_privacy_removal_revision") == revision
+        privacy_removal = bool(message.get("deleted_at")) or bool(message.get("attachment_deleted")) or message.get("_privacy_removal_revision") == revision
         async with self._lock():
             for uid in set(chat.get("members", [])):
                 event_id = uid + ":" + message["id"] + (":revision:" + str(revision) if revision else "")
@@ -137,6 +137,7 @@ class ChatEvents:
             "type": "chat_changed", "chat_id": row["chat_id"],
             "message_id": row["message_id"], "sender_id": row["sender_id"],
             "change": row.get("change", "created"), "revision": row.get("revision", 0),
+            "privacy_removal": bool(row.get("privacy_removal")),
             "cursor": row["seq"], "live": False,
         } for row in rows if row["chat_id"] in allowed or (row.get("privacy_removal") and row["chat_id"] in memberships)]
         return {

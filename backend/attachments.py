@@ -4,6 +4,7 @@ import uuid
 import tempfile
 import secrets
 import asyncio
+import logging
 from typing import Literal
 from datetime import timedelta
 from contextlib import AsyncExitStack
@@ -22,6 +23,7 @@ from image_previews import cached_preview, remember_preview, discard_previews, r
 MAX_BYTES = 25 * 1024 * 1024
 USER_QUOTA_BYTES = 500 * 1024 * 1024
 TOTAL_QUOTA_BYTES = 750 * 1024 * 1024
+logger = logging.getLogger("kuku.attachments")
 
 class ObjectStore:
     def read_preview_source(self, key):
@@ -71,7 +73,7 @@ def storage_for(name):
     return blob_store if name == "vercel" else store
 
 
-def attachment_router(db_getter, auth):
+def attachment_router(db_getter, auth, events=None):
     router = APIRouter()
     preview_gate = asyncio.Semaphore(1)
     async def member(chat_id, user):
@@ -260,6 +262,20 @@ def attachment_router(db_getter, auth):
                 await release_quota(user["id"], doc["size"])
             else:
                 await db_getter().users.update_one({"id": user["id"]}, {"$inc": {"storage_bytes": -doc["size"]}})
-        await db_getter().messages.update_many({"attachment_id": attachment_id}, {"$set": {"attachment_deleted": True}})
+        await db_getter().messages.update_many({"attachment_id": attachment_id}, {
+            "$set": {"attachment_deleted": True, "sync_pending": True}, "$inc": {"revision": 1}})
+        affected = await db_getter().messages.find({"attachment_id": attachment_id}).limit(100).to_list(100)
+        if events:
+            chats = {}
+            for message in affected:
+                chat_id = message["chat_id"]
+                if chat_id not in chats:
+                    chats[chat_id] = await db_getter().chats.find_one({"id": chat_id})
+                if not chats[chat_id]:
+                    continue
+                try:
+                    await events.publish_message(chats[chat_id], message)
+                except Exception:
+                    logger.warning("Attachment deletion is waiting for realtime synchronization")
         return {"ok": True}
     return router
