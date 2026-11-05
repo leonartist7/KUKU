@@ -73,6 +73,16 @@ def storage_for(name):
     return blob_store if name == "vercel" else store
 
 
+async def authorized_chunks(stream, auth, issued, visible):
+    """Recheck private-file access before each provider chunk is released."""
+    async for chunk in stream:
+        active = await auth.session_user(issued["session_id"], issued["user_id"])
+        if not active.get("email_verified"):
+            raise HTTPException(403, "Verify your email before downloading files")
+        await visible(active)
+        yield chunk
+
+
 def attachment_router(db_getter, auth, events=None):
     router = APIRouter()
     preview_gate = asyncio.Semaphore(1)
@@ -241,6 +251,17 @@ def attachment_router(db_getter, auth, events=None):
         stack = AsyncExitStack()
         try:
             stream = await stack.enter_async_context(blob_store.stream(doc["key"]))
+            # Provider startup can outlive the request's first authorization check.
+            # Revalidate before returning any private bytes.
+            active = await auth.session_user(issued["session_id"], issued["user_id"])
+            if not active.get("email_verified"):
+                raise HTTPException(403, "Verify your email before downloading files")
+            await visible_file(attachment_id, active)
+            stream = authorized_chunks(stream, auth, issued,
+                lambda current: visible_file(attachment_id, current))
+        except HTTPException:
+            await stack.aclose()
+            raise
         except Exception:
             await stack.aclose()
             raise HTTPException(503, "Your file couldn’t be opened. Please try again.") from None

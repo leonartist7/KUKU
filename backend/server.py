@@ -57,6 +57,48 @@ chat_actions = ChatActions(lambda: db, auth, chat_events)
 get_current_user = auth.verified
 
 
+async def reconcile_session_grants(batch_size: int = 500):
+    """Remove runtime grants whose owning session is no longer valid.
+
+    Restores intentionally revoke every archived session before the app starts.
+    Push registrations and short-lived tickets must not survive that boundary, while
+    registrations for healthy sessions must remain intact on an ordinary restart.
+    """
+    timestamp = datetime.now(timezone.utc)
+    removed = {}
+    for name in ("devices", "web_devices", "ws_tickets", "file_tickets"):
+        collection = db[name]
+        total = 0
+        if name in ("ws_tickets", "file_tickets"):
+            total += (await collection.delete_many({"expires_at": {"$lte": timestamp}})).deleted_count
+        while True:
+            rows = await collection.aggregate([
+                {"$lookup": {"from": "sessions", "localField": "session_id",
+                             "foreignField": "_id", "as": "session"}},
+                {"$lookup": {"from": "users", "localField": "user_id",
+                             "foreignField": "id", "as": "user"}},
+                {"$match": {"$or": [
+                    {"session.0": {"$exists": False}},
+                    {"session.0.revoked": True},
+                    {"session.0.expires_at": {"$lte": timestamp}},
+                    {"$expr": {"$ne": ["$user_id", {"$arrayElemAt": ["$session.user_id", 0]}]}},
+                    {"user.0": {"$exists": False}},
+                    {"user.0.disabled": True},
+                    {"user.0.email_verified": {"$ne": True}},
+                ]}},
+                {"$project": {"_id": 1}},
+                {"$limit": batch_size},
+            ]).to_list(batch_size)
+            if not rows:
+                break
+            result = await collection.delete_many({"_id": {"$in": [row["_id"] for row in rows]}})
+            total += result.deleted_count
+            if result.deleted_count == 0:
+                break
+        removed[name] = total
+    return removed
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.command("ping")
@@ -86,6 +128,8 @@ async def lifespan(app: FastAPI):
     await db.push_receipts.create_index("expires_at", expireAfterSeconds=0)
     if settings.SEED_DEMO_DATA:
         await seed()
+    await reconcile_session_grants()
+    await reconcile_rooms_once()
     worker = asyncio.create_task(run_worker(db)) if settings.PUSH_ENABLED or web_push_configured() else None
     room_worker = asyncio.create_task(room_lifecycle_worker())
     try:
@@ -473,31 +517,45 @@ async def expire_calls():
 async def room_lifecycle_worker():
     while True:
         try:
-            await chat_events.repair_pending()
-            if settings.ENABLE_CALLS:
-                await expire_calls()
-                for call in await db.calls.find({"status": {"$in": ["ringing", "active"]}}).limit(100).to_list(100):
-                    sessions = [(call["initiator_id"], call.get("initiator_session_id"))]
-                    if call["status"] == "active":
-                        sessions.append((next(uid for uid in call["members"] if uid != call["initiator_id"]),
-                                         call.get("accepted_by_session_id")))
-                    try:
-                        for uid, sid in sessions:
-                            active = await auth.session_user(sid, uid)
-                            if not active.get("email_verified"):
-                                raise HTTPException(403, "Verification required")
-                        await allow_direct(db, call["members"][0], call["members"][1])
-                    except HTTPException:
-                        await _finish_call(call, call["status"], "completed" if call["status"] == "active" else "missed",
-                                           "session_ended", "call_ended")
-                for call in await db.calls.find({"revocation_pending": True}).limit(20).to_list(20):
-                    await _disconnect_call_media(call)
-            # Expired Space connections are also removed when no clients are reading.
-            for space in await db.spaces.find({"presence_connections": {"$exists": True}}).limit(200).to_list(200):
-                await _prune_space_connections(space["id"])
+            await reconcile_rooms_once()
         except Exception:
             logger.warning("Room lifecycle maintenance will retry")
         await asyncio.sleep(15)
+
+
+async def reconcile_rooms_once():
+    """Reconcile durable room state once, including before startup becomes ready."""
+    await chat_events.repair_pending()
+    if settings.ENABLE_CALLS:
+        await expire_calls()
+        for call in await db.calls.find({"status": {"$in": ["ringing", "active"]}}).limit(100).to_list(100):
+            sessions = [(call["initiator_id"], call.get("initiator_session_id"))]
+            if call["status"] == "active":
+                sessions.append((next(uid for uid in call["members"] if uid != call["initiator_id"]),
+                                 call.get("accepted_by_session_id")))
+            try:
+                for uid, sid in sessions:
+                    active = await auth.session_user(sid, uid)
+                    if not active.get("email_verified"):
+                        raise HTTPException(403, "Verification required")
+                await allow_direct(db, call["members"][0], call["members"][1])
+            except HTTPException:
+                await _finish_call(call, call["status"], "completed" if call["status"] == "active" else "missed",
+                                   "session_ended", "call_ended")
+        for call in await db.calls.find({"revocation_pending": True}).limit(20).to_list(20):
+            await _disconnect_call_media(call)
+    # Page only occupied Spaces so empty early records cannot starve later rooms.
+    cursor = None
+    while True:
+        query = {"presence_connections": {"$ne": {}}}
+        if cursor is not None:
+            query["_id"] = {"$gt": cursor}
+        spaces = await db.spaces.find(query).sort("_id", 1).limit(200).to_list(200)
+        if not spaces:
+            break
+        for space in spaces:
+            await _prune_space_connections(space["id"])
+        cursor = spaces[-1]["_id"]
 
 
 async def _authorized_call(call_id: str, current: dict) -> dict:
@@ -1029,6 +1087,17 @@ async def _prune_space_connections(space_id):
     if not space:
         return None
     active = _valid_connections(space)
+    session_ids = [value.get("session_id") for value in active.values() if value.get("session_id")]
+    sessions = await db.sessions.find({"_id": {"$in": session_ids}, "revoked": False,
+        "expires_at": {"$gt": datetime.now(timezone.utc)}}).to_list(len(session_ids)) if session_ids else []
+    session_users = {row["_id"]: row.get("user_id") for row in sessions}
+    user_ids = list(set(session_users.values()))
+    users = await db.users.find({"id": {"$in": user_ids}, "disabled": {"$ne": True},
+        "email_verified": True}, {"id": 1}).to_list(len(user_ids)) if user_ids else []
+    enabled_users = {row["id"] for row in users}
+    active = {key: value for key, value in active.items()
+              if session_users.get(value.get("session_id")) == value.get("user_id")
+              and value.get("user_id") in enabled_users}
     for key, value in (space.get("presence_connections") or {}).items():
         if key not in active:
             await db.spaces.update_one(
