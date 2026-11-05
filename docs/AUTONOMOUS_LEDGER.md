@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-05T15:01:04Z
+Updated: 2026-11-05T18:27:03Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: none; P05 provider-safe retention checkpoint completed 5 November 2026.
+Current controller: root P06 report-only provider inventory, 5 November 2026.
 Work was performed through connected GitHub/provider APIs and cloud CI; never assume a prior local worktree exists.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -96,10 +96,10 @@ Do not mark a full phase complete when a release gate is still outstanding.
 An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
 
 ## Active controller lease
-Controller: none.
-Lease recorded at: 2026-11-05T15:01:04Z
-Lease expires at: —
-State: IDLE; P05 accepted and deployed with live deletion disabled.
+Controller: root P06 report-only provider inventory.
+Lease recorded at: 2026-11-05T18:27:03Z
+Lease expires at: 2026-11-05T19:57:03Z
+State: ACTIVE; two-pass inventory evidence only, with deletion and quota mutation prohibited.
 
 
 ## Verified implementation checkpoint
