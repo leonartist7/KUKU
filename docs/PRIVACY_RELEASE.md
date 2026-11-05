@@ -53,10 +53,27 @@ On successful closure the API:
 7. Makes bounded best-effort attempts to close tracked sockets.
 8. Removes the browser refresh cookie.
 
+The operational portion is now restart-safe. Startup and the closure request both run a bounded,
+expiring compare-and-set lease for accounts that are already confirmed disabled. It idempotently
+revokes sessions, devices, notification registrations, short-lived tickets and recovery codes;
+expires unused invitations; ends active call records and releases their participant leases; and
+removes the closed person's Space presence before repairing host/session state. A crashed lease is
+eligible for retry. Concurrent workers cannot both own the same cleanup attempt.
+
+Requests whose user is active or missing are marked blocked without deleting anything. This is the
+fail-closed boundary that prevents a stranded `closure_pending` record from disabling or cleaning
+an active account. Other accounts' grants and presence are preserved by synthetic isolation tests.
+
+Retention policy version 2 applies zero retention to ephemeral access grants after closure. Shared
+messages, upload metadata/provider objects, the disabled user record and the closure tombstone are
+retained for the still-gated operator erasure policy. Completion therefore records
+`retention_state=physical_erasure_pending` and keeps `physical_erasure_completed=false`.
+
 The disabled-account check is the primary access boundary, including if later cleanup is
-interrupted. Session-bound APIs and downloads reject the closed identity. Long-lived call/Space
-media uses the applicable periodic revocation checks as well as client cleanup; this is not a
-claim that a third-party media session is stopped synchronously at the exact database write.
+interrupted. Session-bound APIs and downloads reject the closed identity. Call records and
+participant leases are ended immediately, but provider removal remains `revocation_pending` when
+a token was issued and still depends on configured LiveKit processing; this is not a claim that
+third-party media stops synchronously at the exact database write.
 
 The frontend clears the closed account's local token, cached profile, outbox and browser-push
 identity through AuthContext.finishClosedAccount(uid). This path does not falsely attempt a
@@ -73,8 +90,8 @@ The following remain until an operator completes a verified cleanup:
 - Previously shared messages, including their stored sender_name values, can remain in history.
 - Private upload objects and their metadata can remain available to already-authorized participants.
 - Backup copies may retain previous account data.
-- A request in closure_pending requires reconciliation: verify the account is actually disabled
-  before treating it as an erasure job.
+- A blocked request is retried only as operational cleanup after the user is independently confirmed
+  disabled; the reconciler never disables an active user from the request record alone.
 
 Other participants' accounts, messages and uploads are not deleted by the closure endpoint. This
 package does not claim legal compliance, provider erasure, backup restoration or physical-device
@@ -84,13 +101,12 @@ acceptance.
 
 Do not run cleanup automatically against real accounts merely to test it. A future worker needs:
 
-- An idempotent lease/CAS workflow on requests whose owner is confirmed disabled.
 - A documented policy for authored shared history and historical names.
 - Private object deletion through the exact stored storage provider, with retries and proof of
   deletion before releasing quota. Never delete another account's object or decrement quota twice.
-- Cleanup of orphaned uploads, account codes, invites, devices, tickets, account-scoped events and
-  member/presence references under the agreed retention policy.
-- Safe host transfer and call/media revocation when an account is removed.
+- Cleanup of orphaned uploads and account-scoped durable events under the agreed retention policy.
+- Verified provider-side call/media removal for issued tokens; the database revocation request is
+  durable, but real LiveKit completion still needs configured-provider evidence.
 - A minimal tombstone retained according to policy so backup restores cannot silently reactivate
   closed accounts or bring back erased content.
 - Progress/error visibility for the operator, plus a way to confirm completion to the requester.

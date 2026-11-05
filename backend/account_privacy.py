@@ -4,6 +4,7 @@ Closure immediately disables authentication and records an operator cleanup requ
 It does not claim that provider objects, shared history or backups have been erased.
 """
 import asyncio
+import logging
 from datetime import timedelta
 from typing import Literal, Optional
 
@@ -15,6 +16,8 @@ from starlette.concurrency import run_in_threadpool
 
 import settings
 from auth_service import now, profile, verify_password
+
+logger = logging.getLogger("account-privacy")
 
 EXPORT_SECTIONS = ("profile", "messages", "attachments", "audio_uploads", "spaces", "space_messages", "calls")
 Section = Literal["profile", "messages", "attachments", "audio_uploads", "spaces", "space_messages", "calls"]
@@ -65,7 +68,7 @@ async def account_privacy_indexes(db):
         await db[section].create_index([(owner, 1), ("id", 1)])
 
 
-def account_privacy_router(get_db, auth):
+def account_privacy_router(get_db, auth, cleanup_account=None):
     router = APIRouter()
 
     @router.get("/account/export")
@@ -116,7 +119,7 @@ def account_privacy_router(get_db, auth):
         requested = now()
         await db.account_deletions.update_one({"_id": user["id"]}, {"$setOnInsert": {
             "user_id": user["id"], "requested_at": requested, "status": "closure_pending",
-            "policy_version": 1, "physical_erasure_completed": False,
+            "policy_version": 2, "physical_erasure_completed": False,
         }}, upsert=True)
         # Disabling is the authorization boundary even if later session cleanup is interrupted.
         closed = await db.users.find_one_and_update(
@@ -127,17 +130,46 @@ def account_privacy_router(get_db, auth):
             return_document=ReturnDocument.AFTER,
         )
         if not closed:
-            raise HTTPException(409, "This account is already closed.")
-        await db.account_deletions.update_one({"_id": user["id"]}, {"$set": {"status": "awaiting_operator_cleanup"}})
-        await db.sessions.update_many({"user_id": user["id"]}, {"$set": {"revoked": True}})
-        await db.devices.delete_many({"user_id": user["id"]})
-        await db.web_devices.delete_many({"user_id": user["id"]})
-        await db.ws_tickets.delete_many({"user_id": user["id"]})
-        await db.file_tickets.delete_many({"user_id": user["id"]})
-        await db.invites.update_many({"creator_id": user["id"], "redeemed_by": None},
-            {"$set": {"expires_at": requested}})
-        # All persisted sessions are invalid already; close tracked sockets without an unbounded scan.
-        sessions = await db.sessions.find({"user_id": user["id"]}, {"_id": 1}).limit(1000).to_list(1000)
+            # Two already-authorized requests can race. If the first request won,
+            # return the same honest closure result instead of turning a successful
+            # closure into a 409 for the second response.
+            closed = await db.users.find_one({"id": user["id"], "disabled": True})
+            deletion = await db.account_deletions.find_one({"_id": user["id"]})
+            if not closed or not deletion:
+                raise HTTPException(409, "This account is already closed.")
+        try:
+            await db.account_deletions.update_one(
+                {"_id": user["id"]}, {"$set": {"status": "awaiting_operator_cleanup"}})
+        except Exception:
+            # The original closure_pending record is still eligible for startup repair.
+            logger.warning("Closed account request status will reconcile on startup")
+
+        cleanup_state = "scheduled"
+        if cleanup_account:
+            try:
+                cleanup_state = (await cleanup_account(user["id"])).get("state", "scheduled")
+            except Exception:
+                # The disabled flag remains the access boundary. Startup
+                # reconciliation owns durable retries after an interrupted request.
+                logger.warning("Closed account operational cleanup will retry")
+        else:
+            # Compatibility fallback for isolated router users. The app supplies the
+            # durable cleanup callback, which also handles calls, codes and Spaces.
+            try:
+                await db.sessions.update_many({"user_id": user["id"]}, {"$set": {"revoked": True}})
+                for name in ("devices", "web_devices", "ws_tickets", "file_tickets"):
+                    await db[name].delete_many({"user_id": user["id"]})
+                await db.invites.update_many({"creator_id": user["id"], "redeemed_by": None},
+                    {"$set": {"expires_at": requested}})
+            except Exception:
+                logger.warning("Fallback account cleanup will retry when the app starts")
+
+        # Authentication is already disabled. Socket closure is bounded and cannot
+        # turn a successful durable closure into a failed response.
+        try:
+            sessions = await db.sessions.find({"user_id": user["id"]}, {"_id": 1}).limit(1000).to_list(1000)
+        except Exception:
+            sessions = []
         async def close_socket(socket):
             try:
                 await asyncio.wait_for(socket.close(code=4401), timeout=2)
@@ -156,6 +188,7 @@ def account_privacy_router(get_db, auth):
         response.delete_cookie("kuku_refresh", path="/api/auth")
         return {
             "status": "closed", "data_deletion": "awaiting_operator_cleanup",
+            "operational_cleanup": cleanup_state, "retention_policy_version": 2,
             "physical_erasure_completed": False,
             "message": "Your account is closed and its sessions and alerts are disabled. Data deletion is recorded for operator processing; shared history, stored files and backups have not been fully erased.",
         }
