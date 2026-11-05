@@ -101,7 +101,7 @@ test("private image UI uses account-fenced requests and explicit navigation inva
   const card=fs.readFileSync("src/PrivateImageCard.tsx","utf8");
   const files=fs.readFileSync("app/(tabs)/files.tsx","utf8");
   const chat=fs.readFileSync("app/chat/[id].tsx","utf8");
-  assert.match(card,/api\.getAs<[^>]+>\(scope\.accountId/);assert.match(card,/api\.deleteAs\(accountId/);
+  assert.match(card,/api\.getAs<[^>]+>\(scope\.accountId/);assert.match(card,/api\.deleteAs\(uid/);
   assert.match(card,/loadPrivateImagePreview/);assert.match(card,/subscribePrivateImagePreviewInvalidation/);
   assert.match(files,/clearPrivateImagePreviewScope/);assert.match(files,/subscribeChatEvents/);assert.match(files,/cacheScope=/);
   assert.match(chat,/clearPrivateImagePreviewScope/);assert.match(chat,/cacheScope=/);
