@@ -26,6 +26,26 @@ TOTAL_QUOTA_BYTES = 750 * 1024 * 1024
 logger = logging.getLogger("kuku.attachments")
 
 class ObjectStore:
+    def list_inventory_page(self, prefix, cursor=None, limit=200):
+        """Return one read-only provider page for the offline inventory command."""
+        self.require_config()
+        if prefix not in ("attachments/", "space-audio/") or not 1 <= limit <= 1000:
+            raise ValueError("Invalid inventory listing request")
+        request = {"Bucket": os.environ["R2_BUCKET"], "Prefix": prefix, "MaxKeys": limit}
+        if cursor:
+            request["ContinuationToken"] = cursor
+        response = self.client().list_objects_v2(**request)
+        items = [{
+            "key": item.get("Key"), "size": item.get("Size"),
+            "uploaded_at": item.get("LastModified"), "etag": item.get("ETag"),
+        } for item in response.get("Contents", [])]
+        has_more = response.get("IsTruncated") is True
+        return {
+            "items": items,
+            "has_more": has_more,
+            "next_cursor": response.get("NextContinuationToken") if has_more else None,
+        }
+
     def read_preview_source(self, key):
         response = self.client().get_object(Bucket=os.environ["R2_BUCKET"], Key=key)
         body = response["Body"]

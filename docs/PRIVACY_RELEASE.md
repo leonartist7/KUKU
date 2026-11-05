@@ -145,8 +145,11 @@ Until those gates pass, keep physical_erasure_completed false. Do not convert qu
 requests into a “data deleted” badge.
 
 The implemented retention worker covers only database-metadata-backed closed-account orphans.
-Provider inventory for bytes stranded before metadata insertion still needs a separate two-pass
-inventory/quarantine design. Never enable the worker merely to test it against real accounts.
+Provider-only bytes stranded before metadata insertion now have a separate manual, report-only
+two-pass inventory design (docs/PROVIDER_INVENTORY.md). It emits keyed digests and bounded counts,
+never raw provider identifiers. Two unchanged observations at least 24 hours apart are quarantine
+evidence only: they do not identify an owner or authorize deletion. No live inventory was run and
+the retention worker must never consume this report automatically.
 
 ## Verification
 
