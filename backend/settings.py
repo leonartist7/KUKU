@@ -14,6 +14,8 @@ DB_NAME = os.getenv("DB_NAME", "kuku")
 WEB_ORIGIN = os.getenv("WEB_ORIGIN", "http://localhost:8081").rstrip("/")
 CORS_ORIGINS = [s.strip() for s in os.getenv("CORS_ORIGINS", WEB_ORIGIN).split(",") if s.strip()]
 ENABLE_CALLS = flag("ENABLE_CALLS")
+# Provider deletion is an operator action. Code may ship while the worker remains off.
+STORAGE_RETENTION_ENABLED = flag("STORAGE_RETENTION_ENABLED")
 
 if len(JWT_SECRET) < 32 or JWT_SECRET == "supersecret-dev-token":
     raise RuntimeError("JWT_SECRET must contain at least 32 random characters")

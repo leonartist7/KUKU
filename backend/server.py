@@ -27,9 +27,10 @@ from chat_events import ChatEvents
 from chat_actions import ChatActions, public_message as chat_message_view, request_fingerprint, same_send
 from account_privacy import account_privacy_router, account_privacy_indexes
 from account_cleanup import account_cleanup_indexes, cleanup_closed_account, reconcile_account_closures
+from storage_retention import storage_retention_indexes, reconcile_storage_retention
 import settings
 from safety import safety_router, allow_direct
-from attachments import attachment_router
+from attachments import attachment_router, storage_for
 from account_recovery import recovery_router
 from push_service import device_router, run_worker
 from web_push import web_push_router, configured as web_push_configured
@@ -63,6 +64,11 @@ async def reconcile_closed_account(user_id: str):
         db, user_id, reconcile_space=_reconcile_space_lifecycle,
         call_lock=_call_token_lock,
     )
+
+
+async def delete_retained_object(storage_provider: str, key: str):
+    """Delete private bytes without exposing provider details to worker status."""
+    await asyncio.to_thread(storage_for(storage_provider).delete, key)
 
 
 async def reconcile_session_grants(batch_size: int = 500):
@@ -115,6 +121,7 @@ async def lifespan(app: FastAPI):
     await chat_actions.indexes()
     await account_privacy_indexes(db)
     await account_cleanup_indexes(db)
+    await storage_retention_indexes(db)
     await db.calls.create_index([("status", 1), ("expires_at", 1)])
     await db.calls.create_index("id", unique=True)
     await db.calls.create_index([("members", 1), ("created_at", -1)])
@@ -144,12 +151,18 @@ async def lifespan(app: FastAPI):
     await reconcile_rooms_once()
     worker = asyncio.create_task(run_worker(db)) if settings.PUSH_ENABLED or web_push_configured() else None
     room_worker = asyncio.create_task(room_lifecycle_worker())
+    retention_worker = (asyncio.create_task(storage_retention_worker())
+                        if settings.STORAGE_RETENTION_ENABLED else None)
     try:
         yield
     finally:
         room_worker.cancel()
         with suppress(asyncio.CancelledError):
             await room_worker
+        if retention_worker:
+            retention_worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await retention_worker
         if worker:
             worker.cancel()
             with suppress(asyncio.CancelledError):
@@ -365,7 +378,10 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
             raise HTTPException(400, "Reply to an existing message in this conversation")
     attachment = None
     if payload.type in ("file", "image", "voice"):
-        attachment = await db.attachments.find_one({"id": payload.attachment_id, "chat_id": chat_id, "owner_id": current["id"]})
+        attachment = await db.attachments.find_one({
+            "id": payload.attachment_id, "chat_id": chat_id, "owner_id": current["id"],
+            "retention_state": {"$ne": "deleting"},
+        })
         if not attachment:
             raise HTTPException(400, "Upload a file to this conversation first")
         if payload.type == "voice" and (attachment.get("kind") != "voice" or not payload.duration_ms or not 250 <= payload.duration_ms <= 300000):
@@ -410,6 +426,14 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
             raise HTTPException(409, "Message ID already used")
         await chat_events.publish_message(chat, previous)
         return public_message(previous, chat)
+    if attachment:
+        usable = await db.attachments.find_one({
+            "id": attachment["id"], "owner_id": current["id"],
+            "retention_state": {"$ne": "deleting"},
+        }, {"_id": 1})
+        if not usable:
+            await db.messages.delete_one({"id": msg["id"], "sender_id": current["id"]})
+            raise HTTPException(409, "This upload is being removed. Choose the file again.")
     await db.chats.update_one({"id": chat_id}, {"$set": {"updated_at": msg["created_at"]}})
     await chat_events.publish_message(chat, msg)
     return public_message(msg, chat)
@@ -536,6 +560,19 @@ async def room_lifecycle_worker():
             await reconcile_rooms_once()
         except Exception:
             logger.warning("Room lifecycle maintenance will retry")
+        await asyncio.sleep(15)
+
+
+async def storage_retention_worker():
+    """Keep optional provider cleanup isolated from realtime room maintenance."""
+    while True:
+        try:
+            await reconcile_storage_retention(
+                db, batch_size=10, object_limit=20,
+                provider_delete=delete_retained_object,
+            )
+        except Exception:
+            logger.warning("Storage retention maintenance will retry")
         await asyncio.sleep(15)
 
 
@@ -1433,7 +1470,10 @@ async def set_space_content(space_id: str, payload: SpaceContentIn, current=Depe
         mode = "video"
     else:
         if payload.upload_id:
-            upload = await db.audio_uploads.find_one({"id": payload.upload_id, "uploader_id": current["id"]})
+            upload = await db.audio_uploads.find_one({
+                "id": payload.upload_id, "uploader_id": current["id"],
+                "retention_state": {"$ne": "deleting"},
+            })
             if not upload:
                 raise HTTPException(404, "Audio upload not found")
             content = {"type": "audio", "source": "upload", "upload_id": upload["id"],
@@ -1456,6 +1496,25 @@ async def set_space_content(space_id: str, payload: SpaceContentIn, current=Depe
          "$inc": {"version": 1}}, return_document=ReturnDocument.AFTER)
     if not changed:
         raise HTTPException(409, "The Space changed. Refresh and try again.")
+    if payload.type == "audio" and payload.upload_id:
+        usable = await db.audio_uploads.find_one({
+            "id": payload.upload_id, "uploader_id": current["id"],
+            "retention_state": {"$ne": "deleting"},
+        }, {"_id": 1})
+        if not usable:
+            restore_set = {key: space[key] for key in
+                           ("content", "mode", "state", "updated_at", "session_id")
+                           if key in space}
+            restore_unset = {key: "" for key in
+                             ("content", "mode", "state", "updated_at", "session_id")
+                             if key not in space}
+            update = {"$inc": {"version": 1}}
+            if restore_set:
+                update["$set"] = restore_set
+            if restore_unset:
+                update["$unset"] = restore_unset
+            await db.spaces.update_one({"id": space_id, "version": changed["version"]}, update)
+            raise HTTPException(409, "This audio is being removed. Choose it again.")
     view = _serialize_space(changed)
     await hub.broadcast(space_id, {"type": "content", "content": view["content"], "mode": mode,
         "state": view["state"], "version": view["version"], "server_time": view["server_time"],
