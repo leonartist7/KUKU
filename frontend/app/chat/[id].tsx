@@ -83,24 +83,26 @@ function ChatConversation({id}: {id: string}) {
   const inputRef = useRef<TextInput>(null);
   const [compactWindow,setCompactWindow]=useState(false);
   const tailAnchoring=useRef(true);
-  const latestVisible=useRef(false);
+  const latestVisible=useRef<string|null>(null);
   const scrollPosition=useRef({offset:0,content:0,viewport:0});
-  const preservePrepend=useRef<{scope:string;content:number;offset:number;target?:number;attempts:number}|null>(null);
+  const rowLayouts=useRef(new Map<string,{y:number;height:number}>());
+  const preservePrepend=useRef<{scope:string;anchorId:string;index:number;viewOffset:number;target?:number;attempts:number;stable?:number;ignoreNext?:boolean}|null>(null);
   const prependRetryTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const tailRetryTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const tailRetryCount=useRef(0);
   const viewabilityConfig=useRef({itemVisiblePercentThreshold:1}).current;
   const settleTailAnchor=useCallback(()=>{
     const position=scrollPosition.current;
+    const latest=messagesRef.current[messagesRef.current.length-1];
     const bottomGap=position.content-position.viewport-position.offset;
-    if(tailAnchoring.current&&latestVisible.current&&position.viewport>0&&bottomGap<80){
+    if(latest&&tailAnchoring.current&&latestVisible.current===latest.id&&position.viewport>0&&bottomGap<80){
       tailAnchoring.current=false;nearBottom.current=true;setNewMessages(false);setCompactWindow(true);
       if(tailRetryTimer.current)clearTimeout(tailRetryTimer.current);tailRetryTimer.current=null;
     }
   },[]);
   const onViewableItemsChanged=useRef(({viewableItems}:{viewableItems:Array<{item:Message;isViewable:boolean|null}>})=>{
     const latest=messagesRef.current[messagesRef.current.length-1];
-    latestVisible.current=!!latest&&viewableItems.some(token=>token.isViewable&&token.item.id===latest.id);
+    latestVisible.current=latest&&viewableItems.some(token=>token.isViewable&&token.item.id===latest.id)?latest.id:null;
     settleTailAnchor();
   }).current;
   function requestTailAnchor(animated=false){
@@ -109,19 +111,36 @@ function ChatConversation({id}: {id: string}) {
     if(tailRetryTimer.current)clearTimeout(tailRetryTimer.current);
     if(tailRetryCount.current<24){
       tailRetryTimer.current=setTimeout(()=>{tailRetryCount.current+=1;requestTailAnchor(false);},80);
+    }else{
+      const position=scrollPosition.current,atBottom=position.content-position.viewport-position.offset<80;
+      tailAnchoring.current=false;nearBottom.current=atBottom;setNewMessages(!atBottom&&messagesRef.current.length>0);setCompactWindow(true);tailRetryTimer.current=null;
     }
+  }
+  function cancelPrependAnchor(){
+    preservePrepend.current=null;
+    if(prependRetryTimer.current)clearTimeout(prependRetryTimer.current);
+    prependRetryTimer.current=null;
   }
   function requestPrependAnchor(){
     const pending=preservePrepend.current;
-    if(!pending||activeChat.current!==pending.scope){preservePrepend.current=null;return;}
-    const height=scrollPosition.current.content;
-    if(height<=pending.content)return;
-    pending.target=pending.offset+(height-pending.content);
-    listRef.current?.scrollToOffset({offset:pending.target,animated:false});
+    if(!pending||activeChat.current!==pending.scope){cancelPrependAnchor();return;}
+    if(pending.attempts>=24){cancelPrependAnchor();return;}
+    pending.attempts+=1;pending.ignoreNext=true;pending.target=undefined;
+    const layout=rowLayouts.current.get(pending.anchorId);
+    if(layout){
+      pending.target=Math.max(0,layout.y-pending.viewOffset);
+      pending.stable=Math.abs(scrollPosition.current.offset-pending.target)<=2?(pending.stable||0)+1:0;
+      listRef.current?.scrollToOffset({offset:pending.target,animated:false});
+      if(pending.stable>=3){cancelPrependAnchor();return;}
+    }else{
+      listRef.current?.scrollToIndex({index:pending.index,viewPosition:0,viewOffset:pending.viewOffset,animated:false});
+    }
     if(prependRetryTimer.current)clearTimeout(prependRetryTimer.current);
-    if(pending.attempts<24){
-      prependRetryTimer.current=setTimeout(()=>{const current=preservePrepend.current;if(current)current.attempts+=1;requestPrependAnchor();},80);
-    }else{preservePrepend.current=null;prependRetryTimer.current=null;}
+    prependRetryTimer.current=setTimeout(requestPrependAnchor,80);
+  }
+  function cancelListAnchors(){
+    cancelPrependAnchor();tailAnchoring.current=false;latestVisible.current=null;
+    if(tailRetryTimer.current)clearTimeout(tailRetryTimer.current);tailRetryTimer.current=null;setCompactWindow(true);
   }
   const tools=useChatTools({chatId:id,userId:user?.id,scopeRef:activeChat,messages,messagesRef,setMessages,setError});
   const {updated,reconcile,mutate,openActions,openOriginal}=tools;
@@ -170,7 +189,7 @@ function ChatConversation({id}: {id: string}) {
     activeChat.current = id+":"+(user?.id||"");
     setError(null);
     setMessages([]); setChatInfo(null); setPending([]); setLoading(true);setText("");setSending(false);setDraft(null);setEmotesOpen(false);setVoiceOpen(false);setAttachmentsOpen(false);setCreatingSpace(false);nearBottom.current=true;setNewMessages(false);setCompactWindow(false);
-    messagesRef.current = []; loadingRef.current = false; tailAnchoring.current=true;latestVisible.current=false;scrollPosition.current={offset:0,content:0,viewport:0};preservePrepend.current=null;if(prependRetryTimer.current)clearTimeout(prependRetryTimer.current);prependRetryTimer.current=null;tailRetryCount.current=0;if(tailRetryTimer.current)clearTimeout(tailRetryTimer.current);tailRetryTimer.current=null;
+    messagesRef.current = []; loadingRef.current = false; tailAnchoring.current=true;latestVisible.current=null;scrollPosition.current={offset:0,content:0,viewport:0};preservePrepend.current=null;rowLayouts.current.clear();if(prependRetryTimer.current)clearTimeout(prependRetryTimer.current);prependRetryTimer.current=null;tailRetryCount.current=0;if(tailRetryTimer.current)clearTimeout(tailRetryTimer.current);tailRetryTimer.current=null;
     chatInfoRef.current = null; reloadRequested.current = false; sendFlight.current = false; uploadFlight.current = false; creatingSpaceRef.current = false;
     olderFlight.current = false; setHasOlder(false); setLoadingOlder(false);
     load();
@@ -208,7 +227,7 @@ function ChatConversation({id}: {id: string}) {
     }, [load, user?.id, id, updated, reconcile]),
   );
 
-  function jumpToLatest(){tailAnchoring.current=true;latestVisible.current=false;tailRetryCount.current=0;nearBottom.current=true;setNewMessages(false);setCompactWindow(false);requestTailAnchor(true);}
+  function jumpToLatest(){cancelPrependAnchor();tailAnchoring.current=true;tailRetryCount.current=0;nearBottom.current=true;setNewMessages(false);setCompactWindow(false);requestTailAnchor(true);}
   useEffect(()=>{
     const latest=messages[messages.length-1];if(!latest)return;
     if(nearBottom.current||latest.sender_id===user?.id){const timer=setTimeout(jumpToLatest,60);return()=>clearTimeout(timer);}
@@ -281,10 +300,16 @@ function ChatConversation({id}: {id: string}) {
     try {
       const older = await api.getAs<Message[]>(user.id,"/chats/" + id + "/messages?before=" + encodeURIComponent(messagesRef.current[0].id));
       if (activeChat.current !== scope) return;
-      const position=scrollPosition.current;
-      preservePrepend.current=position.content>0?{scope,content:position.content,offset:position.offset,attempts:0}:null;
-      tailAnchoring.current=false;latestVisible.current=false;nearBottom.current=false;setCompactWindow(true);
-      const merged = mergeChatMessages(id,messagesRef.current,older);
+      const current=messagesRef.current,position=scrollPosition.current;
+      const anchor=current.map(message=>({message,layout:rowLayouts.current.get(message.id)})).filter(item=>item.layout&&item.layout.y+item.layout.height>position.offset+1&&item.layout.y<position.offset+position.viewport).sort((a,b)=>a.layout!.y-b.layout!.y)[0];
+      const merged = mergeChatMessages(id,current,older);
+      const added=merged.length>current.length;
+      if(added&&anchor){
+        const index=merged.findIndex(message=>message.id===anchor.message.id);
+        preservePrepend.current=index>=0?{scope,anchorId:anchor.message.id,index,viewOffset:anchor.layout!.y-position.offset,attempts:0}:null;
+        rowLayouts.current.delete(anchor.message.id);
+      }else cancelPrependAnchor();
+      tailAnchoring.current=false;latestVisible.current=null;nearBottom.current=false;setCompactWindow(true);
       messagesRef.current = merged; setMessages(merged); setHasOlder(older.length === 50);
     } catch (failure) {
       if (activeChat.current === scope) setError(failure instanceof Error ? failure.message : "Could not load older messages");
@@ -380,12 +405,24 @@ function ChatConversation({id}: {id: string}) {
             onScroll={event=>{
               const {contentOffset,contentSize,layoutMeasurement}=event.nativeEvent;
               scrollPosition.current={offset:contentOffset.y,content:contentSize.height,viewport:layoutMeasurement.height};
+              const prepend=preservePrepend.current;
+              if(prepend?.target!==undefined&&Math.abs(contentOffset.y-prepend.target)>8){
+                if(prepend.ignoreNext)prepend.ignoreNext=false;else cancelPrependAnchor();
+              }else if(prepend)prepend.ignoreNext=false;
               if(tailAnchoring.current){settleTailAnchor();return;}
               nearBottom.current=contentSize.height-layoutMeasurement.height-contentOffset.y<80;
               if(nearBottom.current)setNewMessages(false);
             }}
-            onScrollBeginDrag={()=>{tailAnchoring.current=false;latestVisible.current=false;preservePrepend.current=null;if(prependRetryTimer.current)clearTimeout(prependRetryTimer.current);prependRetryTimer.current=null;if(tailRetryTimer.current)clearTimeout(tailRetryTimer.current);tailRetryTimer.current=null;setCompactWindow(true);}}
+            onScrollBeginDrag={cancelListAnchors}
+            onTouchStart={cancelListAnchors}
             onLayout={()=>requestTailAnchor(false)}
+            onScrollToIndexFailed={({index,averageItemLength})=>{
+              const pending=preservePrepend.current;
+              if(pending&&pending.index===index){
+                pending.ignoreNext=true;
+                listRef.current?.scrollToOffset({offset:Math.max(0,averageItemLength*index-pending.viewOffset),animated:false});
+              }
+            }}
             onContentSizeChange={(_width,height)=>{
               const pending=preservePrepend.current;
               scrollPosition.current={...scrollPosition.current,content:height};
@@ -399,7 +436,7 @@ function ChatConversation({id}: {id: string}) {
             data={messages}
             keyExtractor={(m) => m.id}
             contentContainerStyle={styles.msgList}
-            renderItem={({ item, index }) => <View>
+            renderItem={({ item, index }) => <View onLayout={event=>{const {y,height}=event.nativeEvent.layout;rowLayouts.current.set(item.id,{y,height});if(preservePrepend.current?.anchorId===item.id)requestPrependAnchor();}}>
               {index === 0 || new Date(messages[index - 1].created_at).toLocaleDateString() !== new Date(item.created_at).toLocaleDateString()
                 ? <Text style={styles.dateLabel}>{new Date(item.created_at).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}</Text> : null}
               <MessageRow msg={item} mine={item.sender_id === user?.id} userId={user?.id||""} busy={tools.busy} replyMessage={item.reply_to_id?tools.lookup(item.reply_to_id):null} onActions={openActions} onOriginal={openOriginal} onReact={reactTo}/>
