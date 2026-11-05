@@ -128,10 +128,10 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   await p.page.evaluate(()=>document.dispatchEvent(new Event("visibilitychange")));
   await p.page.getByRole("button",{name:"Jump to new messages",exact:true}).waitFor();await p.page.waitForTimeout(350);
   const prependAnchorAfter=await rowPosition(p.page,"perf-0");
+  report.chat.anchor={remote_before:anchorBefore,remote_after:anchorAfter,prepend_before:prependAnchorBefore,prepend_after:prependAnchorAfter};
   assert.ok(Math.abs(prependAnchorAfter.top-prependAnchorBefore.top)<=4,"Loading older messages must preserve the visible row position");
   await scroll.evaluate(e=>{e.scrollTop=0;e.dispatchEvent(new Event("scroll"));});await p.page.getByTestId("message-row-perf-old-0").waitFor();
   report.chat.after_scroll=await metrics(p,"remote-append-jump-and-prepend-preserved",scrollStarted);
-  report.chat.anchor={remote_before:anchorBefore,remote_after:anchorAfter,prepend_before:prependAnchorBefore,prepend_after:prependAnchorAfter};
   report.checks.push("Latest row intersects the viewport; settled chat mounts fewer than 100 rows; remote append and concurrent-append 50-row prepend preserve reading position");
   fullPhoto=await p.page.evaluate(encoded=>new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>{const c=document.createElement("canvas");c.width=32;c.height=32;c.getContext("2d").drawImage(img,0,0,32,32);resolve(c.toDataURL("image/jpeg").split(",")[1]);};img.onerror=reject;img.src="data:image/jpeg;base64,"+encoded;}),PHOTO);
   const filesStarted=await beginAction(p);await p.page.goto(origin+"/files");await p.page.getByTestId("image-open-perf-asset-0").waitFor();
