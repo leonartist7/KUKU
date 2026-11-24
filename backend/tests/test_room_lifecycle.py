@@ -9,6 +9,7 @@ import pytest_asyncio
 from test_release import client, account, pair, headers, private_files, ticket_path
 import server
 from auth_service import digest, now
+from call_configuration import secure_livekit_url
 
 
 @pytest_asyncio.fixture
@@ -51,6 +52,114 @@ async def make_call(client, a, b):
     result = await client.post("/api/calls", headers=headers(a), json={"other_user_id": b["user"]["id"]})
     assert result.status_code == 200, result.text
     return result.json()
+
+
+def test_livekit_configuration_requires_secure_root_dns_endpoint():
+    for value in ("wss://fixture.livekit.example", "wss://fixture.livekit.example/",
+                  "WSS://PROJECT.LiveKit.Cloud", "wss://media.example.com:7880",
+                  "wss://media.xn--p1ai"):
+        assert secure_livekit_url(value), value
+    for value in (None, "", "ws://fixture.livekit.example", "https://fixture.livekit.example",
+                  "wss://user:secret@fixture.livekit.example", "wss://fixture.livekit.example/rtc",
+                  "wss://fixture.livekit.example?token=private", "wss://fixture.livekit.example#private",
+                  " wss://fixture.livekit.example", "wss://fixture.livekit.example\n",
+                  "wss://fixture.livekit.example\\@other.example", "wss://fixture.livekit.example%2f",
+                  "wss://localhost", "wss://nested.localhost", "wss://127.0.0.1", "wss://[::1]",
+                  "wss://0x7f.0.0.1", "wss://example.123", "wss://example.0x7f", "wss://media..example",
+                  "wss://-media.example", "wss://media_example.com", "wss://média.example",
+                  "wss://fixture.livekit.example:", "wss://media.example:", "wss://fixture.livekit.example:0",
+                  "wss://fixture.livekit.example:65536", "wss://fixture.livekit.example:nope"):
+        assert not secure_livekit_url(value), value
+
+
+@pytest.mark.asyncio
+async def test_call_status_is_verified_configuration_only_and_never_exposes_secrets(client, calls, monkeypatch):
+    a, _, _ = calls
+    attempts = []
+    def forbidden(*_args, **_kwargs):
+        attempts.append(True)
+        raise AssertionError("Readiness must not mint a token or contact a provider")
+    monkeypatch.setattr(server.lkapi, "LiveKitAPI", forbidden)
+    monkeypatch.setattr(server.lkapi, "AccessToken", forbidden)
+    monkeypatch.setattr(server.settings, "ENABLE_CALLS", False)
+    response = await client.get("/api/calls/status", headers=headers(a))
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json() == {
+        "scope": "configuration_only", "calls_enabled": False,
+        "provider_configured": True, "secure_transport": True, "configuration_ready": False,
+        "reason_codes": ["calls_disabled"], "provider_connection_tested": False,
+        "end_to_end_encryption": False,
+    }
+    assert all(secret not in response.text for secret in (
+        server.LIVEKIT_URL, server.LIVEKIT_API_KEY, server.LIVEKIT_API_SECRET, a["token"], a["user"]["id"]))
+    assert not attempts
+    assert await server.db.calls.count_documents({}) == 0
+    assert (await client.get("/api/calls/status")).status_code == 401
+    await server.db.users.update_one({"id": a["user"]["id"]}, {"$set": {"email_verified": False}})
+    assert (await client.get("/api/calls/status", headers=headers(a))).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_call_status_reports_missing_or_insecure_provider_without_raw_values(client, calls, monkeypatch):
+    a, _, _ = calls
+    monkeypatch.setattr(server, "LIVEKIT_URL", "ws://private-provider.example/secret-path")
+    monkeypatch.setattr(server, "LIVEKIT_API_KEY", "")
+    response = await client.get("/api/calls/status", headers=headers(a))
+    assert response.status_code == 200
+    assert response.json()["reason_codes"] == ["provider_url_invalid", "provider_credentials_missing"]
+    assert response.json()["provider_configured"] is False
+    assert response.json()["configuration_ready"] is False
+    assert "private-provider" not in response.text and "secret-path" not in response.text
+    monkeypatch.setattr(server, "LIVEKIT_URL", "")
+    response = await client.get("/api/calls/status", headers=headers(a))
+    assert response.json()["reason_codes"] == ["provider_url_missing", "provider_credentials_missing"]
+
+
+@pytest.mark.asyncio
+async def test_insecure_configuration_cannot_create_accept_or_mint_call_media(client, calls, monkeypatch):
+    a, b, _ = calls
+    call = await make_call(client, a, b)
+    path = "/api/calls/" + call["id"]
+    monkeypatch.setattr(server, "LIVEKIT_URL", "ws://fixture.livekit.example")
+    refused = await client.post("/api/calls", headers=headers(a), json={"other_user_id": b["user"]["id"]})
+    assert refused.status_code == 503
+    assert "fixture.livekit" not in refused.text
+    assert (await client.post(path + "/accept", headers=headers(b), json={})).status_code == 503
+    assert (await server.db.calls.find_one({"id": call["id"]}))["status"] == "ringing"
+    monkeypatch.setattr(server, "LIVEKIT_URL", "wss://fixture.livekit.example")
+    assert (await client.post(path + "/accept", headers=headers(b), json={})).status_code == 200
+    monkeypatch.setattr(server, "LIVEKIT_URL", "wss://fixture.livekit.example?private=value")
+    attempts = []
+    def forbidden(*_args, **_kwargs):
+        attempts.append(True)
+        raise AssertionError("Invalid configuration must not mint a media token")
+    monkeypatch.setattr(server.lkapi, "AccessToken", forbidden)
+    assert (await client.post(path + "/token", headers=headers(a), json={})).status_code == 503
+    assert not attempts
+    assert not (await server.db.calls.find_one({"id": call["id"]})).get("token_issued")
+    assert await server.db.calls.count_documents({}) == 1
+    # Cleanup remains available even when fresh media cannot be authorized.
+    assert (await client.post(path + "/end", headers=headers(a), json={})).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_invalid_provider_configuration_preserves_pending_revocation_without_network(client, monkeypatch):
+    monkeypatch.setattr(server, "LIVEKIT_URL", "ws://fixture.livekit.example")
+    monkeypatch.setattr(server, "LIVEKIT_API_KEY", "fixture-key")
+    monkeypatch.setattr(server, "LIVEKIT_API_SECRET", "fixture-secret-value-is-long-enough")
+    attempts = []
+    def forbidden(*_args, **_kwargs):
+        attempts.append(True)
+        raise AssertionError("Invalid configuration must not contact LiveKit")
+    monkeypatch.setattr(server.lkapi, "LiveKitAPI", forbidden)
+    call = {"id": "synthetic-revocation", "token_issued": True, "members": ["alice", "bob"],
+            "status": "completed", "revocation_pending": False}
+    await server.db.calls.insert_one(call)
+    await server._disconnect_call_media(call)
+    stored = await server.db.calls.find_one({"id": call["id"]})
+    assert stored["revocation_pending"] is True
+    assert not attempts
 
 
 @pytest.mark.asyncio

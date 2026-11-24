@@ -27,6 +27,7 @@ export default function YouScreen() {
     {title: "Your people", items: [
       {icon: "person-add-outline", label: "Invite someone", sub: "Share a private invitation link", onPress: () => router.push("/invite"), testID: "settings-invite"},
       {icon: "planet-outline", label: "Shared spaces", sub: "A room to spend a little time together", onPress: () => router.push("/(tabs)/spaces"), testID: "settings-spaces"},
+      {icon: "call-outline", label: "Calls", sub: "Secure audio setup and microphone access", onPress: () => router.push("/call-settings"), testID: "settings-call-setup"},
       ...(CALLS_ENABLED ? [{icon: "call-outline" as const, label: "Call history", sub: "Your recent conversations", onPress: () => router.push("/(tabs)/calls"), testID: "settings-calls"}] : []),
       {icon: "lock-closed-outline", label: "Privacy", sub: "Blocked contacts and privacy", onPress: () => router.push("/privacy"), testID: "settings-privacy"},
       {icon: "shield-checkmark-outline", label: "Account & data", sub: "Export your data or close your account", onPress: () => router.push("/account"), testID: "settings-account"},

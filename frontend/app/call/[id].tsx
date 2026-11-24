@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useCall } from "../../src/CallContext";
 import { callDuration, callPhaseLabel } from "../../src/callState";
+import { callQualityLabel, callQualityNotice, CallConnectionQuality } from "../../src/callMedia";
 import { CALLS_ENABLED } from "../../src/config";
 import Avatar from "../../src/Avatar";
 import { useTheme } from "../../src/ThemeContext";
@@ -51,6 +52,7 @@ export default function CallScreen() {
   const phase = session?.phase || "preparing";
   const canControl = phase === "connected" || phase === "reconnecting" || phase === "connecting";
   const canOutput = typeof HTMLMediaElement !== "undefined" && "setSinkId" in HTMLMediaElement.prototype;
+  const qualityNotice = session ? callQualityNotice(session.quality) : null;
 
   return <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
     <View style={styles.header}>
@@ -72,7 +74,13 @@ export default function CallScreen() {
       </Text>
       {phase === "connected" ? <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.liveText}>Audio connected</Text></View> : null}
       {["preparing", "connecting", "reconnecting"].includes(phase) ? <ActivityIndicator color={c.primary} style={{ marginTop: 16 }} /> : null}
-      {session?.poorConnection && phase !== "ended" ? <Text style={styles.note}>The connection is weak. Audio may take a moment.</Text> : null}
+      {canControl && session ? <View style={styles.qualityRow} accessibilityLiveRegion="polite" testID="call-quality">
+        <QualityPill label="You" quality={session.quality.local}/>
+        <QualityPill label="Them" quality={session.quality.remote}/>
+      </View> : null}
+      {qualityNotice && canControl ? <Text style={styles.note} accessibilityLiveRegion="polite" testID="call-quality-notice">{qualityNotice}</Text> : null}
+      {session?.remoteMuted && canControl ? <View style={styles.remoteMute} accessibilityLiveRegion="polite" testID="call-remote-muted"><Ionicons name="mic-off-outline" size={16} color={c.textSecondary}/><Text style={styles.liveText}>Their microphone is muted</Text></View> : null}
+      {session?.remoteAudioError && canControl ? <Text accessibilityRole="alert" style={styles.error} testID="call-remote-audio-error">{session.remoteAudioError}</Text> : null}
       {session?.audioBlocked ? <Pressable accessibilityRole="button" onPress={() => { void resumeAudio(); }} style={styles.audioRecovery} testID="call-enable-audio">
         <Ionicons name="volume-high-outline" size={20} color={c.primaryDark} /><Text style={styles.recoveryText}>Tap to hear the call</Text>
       </Pressable> : null}
@@ -104,6 +112,15 @@ export default function CallScreen() {
   </SafeAreaView>;
 }
 
+function QualityPill({label,quality}:{label:string;quality:CallConnectionQuality}) {
+  const {c,f}=useTheme();const styles=makeStyles(c,f);
+  const interrupted=quality==="lost",weak=quality==="poor";
+  return <View style={styles.qualityPill} accessibilityLabel={label+" connection: "+callQualityLabel(quality)}>
+    <Ionicons name={interrupted?"cloud-offline-outline":quality==="unknown"?"ellipsis-horizontal":"cellular-outline"} size={16} color={interrupted?c.error:weak?c.textSecondary:c.primaryDark}/>
+    <Text style={styles.qualityText}>{label} · {callQualityLabel(quality)}</Text>
+  </View>;
+}
+
 function Control({ icon, label, active, disabled, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; active?: boolean; disabled?: boolean; onPress: () => void }) {
   const { c, f } = useTheme();
   const styles = makeStyles(c, f);
@@ -128,6 +145,10 @@ const makeStyles = (c: Palette, f: any) => StyleSheet.create({
   liveRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 12 },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: c.success },
   liveText: { fontFamily: f.bodyMedium, fontSize: 13, color: c.textSecondary },
+  qualityRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: 18 },
+  qualityPill: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 34, borderRadius: 17, paddingHorizontal: 12, backgroundColor: c.surface },
+  qualityText: { fontFamily: f.bodyMedium, fontSize: 12, color: c.textSecondary },
+  remoteMute: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 14 },
   note: { fontFamily: f.body, fontSize: 13, lineHeight: 20, color: c.textSecondary, marginTop: 14, textAlign: "center", maxWidth: 360 },
   error: { fontFamily: f.body, fontSize: 14, lineHeight: 22, color: c.error, marginTop: 16, textAlign: "center", maxWidth: 380 },
   audioRecovery: { minHeight: 48, paddingVertical: 12, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 24, backgroundColor: c.primaryBgSubtle, marginTop: 20 },
