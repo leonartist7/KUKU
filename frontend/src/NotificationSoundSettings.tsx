@@ -8,7 +8,7 @@ import {getSessionEpoch,getSessionUserId} from "./api";
 import {DEFAULT_SOUND,SOUND_CHOICES,SoundId,SoundSettings,CustomSound,readSound,saveSound,playMessageSound,stopMessageSound,readCustomSound,prepareCustomSound,saveCustomSound,removeCustomSound} from "./messageSounds";
 
 export default function NotificationSoundSettings(){
-  const {user}=useAuth(),{c,f}=useTheme();const [value,setValue]=useState<SoundSettings>(DEFAULT_SOUND);
+  const {user,restoring}=useAuth(),{c,f}=useTheme();const [value,setValue]=useState<SoundSettings>(DEFAULT_SOUND);
   const [custom,setCustom]=useState<CustomSound|null>(null),[busy,setBusy]=useState(false);
   const [ready,setReady]=useState(false),[message,setMessage]=useState("");const revision=useRef(0);
   const input=useRef<HTMLInputElement>(null);
@@ -24,7 +24,7 @@ export default function NotificationSoundSettings(){
     return()=>{active=false;revision.current++;stopMessageSound();};
   },[user?.id]);
   if(Platform.OS!=="web")return null;
-  const disabled=!ready||busy;
+  const disabled=!ready||busy||restoring;
   function preview(sound:SoundId,volume=value.volume){
     const version=revision.current;
     void playMessageSound({sound,volume},true,user?.id).catch(error=>{

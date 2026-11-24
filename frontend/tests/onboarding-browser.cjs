@@ -178,6 +178,8 @@ const server=http.createServer((req,res)=>{
     await page.getByRole("radio",{name:"Silent message sound",exact:true}).waitFor();
     await page.getByRole("radio",{name:"Silent message sound",exact:true,checked:true}).waitFor();
     await page.getByRole("radio",{name:"Low message volume",exact:true,checked:true}).waitFor();
+    await page.getByText("Permission",{exact:true}).waitFor();
+    assert.equal(await page.getByText("Your account changed. Please try again.",{exact:true}).count(),0,"Notification diagnostics must wait for session restoration");
     await page.screenshot({path:path.join(shots,"notification-sounds-390.png"),fullPage:true});
     await page.goto(origin+"/invite");
     await page.getByRole("button",{name:"Create invitation link",exact:true}).click();
