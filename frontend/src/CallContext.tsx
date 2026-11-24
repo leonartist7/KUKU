@@ -10,15 +10,17 @@ import {useReducedMotion} from "./useReducedMotion";
 import { Palette, spacing } from "./theme";
 import { ApiError, User } from "./api";
 import { callsApi, openCallSocket, Call, CallSignal } from "./calls";
-import { createCallMedia, CallMedia, AudioOutput } from "./callMedia";
+import { createCallMedia, CallMedia, AudioOutput, CallQuality } from "./callMedia";
 import { CallPhase, callEndLabel, callIsTerminal, mediaTimestamp } from "./callState";
+import { CallClientError, callFailureText } from "./callErrors";
 import Avatar from "./Avatar";
 
 type IncomingCall = { callId: string; from: Pick<User, "id" | "name"> };
 export type CallSession = {
   ownerId: string; callId: string | null; other: User; phase: CallPhase;
   direction: "outgoing" | "incoming"; startedAt: number | null;
-  reason: string; muted: boolean; audioBlocked: boolean; poorConnection: boolean;
+  reason: string; muted: boolean; audioBlocked: boolean; quality: CallQuality;
+  remoteMuted: boolean | null; remoteAudioError: string | null;
   controlPending: boolean; controlError: string | null;
   outputs: AudioOutput[]; outputId: string | null;
 };
@@ -40,16 +42,11 @@ export function useCall() {
   return value;
 }
 const supported = CALLS_ENABLED && Platform.OS === "web";
-const failureText = (error: unknown, fallback: string) => {
-  const name = error instanceof Error ? error.name : "";
-  if (name === "NotAllowedError" || name === "SecurityError") return "Microphone access was blocked. Allow it in your browser settings, then try again.";
-  if (name === "NotFoundError") return "No microphone was found. Connect one and try again.";
-  if (name === "NotReadableError") return "Your microphone is in use or unavailable. Check other apps and try again.";
-  return error instanceof Error ? error.message : fallback;
-};
+const failureText = (error: unknown, fallback: string) => callFailureText(error, fallback, error instanceof ApiError ? error.status : undefined);
 function initialSession(uid: string, other: User, direction: CallSession["direction"]): CallSession {
   return { ownerId: uid, callId: null, other, phase: "preparing", direction, startedAt: null, reason: "",
-    muted: false, audioBlocked: false, poorConnection: false, controlPending: false, controlError: null, outputs: [], outputId: null };
+    muted: false, audioBlocked: false, quality: { local: "unknown", remote: "unknown" }, remoteMuted: null, remoteAudioError: null,
+    controlPending: false, controlError: null, outputs: [], outputId: null };
 }
 
 export function CallProvider({ children }: { children: React.ReactNode }) {
@@ -92,7 +89,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const state = sessionRef.current;
     if (!state || (expectedId && state.callId !== expectedId)) return;
     disposeMedia();
-    if (state.ownerId === uidRef.current) replace({ ...state, phase: "ended", reason, audioBlocked: false, controlPending: false });
+    if (state.ownerId === uidRef.current) replace({ ...state, phase: "ended", reason, audioBlocked: false, controlPending: false,
+      quality: { local: "unknown", remote: "unknown" }, remoteMuted: null, remoteAudioError: null });
   }, [disposeMedia, replace]);
   const endOnServer = useCallback(async (state: CallSession) => {
     if (!state.callId || uidRef.current !== state.ownerId) return;
@@ -105,7 +103,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     if (call.can_join_media === false) { finish("This call is open on another device.", call.id); return; }
     if (connectingId.current === call.id || mediaRef.current) return;
     connectingId.current = call.id;
-    patch({ phase: "connecting", reason: "Waiting for both microphones.", controlError: null });
+    patch({ phase: "connecting", reason: "Waiting for both microphones.", controlError: null,
+      quality: { local: "unknown", remote: "unknown" }, remoteMuted: null, remoteAudioError: null });
     const attempt = ++epoch.current;
     const current = () => epoch.current === attempt && uidRef.current === owner && sessionRef.current?.callId === call.id && sessionRef.current?.phase !== "ended";
     try {
@@ -127,7 +126,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         },
         playbackBlocked: (blocked) => { if (current()) patch({ audioBlocked: blocked }); },
         muted: (muted) => { if (current()) patch({ muted }); },
-        quality: (poorConnection) => { if (current()) patch({ poorConnection }); },
+        quality: (quality) => { if (current()) patch({ quality }); },
+        remoteMuted: (remoteMuted) => { if (current()) patch({ remoteMuted }); },
+        remoteAudioError: (remoteAudioError) => { if (current()) patch({ remoteAudioError }); },
       }, { expectedParticipant: state.other.id, isCurrent: current });
       if (!current()) { media.dispose(); return; }
       mediaRef.current = media;
@@ -318,8 +319,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [session?.callId, session?.phase, endOnServer, finish]);
 
   const checkMicrophone = useCallback(async () => {
-    if (!supported) throw new Error(CALLS_ENABLED ? "Calls need the supported browser version. Native calling is being prepared." : "Calls are not available in this beta yet.");
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error("Microphone access needs a supported browser and a secure connection.");
+    if (!supported) throw new CallClientError(CALLS_ENABLED ? "native-unavailable" : "calls-disabled");
+    if (!navigator.mediaDevices?.getUserMedia) throw new CallClientError("microphone-unsupported");
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     stream.getTracks().forEach((track) => track.stop());
   }, []);

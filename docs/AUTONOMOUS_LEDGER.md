@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-24T20:27:41Z
+Updated: 2026-11-24T20:49:17Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: root N07 notification audio and small icons, 24 November 2026.
+Current controller: root C08 secure audio readiness and connection quality, 24 November 2026.
 Work was performed through connected GitHub/provider APIs and cloud CI; never assume a prior local worktree exists.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -54,7 +54,10 @@ Initial package owners (all returned; no agent has an outstanding write):
 
 ## Current authoritative checkpoint
 This section supersedes historical pending statements below.
-- N07 is in implementation/review. Foreground web sound import and stronger presets plus separate small notification/favicon assets are authored; exact-source cloud checks and review rollout are pending. See docs/NOTIFICATION_SOUNDS.md. Earlier P06 runtime remains live until acceptance.
+- N07 notification web release is accepted on exact source `6e7b4ab9ba25b83e2fef8dce53dbd88e09995810`; [PR #13](https://github.com/leonartist7/KUKU/pull/13) merged into the review release branch as `1834c601bf06527701d6271c35bdabd9a5d3b72e`. Cloud run 45483142402 has 145 backend tests, 123 frontend tests, TypeScript, web export and complete browser journeys passing. A duplicate file-chooser test variable was fixed in an earlier attempt, and visual review caught and repaired notification diagnostics running before restored-account proof.
+- N07 adds local per-account WAV import/replacement/removal (1 MiB/five seconds), validation before browser decode, bounded normalization/headroom and metadata-free PCM re-encoding. Seven audible presets plus Silent and a Maximum volume choice are available while KUKU is open. Android/Chrome continues to control background sounds/volume. Separate vector-derived favicon, larger notification icon and white-alpha small badge are wired for web and the native plugin. No personal audio was used or uploaded.
+- N07 Vercel deployment `dpl_F5PiYPFu2i6FM8Lw2sPVUT7vWN9R` on exact source is READY. The existing beta alias points to it; `/login`, `/favicon.svg` and `/sw.js` returned 200 with the new version-8 assets. Alias UID and its existing access exception were preserved. Backend files were unchanged, so Render stayed on compatible `bd1f9490bdd30779128975051e2f7363cc4a9c96`; no redundant API deployment occurred. Android build is a separate test-artifact gate and is still being checked.
+- C08 now implements the user's follow-up for real secure audio: strict server/client secure endpoint validation, redacted configuration diagnostics, mono speech processing and separate local/remote quality/mute/subscription feedback. You → Calls includes a local microphone-permission check that immediately releases capture. Calls remain gated; exact-source cloud and actual provider readiness are pending.
 - P06 accepted source `a20bdf7354c8c93eea9ee98de2ea2de3eabeb5bb`. [PR #12](https://github.com/leonartist7/KUKU/pull/12) was squash-merged into the review release branch as runtime tree-equivalent commit `bd1f9490bdd30779128975051e2f7363cc4a9c96`; both commits point to tree `33cb1928d4c4b312c29270c2dbd4e5aeda9d6de2`. Main is unchanged.
 - The provider-only object inventory is an explicit offline operator command, not an API route or lifecycle task. It accepts only `attachments/` and `space-audio/`, requires explicit database settings and required metadata collections, and treats any exact metadata key as present regardless of a missing or malformed provider field. Invalid entries, provider/database errors, repeated cursors and page/object budgets make a pass incomplete.
 - Reports contain HMAC digests, coarse age buckets and bounded counts only; raw keys, URLs, ETags, cursors and error messages remain out of the report. A comparison requires the same provider, HMAC key, schema, minimum age and prefixes plus two complete observations at least 24 hours apart. Confirmation does not attribute ownership or authorize deletion, quota work, retention jobs or a physical-erasure claim.
@@ -105,11 +108,11 @@ Do not mark a full phase complete when a release gate is still outstanding.
 An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
 
 ## Active controller lease
-Controller: root N07 notification audio and small icons.
-Lease recorded at: 2026-11-24T20:27:41Z
-Lease expires at: 2026-11-24T22:27:41Z
-State: ACTIVE; user-requested WAV import, stronger presets/volume and notification/favicon assets.
-No provider setup, live message tests, billing or access changes are authorized by this package.
+Controller: root C08 secure audio readiness and connection quality.
+Lease recorded at: 2026-11-24T20:49:17Z
+Lease expires at: 2026-11-24T22:49:17Z
+State: ACTIVE; N07 web release accepted. C08 secure calling implementation and verification underway.
+No call flags, real recipients, LiveKit connections, billing or access settings changed.
 
 
 ## Verified implementation checkpoint

@@ -28,6 +28,7 @@ from chat_actions import ChatActions, public_message as chat_message_view, reque
 from account_privacy import account_privacy_router, account_privacy_indexes
 from account_cleanup import account_cleanup_indexes, cleanup_closed_account, reconcile_account_closures
 from storage_retention import storage_retention_indexes, reconcile_storage_retention
+from call_configuration import call_configuration_status
 import settings
 from safety import safety_router, allow_direct
 from attachments import attachment_router, storage_for
@@ -116,6 +117,9 @@ async def reconcile_session_grants(batch_size: int = 500):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.command("ping")
+    # Aggregate configuration only. Never log the endpoint, keys, tokens or users.
+    # This runs once per normal application startup and makes no provider probe.
+    logger.info("Call readiness configuration: %s", _call_configuration())
     await auth.indexes()
     await chat_events.indexes()
     await chat_actions.indexes()
@@ -472,6 +476,18 @@ def _require_calls():
         raise HTTPException(503, "Calls are not enabled for this release")
 
 
+def _call_configuration():
+    return call_configuration_status(
+        enabled=settings.ENABLE_CALLS, url=LIVEKIT_URL,
+        api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET,
+    )
+
+
+def _require_call_configuration():
+    if not _call_configuration()["provider_configured"]:
+        raise HTTPException(503, "Secure calls are getting ready. Please try again later.")
+
+
 def _call_view(c: dict, other: Optional[dict] = None, current: Optional[dict] = None) -> dict:
     view = {key: c.get(key) for key in (
         "id", "members", "initiator_id", "status", "started_at", "accepted_at",
@@ -494,7 +510,12 @@ async def _call_event(call: dict, event: str):
 
 
 async def _disconnect_call_media(call: dict):
-    if not call.get("token_issued") or not all((LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)):
+    if not call.get("token_issued"):
+        return
+    if not _call_configuration()["provider_configured"]:
+        # Invalid/missing provider setup cannot be treated as successful removal.
+        # Keep the durable retry marker without attempting an insecure endpoint.
+        await db.calls.update_one({"id": call["id"]}, {"$set": {"revocation_pending": True}})
         return
     try:
         async with lkapi.LiveKitAPI(url=LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET) as service:
@@ -654,6 +675,13 @@ async def list_calls(current=Depends(get_current_user)):
     return out
 
 
+@api.get("/calls/status")
+async def call_status(current=Depends(get_current_user)):
+    # This diagnostic remains readable while calls are gated off. It does not
+    # query call history, mint tokens, connect to LiveKit or prove media quality.
+    return _call_configuration()
+
+
 @api.get("/calls/{call_id}")
 async def get_call(call_id: str, current=Depends(get_current_user)):
     call = await _authorized_call(call_id, current)
@@ -665,8 +693,7 @@ async def get_call(call_id: str, current=Depends(get_current_user)):
 @api.post("/calls")
 async def create_call(payload: CallCreateIn, current=Depends(get_current_user)):
     _require_calls()
-    if not all((LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)):
-        raise HTTPException(503, "Calls are getting ready. Please try again later.")
+    _require_call_configuration()
     if payload.other_user_id == current["id"]:
         raise HTTPException(400, "Cannot call yourself")
     await auth.require_contact(current["id"], payload.other_user_id)
@@ -712,6 +739,7 @@ async def create_call(payload: CallCreateIn, current=Depends(get_current_user)):
 @api.post("/calls/{call_id}/accept")
 async def accept_call(call_id: str, current=Depends(get_current_user)):
     call = await _authorized_call(call_id, current)
+    _require_call_configuration()
     if call["initiator_id"] == current["id"]:
         raise HTTPException(400, "Cannot accept your own call")
     await _call_contacts(call, current)
@@ -823,8 +851,7 @@ async def call_token(call_id: str, current=Depends(get_current_user)):
         raise HTTPException(409, "Answer the call before connecting audio")
     _require_call_session(call, current)
     await _call_contacts(call, current)
-    if not all((LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)):
-        raise HTTPException(503, "Calls are getting ready. Please try again later.")
+    _require_call_configuration()
     await auth.limit("call-token:" + current["id"], 30, 60)
     # Ending a call and minting a token use the same per-call lock in this single-worker beta.
     async with _call_token_lock(call_id):

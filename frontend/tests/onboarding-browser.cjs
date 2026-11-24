@@ -37,6 +37,7 @@ const server=http.createServer((req,res)=>{
       if(endpoint==="/api/auth/profile"){profiles++;user={...user,name:body.name,bio:body.bio,onboarding_complete:true};return respond(200,user);}
       if(endpoint==="/api/auth/photo"){photoSaves++;assert.ok(body.image_base64===null||body.image_base64.length>20);user={...user,avatar:body.image_base64===null?null:"data:image/jpeg;base64,"+TEST_PHOTO};return respond(200,user);}
       if(endpoint==="/api/invites"){inviteEmail=body.email;return respond(200,{invite_url:origin+"/login#invite="+"synthetic-link-invitation-0123456789",invite_token:"synthetic-link-invitation-0123456789"});}
+      if(endpoint==="/api/calls/status")return respond(200,{calls_enabled:false,provider_configured:false,secure_transport:false,configuration_ready:false,reason_codes:["calls_disabled","provider_url_missing","provider_credentials_missing"],provider_connection_tested:false,end_to_end_encryption:false});
       if(endpoint==="/api/files/status")return respond(200,{available:++statusChecks>1,used_bytes:0,remaining_bytes:500*1024*1024,max_file_bytes:25*1024*1024});
       if(endpoint==="/api/users")return respond(200,[{id:"sister",name:"Sam",email_verified:true}]);
       if(endpoint==="/api/chats"&&req.method()==="POST")return respond(200,{id:"synthetic-chat"});
@@ -181,6 +182,18 @@ const server=http.createServer((req,res)=>{
     await page.getByText("Permission",{exact:true}).waitFor();
     assert.equal(await page.getByText("Your account changed. Please try again.",{exact:true}).count(),0,"Notification diagnostics must wait for session restoration");
     await page.screenshot({path:path.join(shots,"notification-sounds-390.png"),fullPage:true});
+    await page.goto(origin+"/");await page.getByTestId("profile-button").click();
+    await page.getByTestId("settings-call-setup").click();
+    await page.getByTestId("call-readiness").getByText("Setup still needed",{exact:true}).waitFor();
+    await page.getByRole("button",{name:"Check microphone access",exact:true}).click();
+    await page.getByText("Microphone access allowed",{exact:true}).waitFor();
+    for(const width of [320,390,768]){
+      await page.setViewportSize({width,height:844});
+      assert.equal(await page.locator("html").evaluate(node=>node.scrollWidth),width,"Call setup must fit width "+width);
+      await page.screenshot({path:path.join(shots,"call-setup-"+width+".png"),fullPage:true});
+    }
+    await page.setViewportSize({width:390,height:844});
+
     await page.goto(origin+"/invite");
     await page.getByRole("button",{name:"Create invitation link",exact:true}).click();
     await page.getByRole("button",{name:"Copy invitation link",exact:true}).click();

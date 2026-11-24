@@ -10,16 +10,18 @@ function load(file, globals = {}, requireModule = require) {
   const source = ts.transpileModule(fs.readFileSync(file, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText;
-  vm.runInNewContext(source, { exports, require: requireModule, Date, Map, Set, Promise, Error, Number, ...globals });
+  const dependency = name => name === "./callErrors" ? load("src/callErrors.ts") : requireModule(name);
+  vm.runInNewContext(source, { exports, require: dependency, Date, Map, Set, Promise, Error, Number, URL, ...globals });
   return exports;
 }
 function harness(options = {}) {
   let current = true, room, attached = 0, removed = 0, stopped = 0, released = 0;
-  const callbacks = { ready: 0, reconnecting: [], disconnected: 0, blocked: [], muted: [], quality: [] };
-  const events = Object.fromEntries(["TrackSubscribed", "TrackUnsubscribed", "AudioPlaybackStatusChanged", "Reconnecting", "Reconnected", "ParticipantDisconnected", "Disconnected", "LocalTrackPublished", "TrackMuted", "TrackUnmuted", "ConnectionQualityChanged"].map(x => [x, x]));
+  const callbacks = { ready: 0, reconnecting: [], disconnected: 0, blocked: [], muted: [], quality: [], remoteMuted: [], remoteAudioError: [] };
+  const events = Object.fromEntries(["TrackSubscribed", "TrackUnsubscribed", "TrackSubscriptionFailed", "AudioPlaybackStatusChanged", "Reconnecting", "Reconnected", "ParticipantDisconnected", "Disconnected", "LocalTrackPublished", "TrackMuted", "TrackUnmuted", "ConnectionQualityChanged"].map(x => [x, x]));
   class FakeRoom extends EventEmitter {
-    constructor() {
+    constructor(config) {
       super(); room = this;
+      this.config = config;
       this.state = "disconnected"; this.canPlaybackAudio = !options.blocked;
       this.remoteParticipants = new Map();
       this.localParticipant = {
@@ -77,18 +79,53 @@ function harness(options = {}) {
     disconnected: () => callbacks.disconnected++,
     playbackBlocked: value => callbacks.blocked.push(value),
     muted: value => callbacks.muted.push(value),
-    quality: value => callbacks.quality.push(value)
+    quality: value => callbacks.quality.push(value),
+    remoteMuted: value => callbacks.remoteMuted.push(value),
+    remoteAudioError: value => callbacks.remoteAudioError.push(value)
   };
   return {
     callbacks, events, makeTrack, room: () => room, counts: () => ({ attached, removed, stopped, released }),
     invalidate: () => { current = false; },
-    create: () => module.createCallMedia({ url: "wss://rtc.example.test", token: "test-token", room: "test-room" }, handlers, {
+    create: (url="wss://rtc.example.test") => module.createCallMedia({ url, token: "test-token", room: "test-room" }, handlers, {
       expectedParticipant: "sister", isCurrent: () => current,
-      loadSdk: async () => ({ Room: FakeRoom, RoomEvent: events })
+      loadSdk: async () => ({ Room: FakeRoom, RoomEvent: events, AudioPresets: { speech: { maxBitrate: 24000 } } })
     })
   };
 }
 const settle = () => new Promise(resolve => setImmediate(resolve));
+
+test("media credentials are never sent to insecure or unexpected signaling URLs", async () => {
+  const media = load("src/callMedia.ts");
+  for (const url of ["wss://rtc.example.test", "wss://rtc.example.test/", "wss://my-project.livekit.cloud:443/", "wss://media.xn--p1ai"]) assert.equal(media.isSecureLiveKitUrl(url), true, url);
+  for (const url of [undefined, "", "ws://rtc.example.test", "https://rtc.example.test", "wss:rtc.example.test", "wss:///rtc.example.test", "wss://@rtc.example.test", "wss://user:secret@rtc.example.test", "wss://rtc.example.test/path", "wss://rtc.example.test?token=secret", "wss://rtc.example.test#", "wss://rtc.example.test?", "wss://localhost", "wss://nested.localhost", "wss://127.0.0.1", "wss://0x7f.0.0.1", "wss://example.123", "wss://example.0x7f", "wss://media.example:", "wss://[::1]", "wss://rtc.example.test:0", "wss://rtc.example.test:65536", " wss://rtc.example.test", "wss://rtc.exa%mple.test", "wss://rtc.example.test\\path", "wss://réc.example.test"]) assert.equal(media.isSecureLiveKitUrl(url), false, String(url));
+  const h = harness();
+  await assert.rejects(h.create("wss://user:secret@rtc.example.test"), /Secure calling is not configured/);
+  assert.equal(h.room(), undefined); assert.equal(h.counts().released, 0);
+});
+
+test("call errors expose only controlled text, never SDK endpoints or token details", () => {
+  const m=load("src/callErrors.ts"),fallback="Audio could not connect. Please try another call.";
+  for(const raw of ["WebSocket failed wss://private.example?access_token=secret-token", "token=secret-token", "Device internal id=private-device", "microphone permission denied at https://private.example"]){
+    const result=m.callFailureText(new Error(raw),fallback);
+    assert.equal(result,fallback);assert.ok(!/private|secret|token|wss:|https:/.test(result));
+  }
+  const denied=new Error("https://private.example?token=secret");denied.name="NotAllowedError";
+  assert.match(m.callFailureText(denied,fallback),/Microphone access was blocked/);
+  const missing=new Error("private-device");missing.name="NotFoundError";
+  assert.match(m.callFailureText(missing,fallback),/No microphone/);
+  assert.match(m.callFailureText(new m.CallClientError("another-tab"),fallback),/another KUKU tab/);
+  assert.match(m.callFailureText(new m.CallClientError("secure-setup"),fallback),/Secure calling/);
+  assert.match(m.callFailureText(new Error("url=https://private.example&token=secret"),fallback,503),/Call setup/);
+  assert.match(m.callFailureText(new Error("secret"),fallback,401),/session expired/);
+});
+
+test("speech publishing explicitly prefers mono processing and resilient Opus defaults", async () => {
+  const h=harness(), media=await h.create();
+  const config=JSON.parse(JSON.stringify(h.room().config));
+  assert.deepEqual(config.audioCaptureDefaults,{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1});
+  assert.deepEqual(config.publishDefaults,{audioPreset:{maxBitrate:24000},dtx:true,red:true,forceStereo:false});
+  media.dispose();
+});
 
 test("accepted signaling alone never starts the connected media state", async () => {
   const h = harness(), media = await h.create();
@@ -236,6 +273,87 @@ test("reconnect and removed remote tracks leave the ready state until a playable
   h.room().emit(h.events.TrackUnsubscribed, track);
   assert.equal(h.callbacks.reconnecting.length, 2);
   media.dispose();
+});
+
+test("quality distinguishes both participants and ignores unrelated room identities", async () => {
+  const h=harness(),media=await h.create();await media.connect();
+  assert.equal(h.callbacks.quality.at(-1).local,"unknown");assert.equal(h.callbacks.quality.at(-1).remote,"unknown");
+  h.room().emit(h.events.ConnectionQualityChanged,"excellent",h.room().localParticipant);
+  h.room().emit(h.events.ConnectionQualityChanged,"poor",{identity:"sister"});
+  assert.equal(h.callbacks.quality.at(-1).local,"excellent");assert.equal(h.callbacks.quality.at(-1).remote,"poor");
+  const count=h.callbacks.quality.length;
+  h.room().emit(h.events.ConnectionQualityChanged,"lost",{identity:"outsider"});
+  assert.equal(h.callbacks.quality.length,count);
+  h.room().emit(h.events.ConnectionQualityChanged,"unexpected",{identity:"sister"});
+  assert.equal(h.callbacks.quality.at(-1).remote,"unknown");
+  media.dispose();
+  assert.equal(h.callbacks.quality.at(-1).local,"unknown");assert.equal(h.callbacks.quality.at(-1).remote,"unknown");
+});
+
+test("lost quality leaves media-ready promptly and a recovered connection can return", async () => {
+  const h=harness(),media=await h.create();await media.connect();
+  h.room().emit(h.events.TrackSubscribed,h.makeTrack(),{source:"microphone",isMuted:false},{identity:"sister"});
+  await settle();assert.equal(h.callbacks.ready,1);
+  h.room().emit(h.events.ConnectionQualityChanged,"lost",{identity:"sister"});
+  assert.match(h.callbacks.reconnecting.at(-1),/Their connection dropped/);
+  h.room().emit(h.events.AudioPlaybackStatusChanged);assert.equal(h.callbacks.ready,1,"A playable stale element cannot override lost connection quality");
+  h.room().emit(h.events.ConnectionQualityChanged,"good",{identity:"sister"});
+  assert.equal(h.callbacks.ready,2);
+  h.room().state="reconnecting";h.room().emit(h.events.Reconnecting);
+  assert.equal(h.callbacks.quality.at(-1).local,"unknown");assert.equal(h.callbacks.quality.at(-1).remote,"unknown");
+  assert.equal(h.callbacks.remoteMuted.at(-1),null);media.dispose();
+});
+
+test("remote mute is distinct from network quality and does not invent a reconnect", async () => {
+  const h=harness(),media=await h.create();await media.connect();
+  const track=h.makeTrack(),publication={source:"microphone",isMuted:false};
+  h.room().emit(h.events.TrackSubscribed,track,publication,{identity:"sister"});await settle();
+  h.room().emit(h.events.ConnectionQualityChanged,"good",{identity:"sister"});
+  publication.isMuted=true;h.room().emit(h.events.TrackMuted,publication,{identity:"sister"});
+  assert.equal(h.callbacks.remoteMuted.at(-1),true);assert.equal(h.callbacks.quality.at(-1).remote,"good");
+  h.room().emit(h.events.TrackUnsubscribed,track,publication,{identity:"sister"});
+  assert.equal(h.callbacks.reconnecting.length,0,"An intentional microphone mute is not bad signal");
+  publication.isMuted=false;h.room().emit(h.events.TrackUnmuted,publication,{identity:"sister"});
+  assert.equal(h.callbacks.remoteMuted.at(-1),false);assert.match(h.callbacks.reconnecting.at(-1),/microphone audio/);
+  const count=h.callbacks.remoteMuted.length;
+  h.room().emit(h.events.TrackMuted,{source:"microphone",isMuted:true},{identity:"outsider"});
+  h.room().emit(h.events.TrackMuted,{source:"camera",isMuted:true},{identity:"sister"});
+  assert.equal(h.callbacks.remoteMuted.length,count);media.dispose();
+});
+
+test("subscription errors are scoped and recover without exposing provider error text", async () => {
+  const h=harness(),media=await h.create();await media.connect();
+  const participant={identity:"sister",trackPublications:new Map([["mic",{kind:"audio",source:"microphone"}],["camera",{kind:"video",source:"camera"}]])};
+  const before=h.callbacks.remoteAudioError.length;
+  h.room().emit(h.events.TrackSubscriptionFailed,"mic",{...participant,identity:"outsider"},new Error("token=secret"));
+  h.room().emit(h.events.TrackSubscriptionFailed,"camera",participant,new Error("token=secret"));
+  assert.equal(h.callbacks.remoteAudioError.length,before);
+  h.room().emit(h.events.TrackSubscriptionFailed,"mic",participant,new Error("token=secret"));
+  assert.match(h.callbacks.remoteAudioError.at(-1),/could not be received/);
+  assert.ok(!h.callbacks.remoteAudioError.at(-1).includes("secret"));
+  h.room().emit(h.events.TrackSubscribed,h.makeTrack(),{source:"microphone",isMuted:false},participant);await settle();
+  assert.equal(h.callbacks.remoteAudioError.at(-1),null);assert.equal(h.callbacks.ready,1);media.dispose();
+});
+
+test("a disconnected participant cannot be declared ready from their retained old audio", async () => {
+  const h=harness(),media=await h.create();await media.connect();
+  h.room().emit(h.events.TrackSubscribed,h.makeTrack(),{source:"microphone",isMuted:false},{identity:"sister"});await settle();
+  assert.equal(h.callbacks.ready,1);
+  h.room().emit(h.events.ParticipantDisconnected,{identity:"sister"});
+  assert.equal(h.counts().removed,1);assert.equal(h.callbacks.remoteMuted.at(-1),null);
+  h.room().emit(h.events.ConnectionQualityChanged,"excellent",h.room().localParticipant);
+  assert.equal(h.callbacks.ready,1);
+  h.room().emit(h.events.TrackSubscribed,h.makeTrack(),{source:"microphone",isMuted:false},{identity:"sister"});await settle();
+  assert.equal(h.callbacks.ready,2);media.dispose();
+});
+
+test("quality wording never claims unknown signal is good and identifies the affected side", () => {
+  const m=load("src/callMedia.ts");
+  assert.equal(m.callQualityLabel("unknown"),"Checking");assert.equal(m.callQualityLabel("lost"),"Interrupted");
+  assert.equal(m.callQualityNotice({local:"unknown",remote:"unknown"}),null);
+  assert.match(m.callQualityNotice({local:"poor",remote:"good"}),/Your connection/);
+  assert.match(m.callQualityNotice({local:"excellent",remote:"poor"}),/Their connection/);
+  assert.match(m.callQualityNotice({local:"excellent",remote:"lost"}),/interrupted/);
 });
 
 test("a second tab cannot acquire a held media lease", async () => {
