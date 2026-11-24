@@ -103,7 +103,7 @@ export async function testBrowserNotification(uid: string) {
   const registration = await pushRegistration(); assertCurrent();
   await registration.showNotification("KUKU · Device test", {
     body: "A little hello from KUKU. This is a local notification test.",
-    icon: "/pwa-192.png", badge: "/pwa-192.png", tag: "kuku-device-test", data: {userId: uid, localTest: true},
+    icon: "/notification-icon.png", badge: "/notification-badge.png", tag: "kuku-device-test", data: {userId: uid, localTest: true},
   });
   assertCurrent();
 }

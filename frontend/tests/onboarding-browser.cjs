@@ -148,6 +148,27 @@ const server=http.createServer((req,res)=>{
     await page.clock.resume();
     await page.goto(origin+"/notifications");
     await page.getByTestId("notification-sound-settings").waitFor();
+    await page.getByRole("radio",{name:"Bright bell message sound",exact:true}).click();
+    await page.getByRole("radio",{name:"Maximum message volume",exact:true}).click();
+    const wav=Buffer.alloc(44+8000);wav.write("RIFF");wav.writeUInt32LE(wav.length-8,4);wav.write("WAVEfmt ",8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(8000,24);wav.writeUInt32LE(16000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write("data",36);wav.writeUInt32LE(8000,40);
+    for(let i=0;i<4000;i++)wav.writeInt16LE(Math.round(Math.sin(2*Math.PI*660*i/8000)*1500),44+i*2);
+    const chooser=page.waitForEvent("filechooser");
+    await page.getByRole("button",{name:"Import a WAV sound",exact:true}).click();
+    await (await chooser).setFiles({name:"doorbell.wav",mimeType:"audio/wav",buffer:wav});
+    await page.getByRole("alert").filter({hasText:"Your WAV is ready"}).waitFor();
+    await page.getByRole("radio",{name:"My WAV message sound",exact:true,checked:true}).waitFor();
+    await page.reload();
+    await page.getByRole("radio",{name:"My WAV message sound",exact:true,checked:true}).waitFor();
+    await page.getByRole("radio",{name:"Maximum message volume",exact:true,checked:true}).waitFor();
+    await page.getByRole("button",{name:"Preview My WAV",exact:true}).click();
+    await page.getByTestId("notification-wav-input").setInputFiles({name:"bad.wav",mimeType:"audio/wav",buffer:Buffer.alloc(48)});
+    await page.getByRole("alert").filter({hasText:"valid WAV"}).waitFor();
+    await page.getByRole("radio",{name:"My WAV message sound",exact:true,checked:true}).waitFor();
+    await page.screenshot({path:path.join(shots,"notification-wav-390.png"),fullPage:true});
+    await page.getByRole("button",{name:"Remove imported WAV",exact:true}).click();
+    await page.getByRole("alert").filter({hasText:"Imported sound removed"}).waitFor();
+    await page.getByRole("radio",{name:"Soft bell message sound",exact:true,checked:true}).waitFor();
+
     await page.getByRole("radio",{name:"Raindrop message sound",exact:true}).click();
     await page.getByRole("radio",{name:"Low message volume",exact:true}).click();
     await page.getByRole("button",{name:"Preview Soft bell",exact:true}).click();

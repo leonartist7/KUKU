@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-05T19:12:00Z
+Updated: 2026-11-24T20:27:41Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: none. Root completed P06 report-only provider inventory on 5 November 2026.
+Current controller: root N07 notification audio and small icons, 24 November 2026.
 Work was performed through connected GitHub/provider APIs and cloud CI; never assume a prior local worktree exists.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -54,6 +54,7 @@ Initial package owners (all returned; no agent has an outstanding write):
 
 ## Current authoritative checkpoint
 This section supersedes historical pending statements below.
+- N07 is in implementation/review. Foreground web sound import and stronger presets plus separate small notification/favicon assets are authored; exact-source cloud checks and review rollout are pending. See docs/NOTIFICATION_SOUNDS.md. Earlier P06 runtime remains live until acceptance.
 - P06 accepted source `a20bdf7354c8c93eea9ee98de2ea2de3eabeb5bb`. [PR #12](https://github.com/leonartist7/KUKU/pull/12) was squash-merged into the review release branch as runtime tree-equivalent commit `bd1f9490bdd30779128975051e2f7363cc4a9c96`; both commits point to tree `33cb1928d4c4b312c29270c2dbd4e5aeda9d6de2`. Main is unchanged.
 - The provider-only object inventory is an explicit offline operator command, not an API route or lifecycle task. It accepts only `attachments/` and `space-audio/`, requires explicit database settings and required metadata collections, and treats any exact metadata key as present regardless of a missing or malformed provider field. Invalid entries, provider/database errors, repeated cursors and page/object budgets make a pass incomplete.
 - Reports contain HMAC digests, coarse age buckets and bounded counts only; raw keys, URLs, ETags, cursors and error messages remain out of the report. A comparison requires the same provider, HMAC key, schema, minimum age and prefixes plus two complete observations at least 24 hours apart. Confirmation does not attribute ownership or authorize deletion, quota work, retention jobs or a physical-erasure claim.
@@ -104,11 +105,11 @@ Do not mark a full phase complete when a release gate is still outstanding.
 An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
 
 ## Active controller lease
-Controller: none.
-Lease recorded at: 2026-11-05T18:27:03Z
-Lease closed at: 2026-11-05T19:12:00Z
-State: COMPLETE; P06 report-only implementation and review rollout accepted. No live inventory,
-deletion, quota mutation or retention-job creation occurred.
+Controller: root N07 notification audio and small icons.
+Lease recorded at: 2026-11-24T20:27:41Z
+Lease expires at: 2026-11-24T22:27:41Z
+State: ACTIVE; user-requested WAV import, stronger presets/volume and notification/favicon assets.
+No provider setup, live message tests, billing or access changes are authorized by this package.
 
 
 ## Verified implementation checkpoint

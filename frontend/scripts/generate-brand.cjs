@@ -46,3 +46,5 @@ fs.writeFileSync(path.join(images,"kuku-mail.png"),png(mail,512));
 for(const [name,n] of [["pwa-192.png",192],["pwa-512.png",512],["pwa-maskable-512.png",512]])fs.writeFileSync(path.join(pub,name),png(brand,n,true));
 const tiny=png(brand,32,true), head=Buffer.alloc(22);head.writeUInt16LE(1,2);head.writeUInt16LE(1,4);head[6]=32;head[7]=32;head.writeUInt16LE(1,10);head.writeUInt16LE(32,12);head.writeUInt32LE(tiny.length,14);head.writeUInt32LE(22,18);fs.writeFileSync(path.join(pub,"favicon.ico"),Buffer.concat([head,tiny]));
 console.log("Generated KUKU app, adaptive, favicon, PWA and in-app artwork assets.");
+
+require("./generate-notification-icons.cjs");
