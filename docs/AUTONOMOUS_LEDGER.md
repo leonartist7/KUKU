@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-24T20:49:17Z
+Updated: 2026-11-24T21:09:13Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: root C08 secure audio readiness and connection quality, 24 November 2026.
+Current controller: none. Root completed N07 notifications and C08 secure audio readiness on 24 November 2026.
 Work was performed through connected GitHub/provider APIs and cloud CI; never assume a prior local worktree exists.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -48,16 +48,28 @@ Initial package owners (all returned; no agent has an outstanding write):
 | 2 Design and interaction | FOUNDATIONS DEPLOYED | Responsive browser/theme checks pass; physical accessibility review open |
 | 3 Chat/performance | CHAT TOOLS + BOUNDED CHAT LIST + PRIVATE MEDIA CACHE DEPLOYED | Controlled anchoring/render/cache evidence recorded; physical/CWV memory budgets remain open |
 | 4 Spaces | BETA DEPLOYED; DEVICE SYNC OPEN | Roles/private audio/reconnect checks pass; real drift walkthrough open |
-| 5 Calls | AUDIO FOUNDATION IMPLEMENTED; OFF | Provider and audible two-device checks required; native/video incomplete |
+| 5 Calls | SECURE AUDIO FOUNDATION + TWO-SIDED QUALITY DEPLOYED; OFF | Provider and audible two-device checks required; native/video incomplete |
 | 6 Android/release | TEST APK + RECOVERY REHEARSAL + REPORT-ONLY PROVIDER INVENTORY VERIFIED; PRODUCTION GATED | Physical install/push/signing, live backup/media recovery and full erasure still open |
 
 
 ## Current authoritative checkpoint
 This section supersedes historical pending statements below.
-- N07 notification web release is accepted on exact source `6e7b4ab9ba25b83e2fef8dce53dbd88e09995810`; [PR #13](https://github.com/leonartist7/KUKU/pull/13) merged into the review release branch as `1834c601bf06527701d6271c35bdabd9a5d3b72e`. Cloud run 45483142402 has 145 backend tests, 123 frontend tests, TypeScript, web export and complete browser journeys passing. A duplicate file-chooser test variable was fixed in an earlier attempt, and visual review caught and repaired notification diagnostics running before restored-account proof.
-- N07 adds local per-account WAV import/replacement/removal (1 MiB/five seconds), validation before browser decode, bounded normalization/headroom and metadata-free PCM re-encoding. Seven audible presets plus Silent and a Maximum volume choice are available while KUKU is open. Android/Chrome continues to control background sounds/volume. Separate vector-derived favicon, larger notification icon and white-alpha small badge are wired for web and the native plugin. No personal audio was used or uploaded.
-- N07 Vercel deployment `dpl_F5PiYPFu2i6FM8Lw2sPVUT7vWN9R` on exact source is READY. The existing beta alias points to it; `/login`, `/favicon.svg` and `/sw.js` returned 200 with the new version-8 assets. Alias UID and its existing access exception were preserved. Backend files were unchanged, so Render stayed on compatible `bd1f9490bdd30779128975051e2f7363cc4a9c96`; no redundant API deployment occurred. Android build is a separate test-artifact gate and is still being checked.
-- C08 now implements the user's follow-up for real secure audio: strict server/client secure endpoint validation, redacted configuration diagnostics, mono speech processing and separate local/remote quality/mute/subscription feedback. You → Calls includes a local microphone-permission check that immediately releases capture. Calls remain gated; exact-source cloud and actual provider readiness are pending.
+- Beta: https://kuku-git-codex-kuku-release-20261027-lionovart.vercel.app/login . Notifications and Call setup are under You. Main remains unchanged; PR #1 against main remains draft.
+- C08 tested source `886c1b37e5244c17d3af38eff4f7939e5e64841d` was merged through [PR #14](https://github.com/leonartist7/KUKU/pull/14) as review runtime `d26103a6d706d3dfbc1e946484f66cc7e342981f`. Both commits have exact tree `5c3e54ef5353d887a8efa57b0beefe4c93c1af6e`.
+- Exact-source [run 45485420851](https://github.com/leonartist7/KUKU/actions/runs/45485420851) PASS: backend job 138769380869 has 150 isolated Mongo-backed tests; frontend job 138769381399 has 135/135 unit/release tests, TypeScript, web export and complete onboarding/WAV/call-setup, Spaces, chat-tools and controlled-performance browser journeys. The call setup browser journey uses fake media devices and checks 320/390/768px layouts; it is not two-phone audio evidence.
+- Android job 138771531746 PASS, including arm64/SDK 36/Hermes/public-test-signing provenance. Artifact [14964383753](https://github.com/leonartist7/KUKU/actions/runs/45485420851/artifacts/14964383753) is 39,090,071 bytes; ZIP SHA256 `0805ee10bad14a54faf209c572a78c4b4915fd6e899f62dcc8913ca80324670b`. It does not establish physical install, microphone routing, push, production signing or native calling acceptance.
+- C08 rejects insecure or malformed LiveKit endpoints on both server and client, including embedded credentials, non-root paths, query/fragment, numeric/hex/localhost host forms and empty ports. Verified-only `/api/calls/status` and one startup log return configuration booleans/reason codes only. Provider URLs, keys, secrets, tokens and user/call content are not serialized there. Invalid removal configuration preserves durable pending revocation instead of claiming completion.
+- Audio uses the pinned LiveKit client's mono 24 kbps speech preset, DTX/RED and requested echo cancellation/noise suppression/automatic gain control. Call UI distinguishes local and expected remote signal quality, remote mute, subscription failure and autoplay. Lost quality suspends media-ready; reconnect/disconnect/disposal clear stale feedback/audio. App-owned errors and controlled permission/HTTP guidance replace raw SDK error text. Independent review blockers for endpoint-policy parity and error leakage were fixed and retested.
+- You → Calls now shows honest setup status and a deliberate microphone-access check that immediately releases every acquired track, including a late permission grant after leaving the screen. It neither records/sends audio nor places a call. Readiness and diagnostics cannot claim audible connectivity.
+- Render deploy `dep-dc2vkp2vcj2c73aini70` is LIVE on `d26103a6d706d3dfbc1e946484f66cc7e342981f`, finished 2026-11-24T20:59:24.210435Z. Direct `/health/live` and `/health/ready` returned 200/ok. `/api/auth/me` and the new `/api/calls/status` returned unauthenticated 401/no-store; the approved beta CORS origin was preserved. These are bounded release probes, not a keepalive or latency percentile claim.
+- The actual startup readiness log at 2026-11-24T20:59:18.130310916Z reports `calls_enabled=false`, `provider_configured=false`, `secure_transport=false`, with reasons `calls_disabled`, `provider_url_missing`, `provider_credentials_missing`. LiveKit URL/API key/API secret are not configured. No secret values were inspected. No provider connection or real call was attempted.
+- API deployed first. Only after it was LIVE did implementation preview build from the accepted runtime. Vercel `dpl_Fgng4tQBTtjPZvbxRtSEgi5YiMGB` is READY at https://kuku-a0mvnka12-lionovart.vercel.app . The existing beta alias points to it; `/login` and `/call-settings` returned 200 with new favicon assets; the beta proxy `/api/calls/status` returned 401/no-store. Alias UID/access exception are preserved. No production promotion, DNS/protection or billing change occurred.
+- N07 notification source `6e7b4ab9ba25b83e2fef8dce53dbd88e09995810` was accepted through [PR #13](https://github.com/leonartist7/KUKU/pull/13), merge `1834c601bf06527701d6271c35bdabd9a5d3b72e`. [Run 45483142402](https://github.com/leonartist7/KUKU/actions/runs/45483142402) passes 145 backend and 123 frontend tests, TypeScript/export/browser checks and Android. Its test APK artifact 14962219592 is 39,077,311 bytes; ZIP SHA256 `2c39fb993c32055b62bde40464427b0ddf702dc81ecd89f07a2d710f14e06509`.
+- N07 adds local per-account WAV import/replacement/removal, actual RIFF/chunk validation, 1 MiB/five-second bounds, normalized metadata-free PCM re-encoding, seven audible presets plus Silent and Maximum volume. Quiet sounds are boosted with headroom and pending playback is cancelled on focus/session teardown. New vector-derived SVG/ICO/PNG favicon, larger notification icon and white-alpha badge are wired for web and the Android plugin; public service-worker cache version is 8. Notification diagnostics now wait for restored-account proof. Imported sounds are foreground web only; Android/Chrome controls background/lock-screen sound and volume.
+- Native push/calls remain off. Installed Android calling is not implemented; first physical audio acceptance uses Android Chrome. Standard encrypted transport is required, but E2EE is not configured. The single API worker, manual Render deploy, free plan and unset provider health-check path remain unchanged. No real family messages, invitations, live audio, personal-content fixture reads, provider probes, migrations or retention approvals were initiated.
+- Next operational input is server-side LiveKit project configuration through Render, followed by a reviewed controlled two-phone audio test. Do not enable general-beta calls merely because mocks/builds pass. Native FCM/signing, physical phones, live backup/media recovery, shared-history erasure policy and always-on hosting remain external gates. See docs/NOTIFICATION_SOUNDS.md and docs/CALL_READINESS.md.
+
+## P06/P05 historical checkpoint (superseded)
 - P06 accepted source `a20bdf7354c8c93eea9ee98de2ea2de3eabeb5bb`. [PR #12](https://github.com/leonartist7/KUKU/pull/12) was squash-merged into the review release branch as runtime tree-equivalent commit `bd1f9490bdd30779128975051e2f7363cc4a9c96`; both commits point to tree `33cb1928d4c4b312c29270c2dbd4e5aeda9d6de2`. Main is unchanged.
 - The provider-only object inventory is an explicit offline operator command, not an API route or lifecycle task. It accepts only `attachments/` and `space-audio/`, requires explicit database settings and required metadata collections, and treats any exact metadata key as present regardless of a missing or malformed provider field. Invalid entries, provider/database errors, repeated cursors and page/object budgets make a pass incomplete.
 - Reports contain HMAC digests, coarse age buckets and bounded counts only; raw keys, URLs, ETags, cursors and error messages remain out of the report. A comparison requires the same provider, HMAC key, schema, minimum age and prefixes plus two complete observations at least 24 hours apart. Confirmation does not attribute ownership or authorize deletion, quota work, retention jobs or a physical-erasure claim.
@@ -105,14 +117,14 @@ Follow the IDs and dependencies in docs/MASTER_PLAN.md. Initial work spans R01/R
 Do not mark a full phase complete when a release gate is still outstanding.
 
 ## Continuation schedule
-An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
+An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It was disabled after P06 reached external gates; the November 24 work was explicitly requested and did not re-enable or create a schedule. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
 
 ## Active controller lease
-Controller: root C08 secure audio readiness and connection quality.
-Lease recorded at: 2026-11-24T20:49:17Z
-Lease expires at: 2026-11-24T22:49:17Z
-State: ACTIVE; N07 web release accepted. C08 secure calling implementation and verification underway.
-No call flags, real recipients, LiveKit connections, billing or access settings changed.
+Controller: none.
+Lease closed at: 2026-11-24T21:09:13Z
+State: COMPLETE; N07 notification and C08 call-readiness/quality implementation, cloud checks and
+compatible review rollout accepted. Real calling remains blocked on provider configuration and
+physical two-phone acceptance. No competing controller or outstanding agent write remains.
 
 
 ## Verified implementation checkpoint
@@ -142,13 +154,10 @@ No call flags, real recipients, LiveKit connections, billing or access settings 
 - Integrator verified unchanged server/chat_events/CallContext base blobs before overlay and spliced only the Message type additions into the newer API runtime. Original local worktrees may be stale; remote refs and the latest accepted commit remain authoritative.
 
 ## Next bounded work
-1. Authenticated export, closure, operational cleanup, metadata-backed retention and the report-only provider inventory are accepted. A real inventory pass now requires an explicit read-only database identity, the most restricted available provider listing credential, a stable HMAC key, a provider-cost decision and operator-controlled report storage. It remains report-only; a second complete pass must wait at least 24 hours. Do not infer ownership or delete from either pass.
-2. Keep authored shared-history policy, live database/media backup, live RPO/RTO, provider delivery, physical erasure, production signing and real-device checks as explicit external gates. Do not use personal content as fixtures.
-3. Keep calls disabled. C03/A01 require configured LiveKit/FCM, production signing and representative physical phones; C04 video waits for the real audio gate.
-4. Preserve one API worker until shared fan-out exists. R02 always-on compute and live health-check configuration require a provider/billing decision.
-
-- Emote previews now have a visible loading poster and correct PNG/WebP failure recovery, including six component-handler tests. Browser screenshots wait for the selected preview to decode.
-- Missing or removed reply originals preserve text and memo drafts; voice replies revalidate their captured target before queueing. A separate 404-original browser regression is included.
+1. Live startup confirms missing `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`. The next step requires the user's LiveKit project settings saved server-side in Render, with calls still off. Recheck redacted readiness after setup, then prepare a separately reviewed controlled two-phone test; do not send/answer real calls as synthetic fixtures.
+2. Real audio acceptance must cover two phones/different networks, permission denial, speaker/headphones/Bluetooth, mute, Wi-Fi↔cellular, reconnect, either person ending, tab/account ownership and a 20–30-minute session without leaked capture. Calls remain web-only until the native SDK/incoming-call path is implemented and physically checked. E2EE needs a separate key-management design.
+3. Native FCM/production signing and real background notification delivery, live database/media recovery, physical erasure/shared-history policy, provider-inventory credentials/cost/report storage and always-on hosting remain external gates. Keep retention and native push disabled and preserve one API worker.
+4. No further independent scope expansion or schedules are needed while these external inputs are unchanged.
 
 ## Integrated cloud evidence and narrow recovery fixes
 - Run 41863462822 on 642177430d915eb01551d5a54b2f9f663e88b940: all 119 backend tests against isolated MongoDB 7 pass; TypeScript, all 110 frontend unit tests and web export pass. Spaces browser journey passes.
@@ -167,12 +176,10 @@ No call flags, real recipients, LiveKit connections, billing or access settings 
 - Latest Android preview for the accepted runtime is still compiling in run 41864811206; the earlier 20d4cd79 test-signed build passed. Do not claim physical Android or native notification acceptance.
 
 ## Next controller handoff
-1. Fetch fresh implementation/release refs, PR #1, master plan and this ledger; preserve newer work and acquire a lease. Accepted runtime source is `bd1f9490bdd30779128975051e2f7363cc4a9c96`; PR #12 records the accepted P06 package; PR #1 against main remains draft.
-2. P06 report-only provider inventory is accepted and deployed inertly. No independently executable deletion package follows without owner attribution, authored-history/retention policy and an explicit operator approval design. A live first pass additionally requires the operator credentials, HMAC key, report storage and provider-cost decision documented above; remain quiet while those external inputs are unchanged.
-3. Live backup/media recovery, exact live FCV/PIT consistency, physical erasure, real provider/device acceptance, production signing and billing choices remain external gates.
-4. Dependency changes must follow DEPENDENCY_REVIEW, cloud lockfile regeneration and Expo/web/native checks. Preserve CommonJS decoder compatibility.
-5. N01/C03/A01 need real phones/provider/signing setup; calls stay false. C04 video depends on actual audio acceptance. R02 always-on hosting/live readiness settings need a billing/configuration decision.
-6. Follow RELEASE_RUNBOOK for beta rollouts. The manual beta alias is authoritative; deploy API first when the frontend requires it. Do not redeploy for documentation only or create duplicate builds/keepalive schedules. Preserve main, protection, billing and live data.
+1. Fetch fresh implementation/release heads, PR #1, the master plan and this ledger. Accepted runtime is `d26103a6d706d3dfbc1e946484f66cc7e342981f`; PRs #13/#14 contain the accepted November 24 packages. Preserve newer work, main and access controls.
+2. All independently executable N07/C08 work is accepted. The actual external blocker for calls is missing LiveKit URL/key/secret, not another UI toggle. Do not request secrets in chat or expose them in frontend variables. Recheck current redacted diagnostics rather than assuming the November 24 observation remains current.
+3. Keep calls disabled until reviewed provider setup and controlled physical audio acceptance. Installed native calling, background ringing/push and production signing need their own implementation/setup/device gates. Video follows actual audio acceptance; no E2EE claim is permitted without its own design and verification.
+4. Follow RELEASE_RUNBOOK for compatible API-first beta rollouts. Keep one worker; do not redeploy API for documentation only, merge main, change protection/DNS/billing, run live erasure or create more schedules.
 
 ## P02 private-media isolation implementation history
 The client keeps only bounded thumbnails in memory after a server-proven session. Cache identity includes epoch, account, focus scope, attachment, size and format; full previews are flight-only. Session-boundary listeners clear memory synchronously, late matched responses are rejected, unrelated flights continue, and failed requests remain retryable. Files listens to durable chat changes and reloads after a coalesced revocation. Attachment deletion increments the message revision, marks sync repair state and publishes privacy-removal events to members; the existing repair path prevents a transient publication failure from stranding recipients. Synthetic unit/integration/browser fixtures cover account isolation, relogin, navigation, TTL/entry/byte bounds, deletion replay and request counts. No persistent preview storage or object URLs were added.
