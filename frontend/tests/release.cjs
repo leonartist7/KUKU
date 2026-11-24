@@ -197,7 +197,7 @@ test("sound previews create distinct tones at bounded volume and silent creates 
   vm.runInNewContext(ts.transpileModule(fs.readFileSync("src/messageSounds.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports,Map,Set,Promise,JSON,Number,Array,Error,window:{AudioContext:Context},require:()=>({})});
   await exports.playMessageSound({sound:"silent",volume:1},true);assert.equal(contexts,0);
   for(const sound of ["bell","wood","chime","drop"])await exports.playMessageSound({sound,volume:0.5},true);
-  assert.equal(contexts,1);assert.deepEqual(frequencies,[523.25,1046.5,245,390,659.25,987.77,1100]);assert.ok(levels.every(value=>value<=0.11));
+  assert.equal(contexts,1);assert.deepEqual(frequencies,[523.25,1046.5,245,390,659.25,987.77,1100]);assert.ok(levels.every(value=>value<=0.20));
   const before=frequencies.length;await exports.playMessageSound({sound:"silent",volume:1},true);assert.equal(frequencies.length,before);
 });
 

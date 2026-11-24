@@ -19,7 +19,7 @@ export default function MessageSoundListener() {
     const audible = () => active && !document.hidden && navigator.onLine !== false;
     async function play() {
       const settings = await readSound(uid);
-      if (audible()) await playMessageSound(settings);
+      if (audible()) await playMessageSound(settings, false, uid);
     }
     async function legacyRefresh() {
       if (!audible() || busy) return;

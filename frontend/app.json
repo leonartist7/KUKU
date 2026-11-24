@@ -50,7 +50,13 @@
       "expo-font",
       "expo-audio",
       "expo-secure-store",
-      "expo-notifications"
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#5A6F4C"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
