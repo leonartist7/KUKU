@@ -1,4 +1,4 @@
-import React,{useCallback,useEffect,useRef,useState} from "react";
+import React,{useCallback,useRef,useState} from "react";
 import {View,Text,Pressable,Platform,ActivityIndicator} from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import {useAuth} from "./AuthContext";
@@ -13,16 +13,15 @@ export default function NotificationSoundSettings(){
   const [ready,setReady]=useState(false),[message,setMessage]=useState("");const revision=useRef(0);
   const input=useRef<HTMLInputElement>(null);
   useFocusEffect(useCallback(()=>{
-    setBusy(false);
-    return()=>{revision.current++;stopMessageSound();};
-  },[user?.id]));
-  useEffect(()=>{
-    let active=true;setReady(false);setMessage("");setBusy(false);setCustom(null);setValue(DEFAULT_SOUND);
-    if(user)void Promise.all([readSound(user.id),readCustomSound(user.id)]).then(([next,clip])=>{
-      if(active){setValue(next);setCustom(clip);setReady(true);}
-    }).catch(()=>{if(active)setMessage("Could not load sound settings. Please reopen this page.");});
+    let active=true;
+    const uid=user?.id,epoch=getSessionEpoch(),version=++revision.current;
+    const current=()=>active&&version===revision.current&&uid===getSessionUserId()&&epoch===getSessionEpoch();
+    setReady(false);setMessage("");setBusy(false);setCustom(null);setValue(DEFAULT_SOUND);
+    if(uid&&!restoring&&current())void Promise.all([readSound(uid),readCustomSound(uid)]).then(([next,clip])=>{
+      if(current()){setValue(next);setCustom(clip);setReady(true);}
+    }).catch(()=>{if(current())setMessage("Could not load sound settings. Please reopen this page.");});
     return()=>{active=false;revision.current++;stopMessageSound();};
-  },[user?.id]);
+  },[user?.id,restoring]));
   if(Platform.OS!=="web")return null;
   const disabled=!ready||busy||restoring;
   function preview(sound:SoundId,volume=value.volume){
@@ -48,7 +47,16 @@ export default function NotificationSoundSettings(){
       const clip=await prepareCustomSound(file);if(!current())return;
       await saveCustomSound(uid,clip);if(!current())return;
       setCustom(clip);
-      const next={...value,sound:"custom" as const};await saveSound(uid,next);if(!current())return;
+      const next={...value,sound:"custom" as const};
+      // Replacing an already-selected clip needs only the successful clip write.
+      // If selection fails, keep the previous tone and explain the saved clip.
+      if(value.sound!=="custom"){
+        try{await saveSound(uid,next);}catch{
+          if(current())setMessage("Your WAV was saved. Choose My WAV to select it, or keep your current sound.");
+          return;
+        }
+      }
+      if(!current())return;
       setValue(next);setMessage("Your WAV is ready. Volume balanced and saved only on this device.");
       preview("custom",next.volume);
     }catch(error){if(current())setMessage(error instanceof Error?error.message:"Could not import this WAV. Try a shorter file.");}

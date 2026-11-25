@@ -120,3 +120,64 @@ test("foreground sounds ignore edits, reactions, removals, replay and own messag
   receive({...event,message_id:"new",change:"created"});await tick();assert.equal(plays,1);
   cleanup();
 });
+
+test("a recovery request arriving during reconciliation gets its own latest-state pass",async()=>{
+  const pending=[],h=hookHarness({postAs:()=>new Promise(resolve=>pending.push(resolve))}),hook=h.render();
+  const first=hook.reconcile();await hook.reconcile();assert.equal(pending.length,1);
+  pending[0]([message({revision:1,text:"Snapshot before reconnect"})]);await tick();
+  assert.equal(pending.length,2,"The newer recovery request must not be dropped");
+  pending[1]([message({revision:2,text:"Latest after reconnect"})]);await first;
+  assert.equal(h.messagesRef.current[0].revision,2);assert.equal(h.render().lookup("m").text,"Latest after reconnect");
+});
+test("a newer recovery request survives a failed first reconciliation without clearing history",async()=>{
+  const pending=[],h=hookHarness({postAs:()=>new Promise((resolve,reject)=>pending.push({resolve,reject}))}),hook=h.render();
+  const first=hook.reconcile();await hook.reconcile();pending[0].reject(new Error("Offline"));await first;await tick();
+  assert.equal(h.messagesRef.current.length,1);assert.equal(pending.length,2);
+  pending[1].resolve([message({revision:1,text:"Recovered"})]);await tick();
+  assert.equal(h.render().lookup("m").text,"Recovered");
+});
+test("reply and action transitions dismiss an in-flight original panel without reopening it",async()=>{
+  for(const destination of ["reply","actions"]){
+    let resolve;const h=hookHarness({getAs:()=>new Promise(done=>resolve=done)}),hook=h.render();
+    const opening=hook.openOriginal("m");assert.equal(h.render().focusLoading,true);
+    if(destination==="reply")h.render().reply("m");else h.render().openActions(message());
+    assert.equal(h.render().focusLoading,false);assert.equal(h.render().focusMessage,null);
+    resolve(message({revision:1,text:"Latest original"}));await opening;
+    assert.equal(h.render().focusLoading,false);assert.equal(h.render().focusMessage,null);
+    if(destination==="reply")assert.equal(h.render().replyToId,"m");else assert.equal(h.render().actionMessage.id,"m");
+  }
+});
+test("a recovery request is not retried into a different account after a failed pass",async()=>{
+  let reject,requests=0;const h=hookHarness({postAs:()=>{requests++;return new Promise((_,fail)=>reject=fail);}}),hook=h.render();
+  const first=hook.reconcile();await hook.reconcile();h.scopeRef.current="chat:bob";reject(new Error("Offline"));await first;await tick();
+  assert.equal(requests,1);assert.equal(h.errors.length,0);
+});
+
+function actionSheetHarness(){
+  const slots=[],exports={};let index=0,dependencies=[],effects=[];
+  const react={createElement:(type,props,...children)=>({type,props,children}),
+    useState:initial=>{const key=index++;if(!(key in slots))slots[key]=initial;return [slots[key],value=>slots[key]=typeof value==="function"?value(slots[key]):value];},
+    useRef:initial=>{const key=index++;return slots[key]||(slots[key]={current:initial});},
+    useEffect:(effect,next)=>{const key=index++,old=dependencies[key];if(!old||next.some((value,i)=>value!==old[i])){dependencies[key]=next;effects.push(effect);}}};
+  const native=Object.fromEntries(["ActivityIndicator","KeyboardAvoidingView","Modal","Pressable","ScrollView","Text","TextInput","View"].map(name=>[name,name]));
+  native.StyleSheet={create:value=>value};native.Platform={OS:"web"};
+  const modules={react:{default:react,...react},"react-native":native,"./chatTools":tools,"./api":{},
+    "./ThemeContext":{useTheme:()=>({c:{},f:{}})},"./useReducedMotion":{useReducedMotion:()=>true},
+    "react-native-safe-area-context":{SafeAreaView:"SafeAreaView"},"@expo/vector-icons/Ionicons":{default:"Ionicons"}};
+  const source=ts.transpileModule(fs.readFileSync("src/MessageTools.tsx","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React}}).outputText;
+  vm.runInNewContext(source,{exports,require:name=>modules[name]||{}});
+  const walk=(node,predicate)=>{if(!node)return null;if(Array.isArray(node)){for(const child of node){const found=walk(child,predicate);if(found)return found;}return null;}if(typeof node!=="object")return null;if(predicate(node))return node;return walk(node.children,predicate);};
+  return {render:props=>{index=0;const tree=exports.MessageActionSheet(props);for(const effect of effects.splice(0))effect();return tree;},find:(tree,label)=>walk(tree,node=>node.props?.accessibilityLabel===label)};
+}
+test("removal conflicts allow explicit review of the new revision without automatic deletion",()=>{
+  const h=actionSheetHarness(),removed=[],cleared=[];
+  let item=message(),error=null;
+  const props=()=>({message:item,userId:"alice",busy:false,error,onClose(){},onReply(){},onReact(){},onEdit(){},onPin(){},onRemove:revision=>removed.push(revision),onClearError:()=>{error=null;cleared.push(true);}});
+  let tree=h.render(props());tree=h.render(props());
+  h.find(tree,"Remove for everyone").props.onPress();tree=h.render(props());
+  h.find(tree,"Confirm remove message for everyone").props.onPress();assert.deepEqual(removed,[0]);
+  item=message({revision:1,text:"Edited elsewhere"});error={message:"Changed",conflict:true};tree=h.render(props());
+  h.find(tree,"Review latest before removing").props.onPress();assert.deepEqual(removed,[0],"Review must never submit deletion");
+  tree=h.render(props());h.find(tree,"Confirm remove message for everyone").props.onPress();assert.deepEqual(removed,[0,1]);
+  assert.equal(cleared.length,2);
+});

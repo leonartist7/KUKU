@@ -19,7 +19,7 @@ export default function CallSettings(){
   const uid=user?.id;
   const refresh=useCallback(async()=>{
     if(!uid||restoring)return;
-    const attempt=++revision.current,epoch=getSessionEpoch();setChecking(true);setError("");
+    const attempt=++revision.current,epoch=getSessionEpoch();setStatus(null);setChecking(true);setError("");
     const current=()=>visible.current&&attempt===revision.current&&uid===getSessionUserId()&&epoch===getSessionEpoch();
     try{const result=await api.getAs<CallReadiness>(uid,"/calls/status");if(current())setStatus(result);}
     catch{if(current())setError("We couldn't check calling right now. Reconnect and try again.");}

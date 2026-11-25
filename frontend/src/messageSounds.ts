@@ -22,7 +22,10 @@ export function normalizeSound(value:unknown):SoundSettings {
 
 export type CustomSound = {name:string; data:string; duration:number};
 const customKey=(uid:string)=>"kuku_message_wav_v1_"+uid;
+let customWrites:Promise<void>=Promise.resolve();
 export async function readCustomSound(uid:string):Promise<CustomSound|null> {
+  // A page reopened during a write must observe its settled result.
+  await customWrites.catch(()=>{});
   const raw=await AsyncStorage.getItem(customKey(uid));
   if(!raw || raw.length>MAX_WAV_BYTES)return null;
   try {
@@ -50,25 +53,32 @@ export async function prepareCustomSound(file:File):Promise<CustomSound> {
   for(let offset=0;offset<clean.length;offset+=8192)binary+=String.fromCharCode(...clean.subarray(offset,offset+8192));
   return {name:soundName(file.name),data:btoa(binary),duration:decoded.duration};
 }
-export async function saveCustomSound(uid:string,value:CustomSound) {
-  await AsyncStorage.setItem(customKey(uid),JSON.stringify(value));
+export function saveCustomSound(uid:string,value:CustomSound) {
+  customWrites=customWrites.catch(()=>{}).then(()=>AsyncStorage.setItem(customKey(uid),JSON.stringify(value)));
+  return customWrites;
 }
-export async function removeCustomSound(uid:string) {
-  await AsyncStorage.removeItem(customKey(uid));
+export function removeCustomSound(uid:string) {
+  customWrites=customWrites.catch(()=>{}).then(()=>AsyncStorage.removeItem(customKey(uid)));
+  return customWrites;
 }
 const key=(uid:string)=>"kuku_message_sound_v1_"+uid;
-const cached=new Map<string,SoundSettings>();let writes:Promise<void>=Promise.resolve();
+const cached=new Map<string,SoundSettings>(),saved=new Map<string,SoundSettings>();let writes:Promise<void>=Promise.resolve();
 export async function readSound(uid:string):Promise<SoundSettings> {
+  await writes.catch(()=>{});
   if(cached.has(uid))return cached.get(uid)!;
   const raw=await AsyncStorage.getItem(key(uid));let parsed;
   try{parsed=raw?JSON.parse(raw):null;}catch{parsed=null;}
-  const value=normalizeSound(parsed);if(!cached.has(uid))cached.set(uid,value);
+  const value=normalizeSound(parsed);
+  // An initial storage read can finish after a newer successful write.
+  // Initialize the rollback value once; never replace an observed save with an old snapshot.
+  if(!saved.has(uid))saved.set(uid,value);
+  if(!cached.has(uid))cached.set(uid,value);
   return cached.get(uid)!;
 }
 export function saveSound(uid:string,value:SoundSettings) {
-  const previous=cached.get(uid),next=normalizeSound(value);cached.set(uid,next);
-  writes=writes.catch(()=>{}).then(()=>AsyncStorage.setItem(key(uid),JSON.stringify(next))).catch(error=>{
-    if(cached.get(uid)===next){if(previous)cached.set(uid,previous);else cached.delete(uid);}
+  const next=normalizeSound(value);cached.set(uid,next);
+  writes=writes.catch(()=>{}).then(async()=>{await AsyncStorage.setItem(key(uid),JSON.stringify(next));saved.set(uid,next);}).catch(error=>{
+    if(cached.get(uid)===next){const previous=saved.get(uid);if(previous)cached.set(uid,previous);else cached.delete(uid);}
     throw error;
   });
   return writes;

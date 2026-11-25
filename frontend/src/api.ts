@@ -77,13 +77,21 @@ export async function acceptSession(data: { token: string; refresh_token?: strin
 function headers() {
   return { "Content-Type": "application/json", "X-Kuku-Platform": Platform.OS === "web" ? "web" : "native" };
 }
-async function parse(response: Response) {
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const detail = data.detail;
-    throw new ApiError(typeof detail === "string" ? detail : Array.isArray(detail) ? detail.map((v: {msg?: string}) => v.msg).join(" ") : "Request failed", response.status);
+function responsePayload(data: unknown, status: number, ok: boolean): any {
+  if (!ok) {
+    const detail = data && typeof data === "object" && "detail" in data ? data.detail : null;
+    const validation = Array.isArray(detail) ? detail.filter((item): item is {msg: string} =>
+      !!item && typeof item === "object" && typeof item.msg === "string").map(item => item.msg).join(" ") : "";
+    throw new ApiError(typeof detail === "string" && detail.trim() ? detail : validation || "Request failed. Please try again.", status);
   }
+  // A truncated/HTML/null response is a failed acknowledgement, never a successful
+  // empty object. Preserve the session and let retry-safe callers recover.
+  if (!data || typeof data !== "object") throw new ApiError("KUKU couldn't read the response. Please try again.", 502);
   return data;
+}
+async function parse(response: Response) {
+  if (response.ok && response.status === 204) return {};
+  return responsePayload(await response.json().catch(() => undefined), response.status, response.ok);
 }
 export async function refreshSession(): Promise<string | null> {
   if (refreshFlight) return refreshFlight;
@@ -207,9 +215,10 @@ export async function uploadAttachment(chatId: string, uri: string, name: string
         return result;
       } finally { signal.removeEventListener("abort", cancel); }
     });
-    const data = JSON.parse(response.body);
-    if (response.status >= 400) throw new ApiError(data.detail || "Upload failed", response.status);
     assertCurrent();
+    let decoded: unknown;
+    try { decoded = JSON.parse(response.body); } catch { decoded = undefined; }
+    const data = responsePayload(decoded, response.status, response.status >= 200 && response.status < 300);
     return data as {id: string; file_name: string; file_size: number};
   }
   const blob = await (await fetch(uri)).blob();

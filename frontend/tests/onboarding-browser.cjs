@@ -19,7 +19,7 @@ const server=http.createServer((req,res)=>{
   async function scenario(width,height){
     const context=await browser.newContext({viewport:{width,height},reducedMotion:"reduce",timezoneId:"UTC",permissions:["clipboard-read","clipboard-write","microphone"]});
     const page=await context.newPage();let voiceBytes=null;let user=null,sends=0,profiles=0,uploadedBytes=null,shared=null,inviteEmail="unset",photoSaves=0,uploadAttempts=0,statusChecks=0,fullPreviews=0;
-    const previewFormats=[];let attachmentUploads=0,history=null,refreshCalls=0;
+    const previewFormats=[];let attachmentUploads=0,history=null,refreshCalls=0,callStatusMode="missing";
     const testWebp=await page.evaluate(base64=>new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>{const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);resolve(canvas.toDataURL('image/webp',0.75));};image.onerror=reject;image.src='data:image/jpeg;base64,'+base64;}),TEST_PHOTO);
     assert.ok(testWebp.startsWith('data:image/webp;base64,'));
     const message=()=>({...shared,id:"synthetic-message",file_name:shared?.attachment_id==="synthetic-photo"?"family-photo.jpg":"family.txt",file_size:18,sender_id:"qa-user",created_at:new Date().toISOString()});
@@ -37,7 +37,7 @@ const server=http.createServer((req,res)=>{
       if(endpoint==="/api/auth/profile"){profiles++;user={...user,name:body.name,bio:body.bio,onboarding_complete:true};return respond(200,user);}
       if(endpoint==="/api/auth/photo"){photoSaves++;assert.ok(body.image_base64===null||body.image_base64.length>20);user={...user,avatar:body.image_base64===null?null:"data:image/jpeg;base64,"+TEST_PHOTO};return respond(200,user);}
       if(endpoint==="/api/invites"){inviteEmail=body.email;return respond(200,{invite_url:origin+"/login#invite="+"synthetic-link-invitation-0123456789",invite_token:"synthetic-link-invitation-0123456789"});}
-      if(endpoint==="/api/calls/status")return respond(200,{calls_enabled:false,provider_configured:false,secure_transport:false,configuration_ready:false,reason_codes:["calls_disabled","provider_url_missing","provider_credentials_missing"],provider_connection_tested:false,end_to_end_encryption:false});
+      if(endpoint==="/api/calls/status"){if(callStatusMode==="failed")return respond(503,{detail:"Temporarily unavailable"});if(callStatusMode==="configured")return respond(200,{calls_enabled:false,provider_configured:true,secure_transport:true,configuration_ready:false,reason_codes:["calls_disabled"],provider_connection_tested:false,end_to_end_encryption:false});return respond(200,{calls_enabled:false,provider_configured:false,secure_transport:false,configuration_ready:false,reason_codes:["calls_disabled","provider_url_missing","provider_credentials_missing"],provider_connection_tested:false,end_to_end_encryption:false});}
       if(endpoint==="/api/files/status")return respond(200,{available:++statusChecks>1,used_bytes:0,remaining_bytes:500*1024*1024,max_file_bytes:25*1024*1024});
       if(endpoint==="/api/users")return respond(200,[{id:"sister",name:"Sam",email_verified:true}]);
       if(endpoint==="/api/chats"&&req.method()==="POST")return respond(200,{id:"synthetic-chat"});
@@ -61,10 +61,10 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),width,"No horizontal overflow at "+width);
     await page.screenshot({path:path.join(shots,"login-"+width+".png"),fullPage:true});
     await page.route("https://voice-downloads.example.test/memo.webm",route=>route.fulfill({status:200,contentType:"audio/webm",headers:{"cache-control":"no-store","access-control-allow-origin":origin},body:voiceBytes}));
-    return {page,context,state:()=>({user,sends,profiles,uploadedBytes,shared,inviteEmail,photoSaves,voiceBytes,previewFormats,attachmentUploads}),receiveAsSister:async()=>{user={...user,id:"sister",name:"Sam",email:"sister-qa@example.com"};/* Fixture setup for a separately saved recipient account; never adopt a mismatched cookie. */await page.evaluate(profile=>localStorage.setItem("kuku_profile",JSON.stringify(profile)),user);},setHistory:items=>{history=items;}};
+    return {page,context,setCallStatus:mode=>{callStatusMode=mode;},state:()=>({user,sends,profiles,uploadedBytes,shared,inviteEmail,photoSaves,voiceBytes,previewFormats,attachmentUploads}),receiveAsSister:async()=>{user={...user,id:"sister",name:"Sam",email:"sister-qa@example.com"};/* Fixture setup for a separately saved recipient account; never adopt a mismatched cookie. */await page.evaluate(profile=>localStorage.setItem("kuku_profile",JSON.stringify(profile)),user);},setHistory:items=>{history=items;}};
   }
   try {
-    const {page,context,state,receiveAsSister,setHistory}=await scenario(390,844);
+    const {page,context,state,receiveAsSister,setHistory,setCallStatus}=await scenario(390,844);
     await page.getByTestId("auth-switch").click();
     await page.getByTestId("auth-submit").click();
     await page.getByRole("alert").filter({hasText:"complete email address"}).waitFor();
@@ -193,6 +193,14 @@ const server=http.createServer((req,res)=>{
       await page.screenshot({path:path.join(shots,"call-setup-"+width+".png"),fullPage:true});
     }
     await page.setViewportSize({width:390,height:844});
+    setCallStatus("configured");
+    await page.getByRole("button",{name:"Check calling setup",exact:true}).click();
+    await page.getByTestId("call-readiness").getByText("Setup saved",{exact:true}).waitFor();
+    setCallStatus("failed");
+    await page.getByRole("button",{name:"Check calling setup",exact:true}).click();
+    await page.getByRole("alert").filter({hasText:"couldn't check calling"}).waitFor();
+    assert.equal(await page.getByTestId("call-readiness").getByText("Setup saved",{exact:true}).count(),0,"A failed refresh must clear stale configuration success");
+    await page.screenshot({path:path.join(shots,"call-setup-retry-390.png"),fullPage:true});
 
     await page.goto(origin+"/invite");
     await page.getByRole("button",{name:"Create invitation link",exact:true}).click();

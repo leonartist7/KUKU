@@ -1,66 +1,129 @@
 import {openPrivateDownload} from "./downloads";
-import { api } from "./api";
-import { View, Text, StyleSheet, Pressable, Linking, Alert, Platform } from "react-native";
+import { api, getSessionEpoch, getSessionUserId, onSessionBoundary } from "./api";
+import { View, Text, StyleSheet, Pressable, Alert, Platform } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { createAudioPlayer } from "expo-audio";
 import { useRef, useState, useEffect } from "react";
 import { useTheme } from "./ThemeContext";
+import { useAuth } from "./AuthContext";
+import { useIsFocused } from "@react-navigation/native";
+import { createPrivateMemoLease, PrivateMemoLease } from "./privateMemoLease";
 import { Palette, radius, spacing } from "./theme";
+
+let memoFileSequence = 0;
+function usePrivateMessageScope(attachmentId: string | undefined, media: string | null | undefined, unavailable: boolean) {
+  const {user, restoring} = useAuth(), focused = useIsFocused();
+  const uid = user?.id, epoch = getSessionEpoch();
+  const latest = useRef({uid, epoch, attachmentId, media, unavailable, focused, restoring});
+  latest.current = {uid, epoch, attachmentId, media, unavailable, focused, restoring};
+  const active = useRef<{uid: string; lease: PrivateMemoLease} | null>(null);
+  useEffect(() => {
+    if (!uid || restoring || !focused || unavailable || getSessionUserId() !== uid) return;
+    const snapshot = latest.current;
+    const lease = createPrivateMemoLease(() => {
+      const now = latest.current;
+      return now.uid === uid && now.epoch === epoch && now.attachmentId === snapshot.attachmentId &&
+        now.media === snapshot.media && !now.unavailable && now.focused && !now.restoring &&
+        getSessionUserId() === uid && getSessionEpoch() === epoch;
+    });
+    active.current = {uid, lease};
+    const stop = onSessionBoundary(() => lease.close());
+    return () => {stop(); lease.close(); if (active.current?.lease === lease) active.current = null;};
+  }, [uid, epoch, attachmentId, media, unavailable, focused, restoring]);
+  return {active, uid, epoch, ready: !!uid && !restoring && focused && !unavailable, key: [uid, epoch, attachmentId, media, unavailable, focused, restoring]};
+}
 
 export function VoiceMessageBubble({durationMs, outgoing, media, attachmentId, unavailable = false}: {
   durationMs: number; outgoing: boolean; media?: string | null; attachmentId?: string; unavailable?: boolean;
 }) {
   const {c, f} = useTheme(); const styles = makeStyles(c, f);
-  const player = useRef<any>(null); const objectUrl = useRef<string | null>(null);
-  const cleanupNative = useRef<(() => void) | null>(null); const alive = useRef(true);
+  const scope = usePrivateMessageScope(attachmentId, media, unavailable);
+  const player = useRef<any>(null), loading = useRef<PrivateMemoLease | null>(null);
   const [playing,setPlaying] = useState(false); const [busy,setBusy] = useState(false); const [error,setError] = useState("");
   const seconds = Math.max(1,Math.round(durationMs/1000));
-  useEffect(()=>{alive.current=true;return ()=>{alive.current=false;player.current?.pause?.();player.current?.release?.();if(objectUrl.current)URL.revokeObjectURL(objectUrl.current);cleanupNative.current?.();};},[]);
+  useEffect(() => {player.current = null; loading.current = null; setPlaying(false); setBusy(false); setError("");}, scope.key);
   async function togglePlay() {
-    if(busy || unavailable)return;
-    setError("");
+    const owner = scope.active.current;
+    if (!owner?.lease.current() || loading.current === owner.lease || unavailable) return;
+    const {lease, uid} = owner;
+    loading.current = lease; setBusy(true); setError("");
+    let releaseSource: (() => void) | undefined;
     try {
-      if(!player.current) {
-        setBusy(true);let source = media;
-        if(attachmentId) {
-          const download = await api.get<{url:string;media_type:string}>("/attachments/"+attachmentId+"/download");
-          if(!download.url.startsWith("https://"))throw new Error("This memo could not be opened.");
-          if(Platform.OS === "web") {
-            const response = await fetch(download.url,{cache:"no-store"});
-            if(!response.ok)throw new Error("Could not open this memo. Try again.");
+      if (!player.current) {
+        let source = media;
+        if (attachmentId) {
+          const download = await api.getAs<{url:string;media_type:string}>(uid,"/attachments/"+attachmentId+"/download");
+          if (!lease.current()) return;
+          if (typeof download.url !== "string" || !download.url.startsWith("https://")) throw new Error("memo_unavailable");
+          if (Platform.OS === "web") {
+            const response = await fetch(download.url,{cache:"no-store",signal:lease.signal});
+            if (!lease.current()) return;
+            if (!response.ok) throw new Error("memo_unavailable");
             const bytes = await response.arrayBuffer();
-            if(bytes.byteLength>10*1024*1024)throw new Error("This memo is too large.");
-            source = URL.createObjectURL(new Blob([bytes],{type:download.media_type || "audio/webm"}));objectUrl.current=source;
+            if (!lease.current()) return;
+            if (bytes.byteLength > 10*1024*1024) throw new Error("memo_too_large");
+            source = URL.createObjectURL(new Blob([bytes],{type:download.media_type || "audio/webm"}));
+            const objectUrl = source;
+            releaseSource = lease.own(() => URL.revokeObjectURL(objectUrl));
           } else {
             const files = await import("expo-file-system/legacy");
-            const path = files.cacheDirectory+"kuku-voice-"+attachmentId+".m4a";
-            const result = await files.downloadAsync(download.url,path);
-            if(result.status!==200)throw new Error("Could not open this memo. Try again.");
-            source=result.uri;cleanupNative.current=()=>{void files.deleteAsync(path,{idempotent:true});};
+            if (!lease.current()) return;
+            const path = files.cacheDirectory+"kuku-voice-"+Date.now()+"-"+(++memoFileSequence)+".m4a";
+            const removeFile = () => {void files.deleteAsync(path,{idempotent:true}).catch(() => {});};
+            releaseSource = lease.own(removeFile);
+            let result;
+            try {result = await files.downloadAsync(download.url,path);}
+            finally {if (!lease.current()) removeFile();} // A late download may recreate a file after teardown.
+            if (!lease.current()) return;
+            if (result.status !== 200) throw new Error("memo_unavailable");
+            source = result.uri;
           }
         }
-        if(!source)throw new Error("This older memo has no recording attached.");
-        if(!alive.current)return;
-        if(Platform.OS === "web") {
-          player.current = new Audio(source);
-          player.current.onended=()=>{if(alive.current)setPlaying(false);};
-        } else {
-          player.current = createAudioPlayer(source);
-          player.current.addListener("playbackStatusUpdate",(status:any)=>{if(status.didJustFinish && alive.current)setPlaying(false);});
+        if (!source) throw new Error("memo_missing");
+        if (!lease.current()) return;
+        const webAudio = Platform.OS === "web" ? new Audio(source) : null;
+        const nativeAudio = webAudio ? null : createAudioPlayer(source);
+        const audio = webAudio || nativeAudio!;
+        player.current = audio;
+        lease.own(() => {
+          if (player.current === audio) player.current = null;
+          try {audio.pause?.();} catch {}
+          if (webAudio) {
+            webAudio.onended = null;
+            try {webAudio.removeAttribute("src"); webAudio.load();} catch {}
+          } else if (nativeAudio) {try {nativeAudio.release();} catch {}}
+        });
+        if (webAudio) webAudio.onended = () => {if (lease.current() && player.current === audio) setPlaying(false);};
+        else if (nativeAudio) {
+          const subscription = nativeAudio.addListener("playbackStatusUpdate",status => {
+            if (status.didJustFinish && lease.current() && player.current === audio) setPlaying(false);
+          });
+          lease.own(() => subscription.remove());
         }
       }
-      if(!alive.current)return;
-      if(playing){player.current.pause();setPlaying(false);}
+      const audio = player.current;
+      if (!lease.current() || !audio) return;
+      if (playing) {audio.pause(); if (lease.current()) setPlaying(false);}
       else {
-        if(Platform.OS === "web" && player.current.ended)player.current.currentTime=0;
-        if(Platform.OS !== "web" && player.current.currentTime>=seconds-0.1)await player.current.seekTo(0);
-        await player.current.play();setPlaying(true);
+        if (Platform.OS === "web" && audio.ended) audio.currentTime = 0;
+        if (Platform.OS !== "web" && audio.currentTime >= seconds-0.1) await audio.seekTo(0);
+        if (!lease.current() || player.current !== audio) return;
+        await audio.play();
+        if (lease.current() && player.current === audio) setPlaying(true);
+        else {try {audio.pause();} catch {}}
       }
-    }catch(e){if(alive.current)setError(e instanceof Error && e.name!=="NotAllowedError"?e.message:"Ready — tap Play to listen.");}
-    finally{if(alive.current)setBusy(false);}
+    } catch(e) {
+      if (!player.current) releaseSource?.();
+      if (lease.current()) setError(e instanceof Error && e.name === "NotAllowedError" ? "Ready — tap Play to listen." :
+        e instanceof Error && e.message === "memo_too_large" ? "This memo is too large." :
+        e instanceof Error && e.message === "memo_missing" ? "This older memo has no recording attached." : "Could not open this memo. Try again.");
+    } finally {
+      if (loading.current === lease) loading.current = null;
+      if (lease.current()) setBusy(false);
+    }
   }
   return <View style={{gap:6}}><View style={styles.voiceWrap}>
-    <Pressable accessibilityRole="button" accessibilityLabel={playing?"Pause voice memo":"Play voice memo"} disabled={busy || unavailable || (!media && !attachmentId)} onPress={()=>void togglePlay()} style={[styles.playBtn,{minWidth:44,minHeight:44,opacity:unavailable?0.4:1}]} testID="voice-play">
+    <Pressable accessibilityRole="button" accessibilityLabel={playing?"Pause voice memo":"Play voice memo"} disabled={!scope.ready || busy || unavailable || (!media && !attachmentId)} onPress={()=>void togglePlay()} style={[styles.playBtn,{minWidth:44,minHeight:44,opacity:unavailable?0.4:1}]} testID="voice-play">
       <Ionicons name={busy?"hourglass-outline":playing?"pause":"play"} size={18} color={c.textInverse}/>
     </Pressable>
     <View style={{flex:1,paddingHorizontal:12}}><Text style={{color:c.text,fontFamily:f.bodyMedium}}>{unavailable?"Voice memo deleted":busy?"Opening memo…":playing?"Playing…":"Voice memo"}</Text><Text style={{color:c.textSecondary,fontSize:12}}>{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,"0")}</Text></View>
@@ -84,12 +147,23 @@ export function FilePreviewCard({
 }) {
   const { c, f } = useTheme();
   const styles = makeStyles(c, f);
-  const [deleted, setDeleted] = useState(false);
-  const remove = async () => {try {await api.delete("/attachments/"+attachmentId);setDeleted(true);}catch{Alert.alert("Could not delete file", "Please try again.");}};
+  const scope = usePrivateMessageScope(attachmentId, undefined, unavailable);
+  const [deleted, setDeleted] = useState(false), [busy, setBusy] = useState(false);
+  const inFlight = useRef<PrivateMemoLease | null>(null);
+  useEffect(() => {setDeleted(false);}, [attachmentId, scope.uid, scope.epoch]);
+  useEffect(() => {setBusy(false); inFlight.current = null;}, scope.key);
+  const remove = async (owner: {uid: string; lease: PrivateMemoLease}) => {
+    if (!attachmentId || !owner.lease.current() || inFlight.current === owner.lease) return;
+    inFlight.current = owner.lease; setBusy(true);
+    try {await api.deleteAs(owner.uid,"/attachments/"+attachmentId); if (owner.lease.current()) setDeleted(true);}
+    catch {if (owner.lease.current()) Alert.alert("Could not delete file", "Please try again.");}
+    finally {if (inFlight.current === owner.lease) inFlight.current = null; if (owner.lease.current()) setBusy(false);}
+  };
   const confirmDelete = () => {
-    if (!canDelete || !attachmentId || deleted || unavailable) return;
-    if(Platform.OS==="web"){if(window.confirm("Delete this file for everyone in this chat?"))void remove();}
-    else Alert.alert("Delete file", "This removes the file for everyone in this chat.", [{text:"Cancel",style:"cancel"},{text:"Delete",style:"destructive",onPress:()=>void remove()}]);
+    const owner = scope.active.current;
+    if (!owner?.lease.current() || !canDelete || !attachmentId || busy || deleted || unavailable) return;
+    if(Platform.OS==="web"){if(window.confirm("Delete this file for everyone in this chat?"))void remove(owner);}
+    else Alert.alert("Delete file", "This removes the file for everyone in this chat.", [{text:"Cancel",style:"cancel"},{text:"Delete",style:"destructive",onPress:()=>void remove(owner)}]);
   };
   const icon = type === "image" ? "image-outline" : "document-text-outline";
   const sizeLabel = fileSize
@@ -98,9 +172,13 @@ export function FilePreviewCard({
       : `${fileSize} B`
     : "";
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={"Download " + (fileName || "file")} disabled={!attachmentId || deleted || unavailable} onLongPress={confirmDelete} onPress={async () => {
-      try { const {url} = await api.get<{url:string}>("/attachments/" + attachmentId + "/download"); await openPrivateDownload(url); }
-      catch { Alert.alert("Download failed", "Please try again."); }
+    <Pressable accessibilityRole="button" accessibilityLabel={"Download " + (fileName || "file")} disabled={!scope.ready || busy || !attachmentId || deleted || unavailable} onLongPress={confirmDelete} onPress={async () => {
+      const owner = scope.active.current;
+      if (!owner?.lease.current() || !attachmentId || inFlight.current === owner.lease) return;
+      inFlight.current = owner.lease; setBusy(true);
+      try {const {url} = await api.getAs<{url:string}>(owner.uid,"/attachments/" + attachmentId + "/download"); if (owner.lease.current()) await openPrivateDownload(url);}
+      catch {if (owner.lease.current()) Alert.alert("Download failed", "Please try again.");}
+      finally {if (inFlight.current === owner.lease) inFlight.current = null; if (owner.lease.current()) setBusy(false);}
     }} style={styles.fileWrap}>
       <View style={styles.fileIcon}>
         <Ionicons name={icon as any} size={22} color={c.primaryDark} />

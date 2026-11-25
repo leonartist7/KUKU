@@ -7,13 +7,14 @@ export function validateWav(bytes: ArrayBuffer) {
   if (bytes.byteLength < 44 || bytes.byteLength > MAX_WAV_BYTES) throw new Error("Choose a WAV file smaller than 1 MB.");
   const view = new DataView(bytes);
   const tag = (offset: number) => String.fromCharCode(...new Uint8Array(bytes, offset, 4));
-  if (tag(0) !== "RIFF" || tag(8) !== "WAVE" || view.getUint32(4, true) + 8 > bytes.byteLength) {
+  if (tag(0) !== "RIFF" || tag(8) !== "WAVE" || view.getUint32(4, true) + 8 !== bytes.byteLength) {
     throw new Error("This isn't a valid WAV file. Export it as PCM WAV and try again.");
   }
-  let format = false, data = false, bytesPerSecond = 0, dataBytes = 0;
-  for (let offset = 12; offset + 8 <= bytes.byteLength;) {
+  let format = false, data = false, bytesPerSecond = 0, dataBytes = 0, frameBytes = 0;
+  for (let offset = 12; offset < bytes.byteLength;) {
+    if (offset + 8 > bytes.byteLength) throw new Error("This WAV file is incomplete.");
     const size = view.getUint32(offset + 4, true), end = offset + 8 + size;
-    if (end > bytes.byteLength) throw new Error("This WAV file is incomplete.");
+    if (end + (size % 2) > bytes.byteLength) throw new Error("This WAV file is incomplete.");
     if (tag(offset) === "fmt ") {
       if (size < 16) throw new Error("This WAV format isn't supported.");
       const encoding = view.getUint16(offset + 8, true), channels = view.getUint16(offset + 10, true);
@@ -24,9 +25,13 @@ export function validateWav(bytes: ArrayBuffer) {
           blockAlign !== channels * bits / 8 || declaredRate !== rate * blockAlign) {
         throw new Error("Use a mono or stereo PCM WAV, up to 96 kHz.");
       }
-      format = true; bytesPerSecond = declaredRate;
+      format = true; bytesPerSecond = declaredRate; frameBytes = blockAlign;
     }
-    if (tag(offset) === "data" && size > 0) {data = true; dataBytes += size;}
+    if (tag(offset) === "data") {
+      // Multiple data chunks or partial frames have inconsistent decoder behavior.
+      if (!format || data || size === 0 || size % frameBytes !== 0) throw new Error("This WAV file has invalid audio frames.");
+      data = true; dataBytes = size;
+    }
     offset = end + (size % 2);
   }
   if (!format || !data) throw new Error("This WAV file has no playable audio.");
@@ -36,8 +41,9 @@ export function validateWav(bytes: ArrayBuffer) {
 export function normalizedWav(audio: DecodedSound): Uint8Array {
   if (!Number.isFinite(audio.duration) || audio.duration <= 0 || audio.duration > MAX_WAV_SECONDS ||
       !Number.isInteger(audio.length) || audio.length <= 0 || audio.length > 480000 ||
-      !Number.isFinite(audio.sampleRate) || audio.sampleRate < 8000 || audio.sampleRate > 96000 ||
-      audio.numberOfChannels < 1 || audio.numberOfChannels > 2) {
+      !Number.isInteger(audio.sampleRate) || audio.sampleRate < 8000 || audio.sampleRate > 96000 ||
+      audio.length > audio.sampleRate * MAX_WAV_SECONDS || Math.abs(audio.duration - audio.length / audio.sampleRate) > 1 / audio.sampleRate ||
+      !Number.isInteger(audio.numberOfChannels) || audio.numberOfChannels < 1 || audio.numberOfChannels > 2) {
     throw new Error("Choose a notification sound up to 5 seconds long.");
   }
   const rate = Math.min(48000, audio.sampleRate), length = Math.floor(audio.length * rate / audio.sampleRate);

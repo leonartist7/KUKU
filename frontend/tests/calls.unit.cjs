@@ -202,6 +202,74 @@ test("media cleanup is idempotent, stops capture, detaches audio and releases th
   assert.equal(h.callbacks.disconnected, 0);
 });
 
+test("teardown stops remaining tracks and releases ownership even when SDK cleanup throws", async () => {
+  const h = harness(), media = await h.create();
+  await media.connect();
+  let remainingStopped = false, disconnectAttempted = false;
+  h.room().localParticipant.trackPublications.set("mic", { track: { stop() { throw new Error("broken track cleanup"); } } });
+  h.room().localParticipant.trackPublications.set("second", { track: { stop() { remainingStopped = true; } } });
+  h.room().disconnect = () => { disconnectAttempted = true; throw new Error("broken disconnect"); };
+  assert.doesNotThrow(() => media.dispose());
+  await settle();
+  assert.equal(remainingStopped, true);
+  assert.equal(disconnectAttempted, true);
+  assert.equal(h.counts().released, 1);
+  assert.equal(h.room().eventNames().length, 0);
+});
+
+test("a failed audio pause cannot retain the detached media source", async () => {
+  const h = harness(), media = await h.create();
+  await media.connect();
+  const track = h.makeTrack();
+  track.node.pause = () => { throw new Error("already detached"); };
+  h.room().emit(h.events.TrackSubscribed, track, {}, { identity: "sister" });
+  await settle();
+  media.dispose();
+  await settle();
+  assert.equal(track.node.srcObject, null);
+  assert.equal(h.counts().removed, 1);
+  assert.equal(h.counts().released, 1);
+});
+
+test("a detached element's late rejection cannot block replacement audio", async () => {
+  const h = harness(), media = await h.create();
+  await media.connect();
+  const track = h.makeTrack(), replacement = h.makeTrack();
+  let rejectOld;
+  track.node.play = () => new Promise((_, reject) => { rejectOld = reject; });
+  h.room().emit(h.events.TrackSubscribed, track, {}, { identity: "sister" });
+  h.room().emit(h.events.TrackUnsubscribed, track);
+  track.attach = () => replacement.node;
+  h.room().emit(h.events.TrackSubscribed, track, {}, { identity: "sister" });
+  await settle();
+  assert.equal(h.callbacks.ready, 1);
+  rejectOld(new Error("late autoplay rejection"));
+  await settle();
+  assert.equal(h.callbacks.blocked.at(-1), false);
+  assert.equal(h.callbacks.reconnecting.length, 0);
+  media.dispose();
+});
+
+test("a detached element's late success cannot clear replacement playback rejection", async () => {
+  const h = harness(), media = await h.create();
+  await media.connect();
+  const track = h.makeTrack(), replacement = h.makeTrack();
+  let resolveOld;
+  track.node.play = () => new Promise(resolve => { resolveOld = resolve; });
+  replacement.node.play = async () => { throw new Error("replacement autoplay rejection"); };
+  h.room().emit(h.events.TrackSubscribed, track, {}, { identity: "sister" });
+  h.room().emit(h.events.TrackUnsubscribed, track);
+  track.attach = () => replacement.node;
+  h.room().emit(h.events.TrackSubscribed, track, {}, { identity: "sister" });
+  await settle();
+  assert.equal(h.callbacks.blocked.at(-1), true);
+  resolveOld();
+  await settle();
+  assert.equal(h.callbacks.ready, 0);
+  assert.equal(h.callbacks.blocked.at(-1), true);
+  media.dispose();
+});
+
 test("a stale account connection never enables the microphone", async () => {
   let release; const connectWait = new Promise(resolve => { release = resolve; });
   const h = harness({ connectWait }), media = await h.create();
