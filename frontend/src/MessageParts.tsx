@@ -81,19 +81,21 @@ export function VoiceMessageBubble({durationMs, outgoing, media, attachmentId, u
         }
         if (!source) throw new Error("memo_missing");
         if (!lease.current()) return;
-        const audio = Platform.OS === "web" ? new Audio(source) : createAudioPlayer(source);
+        const webAudio = Platform.OS === "web" ? new Audio(source) : null;
+        const nativeAudio = webAudio ? null : createAudioPlayer(source);
+        const audio = webAudio || nativeAudio!;
         player.current = audio;
         lease.own(() => {
           if (player.current === audio) player.current = null;
           try {audio.pause?.();} catch {}
-          if (Platform.OS === "web") {
-            audio.onended = null;
-            try {audio.removeAttribute?.("src"); audio.load?.();} catch {}
-          } else {try {audio.release?.();} catch {}}
+          if (webAudio) {
+            webAudio.onended = null;
+            try {webAudio.removeAttribute("src"); webAudio.load();} catch {}
+          } else if (nativeAudio) {try {nativeAudio.release();} catch {}}
         });
-        if (Platform.OS === "web") audio.onended = () => {if (lease.current() && player.current === audio) setPlaying(false);};
-        else {
-          const subscription = audio.addListener("playbackStatusUpdate",(status:any) => {
+        if (webAudio) webAudio.onended = () => {if (lease.current() && player.current === audio) setPlaying(false);};
+        else if (nativeAudio) {
+          const subscription = nativeAudio.addListener("playbackStatusUpdate",status => {
             if (status.didJustFinish && lease.current() && player.current === audio) setPlaying(false);
           });
           lease.own(() => subscription.remove());
