@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-25T11:15:29.068Z
+Updated: 2026-11-25T11:48:16Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: root, D10 ten-round debugging on 25 November 2026. Lease expires 2026-11-25T13:15:29.069Z.
+Current controller: none. Root completed D10 ten-round debugging, cloud acceptance and the compatible beta rollout on 25 November 2026.
 Work was performed through connected GitHub/provider APIs and cloud CI; never assume a prior local worktree exists.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -54,6 +54,21 @@ Initial package owners (all returned; no agent has an outstanding write):
 
 ## Current authoritative checkpoint
 This section supersedes historical pending statements below.
+- D10 completes the user's ten-round debugging request. See docs/DEBUGGING_ROUNDS_2026-11-25.md for the round-by-round repairs, evidence and limits. No main/production, DNS/protection, billing, live retention or schedule change occurred.
+- Tested source `70ed5ec457c5b23937dce7c163ccb4ecb7259b64` was merged through [PR #15](https://github.com/leonartist7/KUKU/pull/15) as review runtime `acb29b8bf999ee8950cd41fb31943ff2f893d49b`. Both point to tree `dbfcd28c8d7f29e0173168870abba84a97c3e45a`. The performance artifact records checkout `0dbd64313f59dd78ca65a5aa99de665d0b11c90f` with that same tree and PR head. Final documentation checkpoints do not change the running application code.
+- Exact-source [run 45605352739](https://github.com/leonartist7/KUKU/actions/runs/45605352739) is SUCCESS. Backend job 139174691127 passes 163 isolated Mongo-backed cases; frontend job 139174690746 passes 167 unit/release cases, TypeScript, web export and complete onboarding/WAV/call-setup, Spaces, chat-tools and controlled-performance journeys. This adds 45 regression cases over the previous 150/135 baseline.
+- Android job 139176519049 is SUCCESS, including standalone bundling, arm64/SDK36/Hermes and public test-signing provenance. [Artifact 15019095965](https://github.com/leonartist7/KUKU/actions/runs/45605352739/artifacts/15019095965) is 39,095,899 bytes; ZIP SHA256 `3b34fb3e92477b4730dfd292cb489afa956cd2d435accfb9f333f0096eed835c`. This is build/mock evidence, not physical installation, microphone routing, native push/calls or production-signing acceptance.
+- Attachment privacy repair rejects attachment IDs on text/Space messages and accepts sharing proof only from active owner-authored media. Slow uploads recheck session, verification, membership and blocking after streaming/provider writes; newly generated R2 grants are withheld after access loss. Existing already-issued R2 grants retain their 60-second expiry. Synthetic revoked-write cleanup passes; provider deletion failures retain the existing orphan-recovery limitation.
+- WAV parsing now checks exact container/chunk/padding/frame bounds. Preference writes/removal and failed-save rollback are serialized and focus/account scoped, including the independently reviewed stale-initial-read race. Chat coalesces overlapping reconciliation and offers deliberate latest-revision review before retrying removal. Private voice/file resources and delayed confirmations are bound to session/focus/attachment lifetime, with late web/native cleanup. Call cleanup continues after individual SDK failures, fences late playback to its element and clears stale setup diagnostics. Malformed successful API bodies fail retryably while session/error status is preserved.
+- Render `dep-dc3cgku7bikc73cq6nkg` is LIVE on runtime `acb29b8`, finished 2026-11-25T11:38:00.553134Z. Direct health endpoints returned 200/ok; direct auth/me and calls/status returned 401/no-store with approved beta CORS. A bounded post-rollout error query returned zero app errors; this is not continuous monitoring or a latency percentile. One instance/worker, manual deploy, free plan and unset provider health-check path remain unchanged.
+- API deployed first. Vercel `dpl_BqQ68z9nL58ScP7yPZv5UdMHgDVv` is READY on the matching runtime at https://kuku-cmksii40j-lionovart.vercel.app . The existing [beta alias](https://kuku-git-codex-kuku-release-20261027-lionovart.vercel.app/login) points to it; alias UID/access exception are preserved. Login, notifications and call-settings returned 200 with KUKU HTML and favicon v8 links; private proxy routes returned 401/no-store. Main remains unchanged; PR #1 remains draft.
+- Browser artifact 15018230508 contains 51 synthetic screenshots plus performance/audit reports, ZIP SHA256 `c29da501980046ba9028e3452c32902c287f2d0048cf72e7697fbe11b2b33b3a`. Relevant 320/390px WAV/setup views and the failed-setup refresh view were visually inspected. The durable controlled report is docs/performance/2026-11-25-debugging-controlled.json: 44 rendered chat rows, five initial thumbnails, at most one thumbnail request per same scope, five Google font faces plus one icon font. These are fixture guardrails, not physical memory/CWV/latency claims.
+- The runtime dependency inventory still reports 22 advisories (17 moderate, five high). Manifests/lockfile were not changed. Counts and advisory/fix metadata are persisted in docs/performance/2026-11-25-dependency-audit-summary.json. Reachability and compatible remediation remain unfinished; do not claim vulnerability-free status or run a forced framework downgrade/upgrade blindly.
+- Redacted startup diagnostics at 2026-11-25T11:37:55.352783991Z still report calls disabled, missing provider URL/credentials and no provider connectivity test. Calls/native push stay off. LiveKit setup, physical two-phone audio/Android acceptance, native incoming calls/signing, E2EE and existing backup/erasure/always-on gates remain unverified. No real family messages/invitations, personal-content fixtures, live provider calls, retention approvals or data migration were used.
+- Next bounded independent maintenance is compatible remediation/verification of the dependency inventory. Separately, missing server LiveKit configuration must precede a reviewed controlled two-phone audio test; no general call enablement follows from builds/mocks alone. All D10 path owners returned, independent review found no remaining blocker, and the controller lease is closed.
+
+## N07/C08 historical checkpoint (superseded by D10)
+Historical evidence below describes the previous runtime, not the current deployment.
 - Beta: https://kuku-git-codex-kuku-release-20261027-lionovart.vercel.app/login . Notifications and Call setup are under You. Main remains unchanged; PR #1 against main remains draft.
 - C08 tested source `886c1b37e5244c17d3af38eff4f7939e5e64841d` was merged through [PR #14](https://github.com/leonartist7/KUKU/pull/14) as review runtime `d26103a6d706d3dfbc1e946484f66cc7e342981f`. Both commits have exact tree `5c3e54ef5353d887a8efa57b0beefe4c93c1af6e`.
 - Exact-source [run 45485420851](https://github.com/leonartist7/KUKU/actions/runs/45485420851) PASS: backend job 138769380869 has 150 isolated Mongo-backed tests; frontend job 138769381399 has 135/135 unit/release tests, TypeScript, web export and complete onboarding/WAV/call-setup, Spaces, chat-tools and controlled-performance browser journeys. The call setup browser journey uses fake media devices and checks 320/390/768px layouts; it is not two-phone audio evidence.
@@ -120,10 +135,9 @@ Do not mark a full phase complete when a release gate is still outstanding.
 An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It was disabled after P06 reached external gates; the November 24 work was explicitly requested and did not re-enable or create a schedule. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
 
 ## Active controller lease
-Controller: root/D10.
-Lease acquired: 2026-11-25T11:15:29.068Z
-Lease expires: 2026-11-25T13:15:29.069Z
-State: ACTIVE. Ten bounded improvement/debugging rounds; one controller integrates and deploys.
+Controller: none.
+Lease closed at: 2026-11-25T11:48:16Z
+State: COMPLETE; D10 ten-round fixes, independent review, cloud tests/browser/Android checks and compatible review rollout accepted. No pending agent write remains. Calls stay off; missing LiveKit configuration and physical two-phone acceptance remain gates.
 
 
 ## Verified implementation checkpoint
@@ -175,10 +189,10 @@ State: ACTIVE. Ten bounded improvement/debugging rounds; one controller integrat
 - Latest Android preview for the accepted runtime is still compiling in run 41864811206; the earlier 20d4cd79 test-signed build passed. Do not claim physical Android or native notification acceptance.
 
 ## Next controller handoff
-1. Fetch fresh implementation/release heads, PR #1, the master plan and this ledger. Accepted runtime is `d26103a6d706d3dfbc1e946484f66cc7e342981f`; PRs #13/#14 contain the accepted November 24 packages. Preserve newer work, main and access controls.
-2. All independently executable N07/C08 work is accepted. The actual external blocker for calls is missing LiveKit URL/key/secret, not another UI toggle. Do not request secrets in chat or expose them in frontend variables. Recheck current redacted diagnostics rather than assuming the November 24 observation remains current.
-3. Keep calls disabled until reviewed provider setup and controlled physical audio acceptance. Installed native calling, background ringing/push and production signing need their own implementation/setup/device gates. Video follows actual audio acceptance; no E2EE claim is permitted without its own design and verification.
-4. Follow RELEASE_RUNBOOK for compatible API-first beta rollouts. Keep one worker; do not redeploy API for documentation only, merge main, change protection/DNS/billing, run live erasure or create more schedules.
+1. Fetch actual branch heads and current provider/CI state; honor any fresh unexpired controller lease. D10's accepted runtime and all exact evidence are in the current checkpoint above.
+2. Next independent maintenance: evaluate the recorded dependency advisories, choose SDK-compatible patched versions/overrides from official sources, and verify web/Android compatibility before publishing. No blind force upgrade, new paid service or framework rewrite.
+3. Calls remain disabled with missing LiveKit server configuration. After setup, prepare controlled real two-phone audio acceptance; builds/mocks and setup booleans do not establish audible media. Native/video, FCM/signing, physical notification/Space checks, live backup/media recovery and erasure policy retain their gates.
+4. Follow RELEASE_RUNBOOK for any compatible API-first beta update. Keep one worker. Do not redeploy the API for documentation alone, merge main, alter DNS/protection/billing, run live erasure or create more schedules.
 
 ## P02 private-media isolation implementation history
 The client keeps only bounded thumbnails in memory after a server-proven session. Cache identity includes epoch, account, focus scope, attachment, size and format; full previews are flight-only. Session-boundary listeners clear memory synchronously, late matched responses are rejected, unrelated flights continue, and failed requests remain retryable. Files listens to durable chat changes and reloads after a coalesced revocation. Attachment deletion increments the message revision, marks sync repair state and publishes privacy-removal events to members; the existing repair path prevents a transient publication failure from stranding recipients. Synthetic unit/integration/browser fixtures cover account isolation, relogin, navigation, TTL/entry/byte bounds, deletion replay and request counts. No persistent preview storage or object URLs were added.

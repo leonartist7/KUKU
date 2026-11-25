@@ -1,0 +1,79 @@
+{
+  "source": "70ed5ec457c5b23937dce7c163ccb4ecb7259b64",
+  "run": 45605352739,
+  "scope": "report_only_runtime_dependency_inventory",
+  "manifest_or_lockfile_changed": false,
+  "counts": {
+    "info": 0,
+    "low": 0,
+    "moderate": 17,
+    "high": 5,
+    "critical": 0,
+    "total": 22
+  },
+  "high": [
+    {
+      "name": "decode-uri-component",
+      "direct": false,
+      "range": "<=0.5.0",
+      "fixAvailable": {
+        "name": "expo-router",
+        "version": "58.0.32",
+        "isSemVerMajor": true
+      },
+      "advisories": [
+        "https://github.com/advisories/GHSA-vcc3-ghjq-m6fr",
+        "https://github.com/advisories/GHSA-qr28-fpjm-wq7f"
+      ]
+    },
+    {
+      "name": "expo-router",
+      "direct": true,
+      "range": "1.2.2 - 3.1.2 || 4.0.13-canary-20241211-61c49bd || 4.0.18-canary-20250124-42fe332 - 4.0.18-canary-20250306-d9d3e02 || 4.0.20-canary-20250320-7a205d3 || 4.0.21 - 5.0.2-preview.6 || 5.2.0-canary-20250611-f0afe80 - 58.0.12",
+      "fixAvailable": {
+        "name": "expo-router",
+        "version": "58.0.32",
+        "isSemVerMajor": true
+      },
+      "advisories": []
+    },
+    {
+      "name": "image-size",
+      "direct": false,
+      "range": "0.6.3 - 2.0.2",
+      "fixAvailable": true,
+      "advisories": [
+        "https://github.com/advisories/GHSA-5p2g-fcmc-qvqq",
+        "https://github.com/advisories/GHSA-w3rx-r6r6-pgpr"
+      ]
+    },
+    {
+      "name": "postcss",
+      "direct": false,
+      "range": "<=8.5.22",
+      "fixAvailable": {
+        "name": "expo",
+        "version": "52.0.49",
+        "isSemVerMajor": true
+      },
+      "advisories": [
+        "https://github.com/advisories/GHSA-qx2v-qp2m-jg93",
+        "https://github.com/advisories/GHSA-6g55-p6wh-862q",
+        "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp",
+        "https://github.com/advisories/GHSA-r28c-9q8g-f849"
+      ]
+    },
+    {
+      "name": "query-string",
+      "direct": false,
+      "range": "5.0.0 - 9.4.1",
+      "fixAvailable": {
+        "name": "expo-router",
+        "version": "58.0.32",
+        "isSemVerMajor": true
+      },
+      "advisories": []
+    }
+  ],
+  "limitation": "Dependency-graph advisories are not a complete reachability analysis. Remediation and Expo/Android compatibility verification remain unfinished; no force upgrade or vulnerability-free claim."
+}

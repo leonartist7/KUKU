@@ -21,9 +21,20 @@ invitations, provider credentials or phone calls are used as test fixtures.
 
 ## Acceptance
 
-Implementation and review are in progress. The final accepted source, cloud checks,
-test counts, Android artifact, compatible beta pair and rollback reference must be
-recorded here and in AUTONOMOUS_LEDGER.md before this checkpoint is complete.
+All ten rounds are implemented, independently reviewed, cloud verified and deployed to the existing beta.
+
+- Tested source: `70ed5ec457c5b23937dce7c163ccb4ecb7259b64`; [PR #15](https://github.com/leonartist7/KUKU/pull/15) runtime merge: `acb29b8bf999ee8950cd41fb31943ff2f893d49b`. Exact shared tree: `dbfcd28c8d7f29e0173168870abba84a97c3e45a`.
+- [Run 45605352739](https://github.com/leonartist7/KUKU/actions/runs/45605352739) SUCCESS: 163 backend cases (job 139174691127), 167 frontend cases (job 139174690746), TypeScript/export and all onboarding/WAV/call-setup, Spaces, chat-tools and controlled-performance journeys. Forty-five regression cases were added. Initial acceptance caught a web/native typing issue and a fixture control-scope mistake; both were corrected before this successful source. No acceptance gate was skipped.
+- Android job 139176519049 SUCCESS. [Test artifact 15019095965](https://github.com/leonartist7/KUKU/actions/runs/45605352739/artifacts/15019095965): 39,095,899 bytes; ZIP SHA256 `3b34fb3e92477b4730dfd292cb489afa956cd2d435accfb9f333f0096eed835c`. Arm64, SDK36, Hermes and public test-signing provenance verified; physical phone behavior remains unverified.
+- Browser artifact 15018230508: 51 screenshots and performance/audit reports; ZIP SHA256 `c29da501980046ba9028e3452c32902c287f2d0048cf72e7697fbe11b2b33b3a`. Relevant narrow WAV/setup and failed-status-refresh screenshots were inspected. The controlled report is persisted in [performance/2026-11-25-debugging-controlled.json](performance/2026-11-25-debugging-controlled.json).
+- API-first rollout: Render `dep-dc3cgku7bikc73cq6nkg` LIVE on runtime `acb29b8`, finished 2026-11-25T11:38:00.553134Z; then matching Vercel `dpl_BqQ68z9nL58ScP7yPZv5UdMHgDVv` READY. [Existing beta](https://kuku-git-codex-kuku-release-20261027-lionovart.vercel.app/login), alias UID/access exception preserved. Direct health 200/ok; direct and proxy private routes 401/no-store; login/notifications/call-settings 200 with KUKU HTML/favicon v8. A bounded post-rollout application-error query returned zero rows.
+- Main, provider protection, billing, one API worker/manual free Render service and native/call flags are unchanged. No live data migration or personal-content testing occurred.
+
+## Next maintenance and limitations
+
+The existing runtime dependency inventory reports 22 advisories (17 moderate, five high); no manifest/lockfile was changed. See [the durable summary](performance/2026-11-25-dependency-audit-summary.json) for advisory links and reported fixes. Dependency graph inventory is not reachability analysis. Compatible remediation and web/Android verification are the next independent maintenance package. A forced Expo upgrade/downgrade is not accepted evidence.
+
+Official advisory examples verified on 25 November 2026: [decode-uri-component](https://github.com/advisories/GHSA-qr28-fpjm-wq7f), [image-size](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq), [PostCSS](https://github.com/advisories/GHSA-r28c-9q8g-f849). The notification/call/privacy repairs do not establish that the complete dependency graph is vulnerability-free.
 
 All synthetic checks establish their exercised behavior only. Calls and native push
 stay off. LiveKit configuration, physical two-phone audio/Android notification tests,
