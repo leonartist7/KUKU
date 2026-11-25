@@ -13,6 +13,7 @@ import { callsApi, openCallSocket, Call, CallSignal } from "./calls";
 import { createCallMedia, CallMedia, AudioOutput, CallQuality } from "./callMedia";
 import { CallPhase, callEndLabel, callIsTerminal, mediaTimestamp } from "./callState";
 import { CallClientError, callFailureText } from "./callErrors";
+import { checkMicrophoneAccess } from "./callReadiness";
 import Avatar from "./Avatar";
 
 type IncomingCall = { callId: string; from: Pick<User, "id" | "name"> };
@@ -321,8 +322,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const checkMicrophone = useCallback(async () => {
     if (!supported) throw new CallClientError(CALLS_ENABLED ? "native-unavailable" : "calls-disabled");
     if (!navigator.mediaDevices?.getUserMedia) throw new CallClientError("microphone-unsupported");
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    stream.getTracks().forEach((track) => track.stop());
+    await checkMicrophoneAccess(
+      () => navigator.mediaDevices.getUserMedia({ audio: true, video: false }),
+      () => !!uidRef.current,
+    );
   }, []);
 
   const start = useCallback(async (otherId: string) => {

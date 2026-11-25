@@ -107,15 +107,32 @@ def attachment_router(db_getter, auth, events=None):
     router = APIRouter()
     preview_gate = asyncio.Semaphore(1)
     async def member(chat_id, user):
-        if not await db_getter().chats.find_one({"id": chat_id, "members": user["id"]}):
+        chat = await db_getter().chats.find_one({"id": chat_id, "members": user["id"]})
+        if not chat:
             raise HTTPException(404, "Chat not found")
+        return chat
+
+    async def upload_access(chat_id, user):
+        # A slow request body/provider write can outlive its initial dependency.
+        # Recheck the session and current contact relationship at each boundary.
+        active = await auth.session_user(user["_session_id"], user["id"])
+        if not active.get("email_verified"):
+            raise HTTPException(403, "Verify your email before uploading files")
+        chat = await member(chat_id, active)
+        for other_id in chat["members"]:
+            if other_id != active["id"]:
+                await allow_direct(db_getter(), active["id"], other_id)
 
     async def visible_file(attachment_id, user):
         doc = await db_getter().attachments.find_one({"id": attachment_id})
         if not doc:
             raise HTTPException(404, "File not found")
         await member(doc["chat_id"], user)
-        if doc["owner_id"] != user["id"] and not await db_getter().messages.find_one({"attachment_id": attachment_id, "chat_id": doc["chat_id"]}):
+        if doc["owner_id"] != user["id"] and not await db_getter().messages.find_one({
+            "attachment_id": attachment_id, "chat_id": doc["chat_id"],
+            "sender_id": doc["owner_id"], "type": {"$in": ["file", "image", "voice"]},
+            "deleted_at": {"$exists": False}, "attachment_deleted": {"$ne": True},
+        }):
             raise HTTPException(404, "File not found")
         return doc
 
@@ -135,11 +152,7 @@ def attachment_router(db_getter, auth, events=None):
     async def upload(chat_id: str, request: Request, name: str, kind: str = "file", user=Depends(auth.verified)):
         if kind not in ("file", "voice"):
             raise HTTPException(400, "Unsupported attachment kind")
-        await member(chat_id, user)
-        chat = await db_getter().chats.find_one({"id": chat_id})
-        for other_id in chat["members"]:
-            if other_id != user["id"]:
-                await allow_direct(db_getter(), user["id"], other_id)
+        await upload_access(chat_id, user)
         await auth.limit("upload:" + user["id"], 30, 3600)
         storage_provider = provider()
         selected_store = storage_for(storage_provider)
@@ -175,6 +188,7 @@ def attachment_router(db_getter, auth, events=None):
                 else:
                     raise HTTPException(400, "This recording format is not supported")
             file.seek(0)
+            await upload_access(chat_id, user)
             reserved = await db_getter().users.update_one({"id": user["id"],
                 "$or": [{"storage_bytes": {"$exists": False}}, {"storage_bytes": {"$lte": USER_QUOTA_BYTES - size}}]},
                 {"$inc": {"storage_bytes": size}})
@@ -193,6 +207,16 @@ def attachment_router(db_getter, auth, events=None):
                 await run_in_threadpool(selected_store.put, key, file)
             except Exception:
                 await release_quota(user["id"], size)
+                raise
+            try:
+                await upload_access(chat_id, user)
+            except Exception:
+                # Bytes already written remain private; do not publish metadata
+                # after logout/removal/blocking while the provider was working.
+                try:
+                    await run_in_threadpool(selected_store.delete, key)
+                finally:
+                    await release_quota(user["id"], size)
                 raise
         doc = {"id": str(uuid.uuid4()), "key": key, "chat_id": chat_id,
             "owner_id": user["id"], "name": name, "size": size, "created_at": now(),
@@ -247,7 +271,12 @@ def attachment_router(db_getter, auth, events=None):
         doc = await visible_file(attachment_id, user)
         await auth.limit("download:" + user["id"], 120, 3600)
         if doc.get("storage_provider", "r2") != "vercel":
-            return {"url": await run_in_threadpool(store.download, doc), "expires_in": 60, "media_type": doc.get("media_type", "application/octet-stream")}
+            url = await run_in_threadpool(store.download, doc)
+            active = await auth.session_user(user["_session_id"], user["id"])
+            if not active.get("email_verified"):
+                raise HTTPException(403, "Verify your email before downloading files")
+            await visible_file(attachment_id, active)
+            return {"url": url, "expires_in": 60, "media_type": doc.get("media_type", "application/octet-stream")}
         origin = os.getenv("PUBLIC_API_ORIGIN", "").rstrip("/")
         if not origin.startswith("https://") or "/" in origin[8:] or "?" in origin or "#" in origin:
             raise HTTPException(503, "Downloads are getting ready. Please try again later.")

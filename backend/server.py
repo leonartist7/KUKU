@@ -359,6 +359,8 @@ async def send_message(chat_id: str, payload: MessageIn, current=Depends(get_cur
             await allow_direct(db, current["id"], other_id)
     if payload.chat_id != chat_id:
         raise HTTPException(400, "Conversation does not match")
+    if payload.attachment_id is not None and payload.type not in ("file", "image", "voice"):
+        raise HTTPException(400, "Attachments must use a file, image or voice message")
     if payload.client_message_id:
         previous = await db.messages.find_one({"chat_id": chat_id, "sender_id": current["id"], "client_message_id": payload.client_message_id}, {"_id": 0})
         if previous:

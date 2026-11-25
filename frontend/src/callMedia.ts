@@ -127,9 +127,11 @@ export async function createCallMedia(join: LiveKitJoin, callbacks: CallMediaCal
     const element = elements.get(track);
     elements.delete(track); playable.delete(track); rejectedPlayback.delete(track);
     if (element) {
-      try { element.pause(); element.srcObject = null; element.remove(); } catch { /* Detached by SDK. */ }
+      try { element.pause(); } catch { /* Continue clearing and removing this sink. */ }
+      try { element.srcObject = null; } catch { /* Detached by SDK. */ }
+      try { element.remove(); } catch { /* Detached by SDK. */ }
     }
-    try { track.detach().forEach((node) => node.remove()); } catch { /* Already removed. */ }
+    try { track.detach().forEach((node) => { try { node.remove(); } catch { /* Remove every sink. */ } }); } catch { /* Already removed. */ }
     if (current() && reportedReady && playable.size === 0 && remoteMuted !== true) {
       reportedReady = false;
       callbacks.reconnecting("Waiting for the other microphone.");
@@ -148,11 +150,11 @@ export async function createCallMedia(join: LiveKitJoin, callbacks: CallMediaCal
     document.body.appendChild(element);
     elements.set(track, element);
     void element.play().then(() => {
-      if (!current() || !elements.has(track)) return;
+      if (!current() || elements.get(track) !== element) return;
       playable.add(track); rejectedPlayback.delete(track); checkReady();
       callbacks.remoteAudioError(null);
     }).catch(() => {
-      if (current() && elements.has(track)) { rejectedPlayback.add(track); checkReady(); }
+      if (current() && elements.get(track) === element) { rejectedPlayback.add(track); checkReady(); }
     });
   };
   room.on(sdk.RoomEvent.TrackSubscribed, attach);
@@ -229,16 +231,17 @@ export async function createCallMedia(join: LiveKitJoin, callbacks: CallMediaCal
   // disconnect cannot stop tracks that the SDK has not created yet.
   function forceCleanup() {
     for (const track of [...elements.keys()]) detach(track);
-    room.localParticipant.trackPublications.forEach((publication) => publication.track?.stop());
-    void room.disconnect(true).catch(() => {});
+    room.localParticipant.trackPublications.forEach((publication) => {
+      try { publication.track?.stop(); } catch { /* One failed track must not retain the others. */ }
+    });
+    try { void room.disconnect(true).catch(() => {}); } catch { /* Continue releasing local ownership. */ }
   }
   function dispose() {
     if (disposed) return;
     if (options.isCurrent()) resetFeedback();
     disposed = true;
     room.removeAllListeners();
-    forceCleanup();
-    releaseLease();
+    try { forceCleanup(); } finally { releaseLease(); }
   }
   return {
     async connect() {
@@ -272,9 +275,10 @@ export async function createCallMedia(join: LiveKitJoin, callbacks: CallMediaCal
     async resumeAudio() {
       if (!current()) return;
       await room.startAudio();
+      if (!current()) return;
       await Promise.all([...elements].map(async ([track, element]) => {
         await element.play();
-        if (current() && elements.has(track)) { playable.add(track); rejectedPlayback.delete(track); }
+        if (current() && elements.get(track) === element) { playable.add(track); rejectedPlayback.delete(track); }
       }));
       if (current()) checkReady();
     },

@@ -15,7 +15,7 @@ export function useChatTools({chatId,userId,scopeRef,messages,messagesRef,setMes
   const [findMode,setFindMode]=useState<"search"|"pins"|null>(null);
   const [focusId,setFocusId]=useState<string|null>(null),[focusLoading,setFocusLoading]=useState(false),focusRequest=useRef(0);
   const [refreshVersion,setRefreshVersion]=useState(0);
-  const resolving=useRef(new Set<string>()),dirty=useRef(new Set<string>()),reconciling=useRef(false);
+  const resolving=useRef(new Set<string>()),dirty=useRef(new Set<string>()),reconciling=useRef(false),reconcileAgain=useRef(false);
   const scoped=useCallback(()=>!!userId&&scopeRef.current===chatId+":"+userId,[chatId,userId,scopeRef]);
   const apply=useCallback((incoming:Message[],missing:string[]=[])=>{
     const good=incoming.filter(message=>message?.chat_id===chatId);
@@ -44,23 +44,34 @@ export function useChatTools({chatId,userId,scopeRef,messages,messagesRef,setMes
     }
   },[userId,chatId,scoped,apply,setError]);
   const reconcile=useCallback(async()=>{
-    if(!userId||!scoped()||reconciling.current)return;
-    const ids=Array.from(new Set([...messagesRef.current.map(message=>message.id),...Object.keys(resolvedRef.current)]));
-    if(!ids.length)return;reconciling.current=true;
+    if(!userId||!scoped())return;
+    // A reconnect can arrive while an earlier resolve is still in flight. Keep
+    // one follow-up pass instead of losing the newer recovery request.
+    if(reconciling.current){reconcileAgain.current=true;return;}
+    reconciling.current=true;
     try{
-      for(let offset=0;offset<ids.length;offset+=100){
-        const batch=ids.slice(offset,offset+100),current=await api.postAs<Message[]>(userId,"/chats/"+chatId+"/messages/resolve",{message_ids:batch});
-        if(!scoped())return;
-        if(!Array.isArray(current))throw new Error("Couldn't refresh message changes.");
-        apply(current,batch);
-      }
-      if(scoped())setRefreshVersion(version=>version+1);
+      do{
+        reconcileAgain.current=false;
+        const ids=Array.from(new Set([...messagesRef.current.map(message=>message.id),...Object.keys(resolvedRef.current)]));
+        if(!ids.length)return;
+        for(let offset=0;offset<ids.length;offset+=100){
+          const batch=ids.slice(offset,offset+100),current=await api.postAs<Message[]>(userId,"/chats/"+chatId+"/messages/resolve",{message_ids:batch});
+          if(!scoped())return;
+          if(!Array.isArray(current))throw new Error("Couldn't refresh message changes.");
+          apply(current,batch);
+        }
+        if(scoped())setRefreshVersion(version=>version+1);
+      }while(reconcileAgain.current&&scoped());
     }catch(failure){
       if(scoped()&&failure instanceof ApiError&&failure.status===403){
         messagesRef.current=[];setMessages([]);resolvedRef.current={};setResolved({});setError("This conversation is no longer available.");
       }
       // An unavailable new endpoint during a phased rollout is not deletion of all history.
-    }finally{reconciling.current=false;}
+    }finally{
+      reconciling.current=false;
+      // Retry a newer recovery request even when the preceding pass failed.
+      if(reconcileAgain.current&&scoped()){reconcileAgain.current=false;void reconcile();}
+    }
   },[userId,chatId,scoped,messagesRef,apply,setMessages,setError]);
   const updated=useCallback((messageId:string)=>{
     if(!scoped())return;setRefreshVersion(version=>version+1);
@@ -88,14 +99,15 @@ export function useChatTools({chatId,userId,scopeRef,messages,messagesRef,setMes
     }finally{if(scoped()){busyRef.current=false;setBusy(false);}}
   },[userId,scoped,chatId,apply,fetchOne,actionId,messagesRef,setError]);
   const reply=useCallback((messageId:string)=>{
+    if(!scoped())return;
     const message=currentMessage(messageId,messagesRef.current,resolvedRef.current);
     if(!message||messageRemoved(message))return;
-    setReplyToId(messageId);setActionId(null);setFocusId(null);setFindMode(null);setActionError(null);
-  },[messagesRef]);
+    focusRequest.current++;setFocusLoading(false);setReplyToId(messageId);setActionId(null);setFocusId(null);setFindMode(null);setActionError(null);
+  },[messagesRef,scoped]);
   const openActions=useCallback((message:Message)=>{
-    if(busyRef.current||message.chat_id!==chatId||messageRemoved(message))return;
-    apply([message]);setFocusId(null);setActionId(message.id);setActionError(null);
-  },[chatId,apply]);
+    if(!scoped()||busyRef.current||message.chat_id!==chatId||messageRemoved(message))return;
+    focusRequest.current++;setFocusLoading(false);apply([message]);setFocusId(null);setActionId(message.id);setActionError(null);
+  },[chatId,apply,scoped]);
   const openOriginal=useCallback(async(messageId:string)=>{
     setFindMode(null);setFocusId(messageId);setFocusLoading(true);
     const request=++focusRequest.current,message=await fetchOne(messageId);

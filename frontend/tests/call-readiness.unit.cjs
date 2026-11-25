@@ -15,3 +15,10 @@ test('a late microphone permission grant is stopped after leaving the screen',as
  const result=m.checkMicrophoneAccess(()=>new Promise(r=>resolve=r),()=>current);
  current=false;resolve({getTracks:()=>[{stop:()=>stopped++}]});assert.equal(await result,false);assert.equal(stopped,1);
 });
+test('microphone preflight releases later tracks even when one stop fails',async()=>{
+ const m=moduleUnderTest();let stopped=0;
+ const allowed=await m.checkMicrophoneAccess(async()=>({getTracks:()=>[
+  {stop(){throw new Error('device cleanup failed');}}, {stop(){stopped++;}},
+ ]}),()=>true);
+ assert.equal(allowed,true);assert.equal(stopped,1);
+});
