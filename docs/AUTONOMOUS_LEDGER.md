@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-24T21:09:13Z
+Updated: 2026-11-25T11:15:29.068Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: none. Root completed N07 notifications and C08 secure audio readiness on 24 November 2026.
+Current controller: root, D10 ten-round debugging on 25 November 2026. Lease expires 2026-11-25T13:15:29.069Z.
 Work was performed through connected GitHub/provider APIs and cloud CI; never assume a prior local worktree exists.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -120,11 +120,10 @@ Do not mark a full phase complete when a release gate is still outstanding.
 An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It was disabled after P06 reached external gates; the November 24 work was explicitly requested and did not re-enable or create a schedule. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
 
 ## Active controller lease
-Controller: none.
-Lease closed at: 2026-11-24T21:09:13Z
-State: COMPLETE; N07 notification and C08 call-readiness/quality implementation, cloud checks and
-compatible review rollout accepted. Real calling remains blocked on provider configuration and
-physical two-phone acceptance. No competing controller or outstanding agent write remains.
+Controller: root/D10.
+Lease acquired: 2026-11-25T11:15:29.068Z
+Lease expires: 2026-11-25T13:15:29.069Z
+State: ACTIVE. Ten bounded improvement/debugging rounds; one controller integrates and deploys.
 
 
 ## Verified implementation checkpoint
