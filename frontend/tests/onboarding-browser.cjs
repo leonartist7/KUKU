@@ -61,10 +61,10 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.locator("html").evaluate(e=>e.scrollWidth),width,"No horizontal overflow at "+width);
     await page.screenshot({path:path.join(shots,"login-"+width+".png"),fullPage:true});
     await page.route("https://voice-downloads.example.test/memo.webm",route=>route.fulfill({status:200,contentType:"audio/webm",headers:{"cache-control":"no-store","access-control-allow-origin":origin},body:voiceBytes}));
-    return {page,context,state:()=>({user,sends,profiles,uploadedBytes,shared,inviteEmail,photoSaves,voiceBytes,previewFormats,attachmentUploads}),receiveAsSister:async()=>{user={...user,id:"sister",name:"Sam",email:"sister-qa@example.com"};/* Fixture setup for a separately saved recipient account; never adopt a mismatched cookie. */await page.evaluate(profile=>localStorage.setItem("kuku_profile",JSON.stringify(profile)),user);},setHistory:items=>{history=items;}};
+    return {page,context,setCallStatus:mode=>{callStatusMode=mode;},state:()=>({user,sends,profiles,uploadedBytes,shared,inviteEmail,photoSaves,voiceBytes,previewFormats,attachmentUploads}),receiveAsSister:async()=>{user={...user,id:"sister",name:"Sam",email:"sister-qa@example.com"};/* Fixture setup for a separately saved recipient account; never adopt a mismatched cookie. */await page.evaluate(profile=>localStorage.setItem("kuku_profile",JSON.stringify(profile)),user);},setHistory:items=>{history=items;}};
   }
   try {
-    const {page,context,state,receiveAsSister,setHistory}=await scenario(390,844);
+    const {page,context,state,receiveAsSister,setHistory,setCallStatus}=await scenario(390,844);
     await page.getByTestId("auth-switch").click();
     await page.getByTestId("auth-submit").click();
     await page.getByRole("alert").filter({hasText:"complete email address"}).waitFor();
@@ -193,10 +193,10 @@ const server=http.createServer((req,res)=>{
       await page.screenshot({path:path.join(shots,"call-setup-"+width+".png"),fullPage:true});
     }
     await page.setViewportSize({width:390,height:844});
-    callStatusMode="configured";
+    setCallStatus("configured");
     await page.getByRole("button",{name:"Check calling setup",exact:true}).click();
     await page.getByTestId("call-readiness").getByText("Setup saved",{exact:true}).waitFor();
-    callStatusMode="failed";
+    setCallStatus("failed");
     await page.getByRole("button",{name:"Check calling setup",exact:true}).click();
     await page.getByRole("alert").filter({hasText:"couldn't check calling"}).waitFor();
     assert.equal(await page.getByTestId("call-readiness").getByText("Setup saved",{exact:true}).count(),0,"A failed refresh must clear stale configuration success");
