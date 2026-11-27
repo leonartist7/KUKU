@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-25T11:48:16Z
+Updated: 2026-11-27T19:22:40.408Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: none. Root completed D10 ten-round debugging, cloud acceptance and the compatible beta rollout on 25 November 2026.
+Current controller: root, L01 clickable messages and quiet startup. Lease expires 2026-11-27T21:22:40.408Z.
 Work was performed through connected GitHub/provider APIs and cloud CI; never assume a prior local worktree exists.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -135,9 +135,10 @@ Do not mark a full phase complete when a release gate is still outstanding.
 An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It was disabled after P06 reached external gates; the November 24 work was explicitly requested and did not re-enable or create a schedule. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
 
 ## Active controller lease
-Controller: none.
-Lease closed at: 2026-11-25T11:48:16Z
-State: COMPLETE; D10 ten-round fixes, independent review, cloud tests/browser/Android checks and compatible review rollout accepted. No pending agent write remains. Calls stay off; missing LiveKit configuration and physical two-phone acceptance remain gates.
+Controller: root/L01.
+Lease acquired: 2026-11-27T19:22:40.408Z
+Lease expires: 2026-11-27T21:22:40.408Z
+State: ACTIVE; message links/actions and calm startup. One controller integrates and deploys.
 
 
 ## Verified implementation checkpoint
