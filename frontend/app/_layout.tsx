@@ -99,8 +99,8 @@ function StartupStatus({color=colors.primary,background=colors.bg}:{color?:strin
   return <View testID="startup-status" accessibilityLiveRegion="polite" style={[styles.loading,{backgroundColor:background,padding:32,gap:16}]}>
     <Text style={{fontSize:24,fontWeight:"600",letterSpacing:2,color}}>KUKU</Text>
     <ActivityIndicator color={color}/>
-    <Text style={{fontSize:16,color,textAlign:"center"}}>{slow?"Still connecting to your space":"Opening your space"}</Text>
-    <Text style={{fontSize:14,lineHeight:21,color,textAlign:"center",maxWidth:340}}>{slow?"Reconnecting can take a moment. Please keep this page open while we reconnect.":"A little closer, in a moment."}</Text>
+    <Text style={{fontSize:16,color,textAlign:"center"}}>{slow?"Opening your space":"Opening your space"}</Text>
+    <Text style={{fontSize:14,lineHeight:21,color,textAlign:"center",maxWidth:340}}>{slow?"Taking a little longer. Your account will open when it’s ready.":"A little closer, in a moment."}</Text>
   </View>;
 }
 

@@ -16,6 +16,7 @@ function authHarness({cached = alice, serverUser = alice} = {}) {
   const storage = new Map(cached === null ? [] : [["kuku_profile", JSON.stringify(cached)]]);
   storage.set("connect_token", "legacy");
   const token = deferred(), calls = [], paints = [], expired = new Set();
+  let tokenFlight = token;
   let epoch = 0, actualUser = null, expectedUser = null, contextValue, renderedTree;
   let tokenCalls = 0, mounted = true, queued = false, rendering = false, cursor = 0;
   const cells = [], pendingEffects = [], cleanups = new Map();
@@ -54,7 +55,7 @@ function authHarness({cached = alice, serverUser = alice} = {}) {
     api, ApiError,
     getToken: async () => {
       tokenCalls++; const started = epoch;
-      const result = await token.promise;
+      const result = await tokenFlight.promise;
       if (started === epoch && result) actualUser = serverUser.id;
       return result;
     },
@@ -88,12 +89,21 @@ function authHarness({cached = alice, serverUser = alice} = {}) {
   }
   render();
   return {token, api, ApiError, storage, calls, paints,
+    nextToken() {tokenFlight = deferred(); return tokenFlight;},
     get value() {return contextValue;}, get tree() {return renderedTree;}, get tokenCalls() {return tokenCalls;}, get actualUser() {return actualUser;},
     expire() {epoch++; actualUser = null; expectedUser = null; expired.forEach(listener => listener());},
     unmount() {mounted = false; for (const cleanup of cleanups.values()) cleanup();},
   };
 }
 async function settle() {for (let i = 0; i < 45; i++) await Promise.resolve();}
+function findTestId(node, id) {
+  if (!node || typeof node !== "object") return undefined;
+  if (node.props?.testID === id) return node;
+  for (const child of node.children || []) {
+    if (Array.isArray(child)) {for (const item of child) {const found = findTestId(item, id); if (found) return found;}}
+    else {const found = findTestId(child, id); if (found) return found;}
+  }
+}
 
 function actualApiHarness(responseUser = bob) {
   const calls = [];
@@ -119,13 +129,14 @@ test("cache parsing bounds identity/flags and strips credentials and external av
   assert.equal(canShowCachedShell({...alice, onboarding_complete: false}), false);
 });
 
-test("valid saved profile paints before unresolved refresh, with no client authentication proof", async () => {
+test("valid saved profile opens quietly before unresolved refresh, with no client authentication proof", async () => {
   const h = authHarness(); await settle();
   assert.equal(h.value.user.id, "alice"); assert.equal(h.value.restoring, true); assert.equal(h.actualUser, null);
-  assert.match(h.value.connectionNotice, /saved profile.*check your account/i);
+  assert.equal(h.value.connectionNotice, null);
+  assert.equal(findTestId(h.tree, "session-restore-notice"), undefined, "Normal restoration must not show a reconnecting banner");
   assert.equal(h.tokenCalls, 1); assert.equal(h.calls.some(call => call[0] === "GETAS"), false);
   assert.deepEqual(h.paints[0], {uid: "alice", expectedUser: "alice", actualUser: null});
-  await assert.rejects(h.value.updateProfile("New name", ""), /reconnecting/i);
+  await assert.rejects(h.value.updateProfile("New name", ""), /still opening/i);
   h.unmount();
 });
 
@@ -147,8 +158,23 @@ test("invalid and disabled sessions clear cached identity and never become authe
 
 test("network failure keeps a cached shell unproven until a successful retry", async () => {
   const h = authHarness(); await settle(); h.token.reject(new Error("offline")); await settle();
-  assert.equal(h.value.user.id, "alice"); assert.equal(h.value.restoring, true); assert.match(h.value.connectionNotice, /verify your account/i);
+  assert.equal(h.value.user.id, "alice"); assert.equal(h.value.restoring, true); assert.match(h.value.connectionNotice, /check your connection/i);
+  assert.ok(findTestId(h.tree, "session-restore-notice"));
+  assert.ok(findTestId(h.tree, "session-restore-retry"));
   assert.equal(h.storage.has("kuku_profile"), true); h.unmount();
+});
+
+test("a real failed restore offers retry and returns quietly to a server-proven account", async () => {
+  const h = authHarness(); await settle();
+  h.token.reject(new Error("offline")); await settle();
+  const retry = findTestId(h.tree, "session-restore-retry"); assert.ok(retry);
+  assert.equal(h.actualUser, null); assert.equal(h.value.restoring, true);
+  const token = h.nextToken(); retry.props.onPress(); await settle();
+  assert.equal(h.value.connectionNotice, null); assert.equal(findTestId(h.tree, "session-restore-notice"), undefined);
+  assert.equal(h.actualUser, null); assert.equal(h.calls.some(call => call[0] === "GETAS"), false);
+  token.resolve("alice-access"); await settle();
+  assert.equal(h.actualUser, "alice"); assert.equal(h.value.restoring, false); assert.equal(h.value.connectionNotice, null);
+  assert.equal(findTestId(h.tree, "session-restore-notice"), undefined); h.unmount();
 });
 
 test("fresh web visits and malformed saved profiles reach sign-in without waking the API", async () => {
@@ -184,13 +210,7 @@ test("failed sign-out leaves cached identity unproven and makes its reconnect re
   h.api.postAs = async () => {throw new Error("offline logout");};
   await assert.rejects(h.value.signOut(), /offline logout/); await settle();
   assert.equal(h.value.user.id, "alice"); assert.equal(h.value.restoring, true);
-  function find(node, id) {
-    if (!node || typeof node !== "object") return undefined;
-    if (node.props?.testID === id) return node;
-    for (const child of node.children || []) {if (Array.isArray(child)) {for (const item of child) {const found = find(item, id); if (found) return found;}}
-      else {const found = find(child, id); if (found) return found;}}
-  }
-  const retry = find(h.tree, "session-restore-retry"); assert.ok(retry, "Do not leave a cancelled restore spinner blocking Retry");
+  const retry = findTestId(h.tree, "session-restore-retry"); assert.ok(retry, "Do not leave a cancelled restore spinner blocking Retry");
   retry.props.onPress(); await settle(); h.token.resolve("alice-access"); await settle();
   assert.equal(h.value.user.id, "alice"); assert.equal(h.value.restoring, false); h.unmount();
 });

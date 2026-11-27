@@ -92,11 +92,13 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   report.checks.push("All five brand fonts and the used Ionicons font load under their existing names");
   report.checks.push("Fresh and repeat sign-in make zero API requests");
   const p=await context(true);apiRequests=[];let release;gate={promise:new Promise(r=>release=r)};
-  const shellStarted=await beginAction(p);await p.page.goto(origin+"/");await p.page.getByTestId("session-restore-notice").waitFor();await p.page.getByTestId("profile-button").waitFor();
+  const shellStarted=await beginAction(p);await p.page.goto(origin+"/");await p.page.getByTestId("profile-button").waitFor();
+  assert.equal(await p.page.getByTestId("session-restore-notice").count(),0,"Routine cached-profile restoration is quiet");
   report.cached_shell=await metrics(p,"saved-profile-before-server-proof",shellStarted);
   assert.equal(apiRequests.filter(r=>!["/api/auth/refresh","/api/auth/me"].includes(r.path)).length,0,"Unproven cached shell must not dispatch private requests");
-  gate=null;release();await p.page.getByTestId("session-restore-notice").waitFor({state:"hidden"});await p.page.getByTestId("chat-row-perf-chat").waitFor();
-  report.checks.push("Saved profile shell paints before held refresh, without private operations");
+  gate=null;release();await p.page.getByTestId("chat-row-perf-chat").waitFor();
+  assert.equal(await p.page.getByTestId("session-restore-notice").count(),0,"Successful account proof needs no connection banner");
+  report.checks.push("Saved profile shell paints quietly before held refresh, without private operations");
   const chatStarted=await beginAction(p);await p.page.getByTestId("chat-row-perf-chat").click();await p.page.getByTestId("chat-message-list").getByText(/Performance note 99/).waitFor();
   await p.page.waitForFunction(()=>{const list=document.querySelector('[data-testid="chat-message-list"]'),row=document.querySelector('[data-testid="message-row-perf-99"]');if(!list||!row)return false;const box=list.getBoundingClientRect(),rect=row.getBoundingClientRect();return rect.bottom>box.top&&rect.top<box.bottom&&list.scrollHeight-list.clientHeight-list.scrollTop<=80;});
   report.chat_initial=await metrics(p,"100-variable-height-message-history-ready",chatStarted);
@@ -106,7 +108,7 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   assert.ok(report.chat.rendered_message_rows>0&&report.chat.rendered_message_rows<100,"Settled chat window must mount fewer than the 100 loaded rows");
   const latestInitial=await rowPosition(p.page,"perf-99");assert.ok(latestInitial.bottom>0&&latestInitial.top<latestInitial.viewport&&latestInitial.bottomGap<=80,"Initial latest message must intersect the list at its tail");
 
-  const scrollStarted=await beginAction(p);const scroll=p.page.getByTestId("chat-message-list");await scroll.evaluate(e=>{e.scrollTop=(e.scrollHeight-e.clientHeight)*0.45;e.dispatchEvent(new Event("scroll"));});await p.page.waitForTimeout(200);
+  const scrollStarted=await beginAction(p);const scroll=p.page.getByTestId("chat-message-list");await scroll.hover();await p.page.mouse.wheel(0,-1000);await scroll.evaluate(e=>{e.scrollTop=(e.scrollHeight-e.clientHeight)*0.45;e.dispatchEvent(new Event("scroll"));});await p.page.waitForTimeout(200);
   const anchorBefore=await firstVisiblePerfRow(p.page);assert.ok(anchorBefore,"A middle reading anchor must be mounted");
   history.push({id:"perf-incoming-100",chat_id:"perf-chat",sender_id:other.id,sender_name:other.name,type:"text",text:"New performance note while reading",created_at:"2026-11-04T10:02:00.000Z",revision:0});
   await p.page.evaluate(()=>document.dispatchEvent(new Event("visibilitychange")));
@@ -120,7 +122,7 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   await p.page.getByRole("button",{name:"Jump to new messages",exact:true}).waitFor({state:"hidden"});
   const latestAfterJump=await rowPosition(p.page,"perf-incoming-100");assert.ok(latestAfterJump.bottomGap<=80);
 
-  await scroll.evaluate(e=>{e.scrollTop=0;e.dispatchEvent(new Event("scroll"));});await p.page.waitForTimeout(200);
+  await scroll.hover();await p.page.mouse.wheel(0,-1000);await scroll.evaluate(e=>{e.scrollTop=0;e.dispatchEvent(new Event("scroll"));});await p.page.waitForTimeout(200);
   const prependAnchorBefore=await rowPosition(p.page,"perf-0");
   const olderResponse=p.page.waitForResponse(response=>new URL(response.url()).searchParams.get("before")==="perf-0"&&response.status()===200);
   await p.page.getByRole("button",{name:"Load older messages",exact:true}).click();await olderResponse;
@@ -130,7 +132,7 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   const prependAnchorAfter=await rowPosition(p.page,"perf-0");
   report.chat.anchor={remote_before:anchorBefore,remote_after:anchorAfter,prepend_before:prependAnchorBefore,prepend_after:prependAnchorAfter};
   assert.ok(Math.abs(prependAnchorAfter.top-prependAnchorBefore.top)<=4,"Loading older messages must preserve the visible row position");
-  await scroll.evaluate(e=>{e.scrollTop=0;e.dispatchEvent(new Event("scroll"));});await p.page.getByTestId("message-row-perf-old-0").waitFor();
+  await scroll.hover();await p.page.mouse.wheel(0,-1000);await scroll.evaluate(e=>{e.scrollTop=0;e.dispatchEvent(new Event("scroll"));});await p.page.getByTestId("message-row-perf-old-0").waitFor();
   report.chat.after_scroll=await metrics(p,"remote-append-jump-and-prepend-preserved",scrollStarted);
   report.checks.push("Latest row intersects the viewport; settled chat mounts fewer than 100 rows; remote append and concurrent-append 50-row prepend preserve reading position");
   fullPhoto=await p.page.evaluate(encoded=>new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>{const c=document.createElement("canvas");c.width=32;c.height=32;c.getContext("2d").drawImage(img,0,0,32,32);resolve(c.toDataURL("image/jpeg").split(",")[1]);};img.onerror=reject;img.src="data:image/jpeg;base64,"+encoded;}),PHOTO);
