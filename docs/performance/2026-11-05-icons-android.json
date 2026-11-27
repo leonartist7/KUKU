@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "checked_at": "2026-11-04T23:48:32.735Z",
+  "baseline": {
+    "artifact_id": 13370108686,
+    "archive_sha256": "8a2ef4324d4356d7f76425182539b3888f426f5955522f0e0813635c589ad2de",
+    "archive_bytes": 41231549,
+    "apk_bytes": 41221514,
+    "apk_sha256": "ad39dc0deec73523d9e867a78075a73f4a498550dab998531027c9f55d318a7d",
+    "build": {
+      "source_sha": "331dc40900804a5198e81509965571c6ddd2bc32",
+      "workflow_run_id": "41927867023",
+      "workflow_run_attempt": "1",
+      "package": "com.leonartist7.kuku.preview",
+      "version": "1.0.0-preview.58.1",
+      "version_code": 1000058,
+      "api_origin": "https://kuku-api-staging.onrender.com",
+      "calls_enabled": false,
+      "native_push_enabled": false,
+      "signing": "PUBLIC ANDROID DEBUG TEST KEY — NOT PRODUCTION SIGNING",
+      "architecture": "arm64-v8a",
+      "embedded_hermes_bytes": 3994376,
+      "device_testing": "NOT TESTED"
+    },
+    "fonts": [
+      {
+        "path": "res/59.ttf",
+        "bytes": 25788,
+        "sha256": "dd8ee403bbcbf5e58b77dca4ac03ebafa13a284a3d87d8ea9ca490435a86fa48"
+      },
+      {
+        "path": "res/7D.ttf",
+        "bytes": 56344,
+        "sha256": "20ccb90498d8ca511bb0be31a74eccd5f29fbe1161852ef72781b703929e98ec"
+      },
+      {
+        "path": "res/9v.ttf",
+        "bytes": 72472,
+        "sha256": "9cede435056e96eb39ac587d57cc9509484d7fa18fbb0532f149f183af13b14d"
+      },
+      {
+        "path": "res/As.ttf",
+        "bytes": 202744,
+        "sha256": "3d06af1f31cd83ace7a265a014b8fb5dee15770ecac8f7a55555190e627e03c2"
+      },
+      {
+        "path": "res/B1.ttf",
+        "bytes": 66200,
+        "sha256": "16f92298587bab2b469bc13c0dfc6d5d171bca10bad0c9053ad16bc023bf717d"
+      },
+      {
+        "path": "res/C-.ttf",
+        "bytes": 209376,
+        "sha256": "bc844b5b02d3f3adabb514de4e0c0208252d3123413bd03f6287fa446acee859"
+      },
+      {
+        "path": "res/CU.ttf",
+        "bytes": 389724,
+        "sha256": "fa2ab7d2557819b2bfe5009e46844efa7170cf177be7735d43aa2ac1295f1d54"
+      },
+      {
+        "path": "res/Fw.ttf",
+        "bytes": 56976,
+        "sha256": "7e1dd03dd4ce90b658052554cd7459df16716717389a552fa4c6d56a5f8933e6"
+      },
+      {
+        "path": "res/Hx.ttf",
+        "bytes": 67976,
+        "sha256": "64f9fb623681f112261e9a2f97826782439f3925dea8f44a57d1e4db95ba6cfd"
+      },
+      {
+        "path": "res/Ic.ttf",
+        "bytes": 33736,
+        "sha256": "c651b8a67d3193206f622c3c3b0fbca4a2f2727108c4212b52c1e2a2e84c9b31"
+      },
+      {
+        "path": "res/M_.ttf",
+        "bytes": 134040,
+        "sha256": "06f4d00923ea24697df5df0b92984175991d8bd25776a02d531bb401e393ec42"
+      },
+      {
+        "path": "res/QV.ttf",
+        "bytes": 69436,
+        "sha256": "9bc4d9f5e994e774bdc3ef9a9a87da749af5f50b861473ef7d1cc3d6f8229267"
+      },
+      {
+        "path": "res/RV.ttf",
+        "bytes": 3316,
+        "sha256": "acbf6c59d8c5765ffa9af2a839249e2800e0b107aad4045cf5c070765fa29322"
+      },
+      {
+        "path": "res/S5.ttf",
+        "bytes": 356840,
+        "sha256": "ef149f08bdd2ff09a4e2c8573476b7b0f3fbb15b623954ade59899e7175bedda"
+      },
+      {
+        "path": "res/dq.ttf",
+        "bytes": 54056,
+        "sha256": "3f501ddb05c70829bbb51cfe9ca9fff57f39e060457c257b3ccf25df767f0870"
+      },
+      {
+        "path": "res/gg.ttf",
+        "bytes": 313528,
+        "sha256": "94dab9f1d5b13ea0769d124a2da0d02433f3b99d6dea5a07c0446a77158100c0"
+      },
+      {
+        "path": "res/nF.ttf",
+        "bytes": 55596,
+        "sha256": "02b88ead91ade5710d7ca18edb43a6965a71d93732c06f290cc07a6dd249e987"
+      },
+      {
+        "path": "res/oI.ttf",
+        "bytes": 1307660,
+        "sha256": "61e8aba5a4e981fe22cf7c8e8bcdbea00476e75c62c37f01bf7ee33361d68428"
+      },
+      {
+        "path": "res/pE.ttf",
+        "bytes": 13456,
+        "sha256": "a5caeb4d395c5e32f1d5a30acb382aebc664f1badfd149319907f2215e4e3e26"
+      },
+      {
+        "path": "res/pt.ttf",
+        "bytes": 130484,
+        "sha256": "08a9d5b513cf947e22ede81e9a843bd8d7763a63444cd21484bfde7662cc6543"
+      },
+      {
+        "path": "res/rJ.ttf",
+        "bytes": 72504,
+        "sha256": "9f03c0fe70d1670d22f392a138ac02eceedc5eee5f1cd8d7486ba2aed843b8aa"
+      },
+      {
+        "path": "res/rg.ttf",
+        "bytes": 165548,
+        "sha256": "aa58f33f239a0fb02f5c7a6c45c043d7a9ac9a093335806694ecd6d4edc0d6a8"
+      },
+      {
+        "path": "res/t3.ttf",
+        "bytes": 56336,
+        "sha256": "b3ee9c6f271318066adae56c3033e6e4192f88f5d127cb507686d89a0a269168"
+      },
+      {
+        "path": "res/wx.ttf",
+        "bytes": 56376,
+        "sha256": "568dafd2db3728534b42c064e63ed1ff45ec97739bc21e407123dfddcb2ad255"
+      },
+      {
+        "path": "res/zM.ttf",
+        "bytes": 423676,
+        "sha256": "31f099c13f6e4ba05f1b471bf170cb5493249474222917372de3ca5cf29e6a1a"
+      }
+    ]
+  },
+  "after": {
+    "artifact_id": 13374117104,
+    "archive_sha256": "d1853edb146ef7a05b824707569d408184b226f972fe01505e37def23e905b5b",
+    "archive_bytes": 39054429,
+    "apk_bytes": 39044394,
+    "apk_sha256": "a7c96fa662eda3b85a605f26ffd0b0921949a8068cb76bba6598815751925e2f",
+    "build": {
+      "source_sha": "36655ce6089ee07cf4b83cda9b54342a31406b2d",
+      "workflow_run_id": "41934515662",
+      "workflow_run_attempt": "1",
+      "package": "com.leonartist7.kuku.preview",
+      "version": "1.0.0-preview.62.1",
+      "version_code": 1000062,
+      "api_origin": "https://kuku-api-staging.onrender.com",
+      "calls_enabled": false,
+      "native_push_enabled": false,
+      "signing": "PUBLIC ANDROID DEBUG TEST KEY — NOT PRODUCTION SIGNING",
+      "architecture": "arm64-v8a",
+      "embedded_hermes_bytes": 3664844,
+      "device_testing": "NOT TESTED"
+    },
+    "fonts": [
+      {
+        "path": "res/7D.ttf",
+        "bytes": 56344,
+        "sha256": "20ccb90498d8ca511bb0be31a74eccd5f29fbe1161852ef72781b703929e98ec"
+      },
+      {
+        "path": "res/9v.ttf",
+        "bytes": 72472,
+        "sha256": "9cede435056e96eb39ac587d57cc9509484d7fa18fbb0532f149f183af13b14d"
+      },
+      {
+        "path": "res/CU.ttf",
+        "bytes": 389724,
+        "sha256": "fa2ab7d2557819b2bfe5009e46844efa7170cf177be7735d43aa2ac1295f1d54"
+      },
+      {
+        "path": "res/RV.ttf",
+        "bytes": 3316,
+        "sha256": "acbf6c59d8c5765ffa9af2a839249e2800e0b107aad4045cf5c070765fa29322"
+      },
+      {
+        "path": "res/rJ.ttf",
+        "bytes": 72504,
+        "sha256": "9f03c0fe70d1670d22f392a138ac02eceedc5eee5f1cd8d7486ba2aed843b8aa"
+      },
+      {
+        "path": "res/t3.ttf",
+        "bytes": 56336,
+        "sha256": "b3ee9c6f271318066adae56c3033e6e4192f88f5d127cb507686d89a0a269168"
+      },
+      {
+        "path": "res/wx.ttf",
+        "bytes": 56376,
+        "sha256": "568dafd2db3728534b42c064e63ed1ff45ec97739bc21e407123dfddcb2ad255"
+      }
+    ],
+    "all_six_used_font_hashes_preserved": true
+  },
+  "artifact": {
+    "id": 13374117104,
+    "expires_at": "2026-11-11T23:45:29Z",
+    "zip_sha256": "d1853edb146ef7a05b824707569d408184b226f972fe01505e37def23e905b5b",
+    "url": "https://github.com/leonartist7/KUKU/actions/runs/41934515662/artifacts/13374117104"
+  },
+  "comparison": {
+    "font_file_count_before": 25,
+    "font_file_count_after": 7,
+    "font_raw_bytes_before": 4394188,
+    "font_raw_bytes_after": 707072,
+    "font_raw_bytes_removed": 3687116,
+    "apk_bytes_removed": 2177120,
+    "all_six_used_font_hashes_preserved": true,
+    "embedded_hermes_before": 3994376,
+    "embedded_hermes_after": 3664844
+  },
+  "checks": {
+    "workflow_run": 41934515662,
+    "job": 126941189511,
+    "result": "success",
+    "build_duration": "8m3s",
+    "archive_digest_verified": true,
+    "apk_digest_matches_SHA256SUMS": true,
+    "package_signature_nondebuggable_embedded_Hermes": "pass",
+    "device_testing": "NOT TESTED"
+  }
+}

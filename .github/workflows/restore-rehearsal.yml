@@ -1,0 +1,54 @@
+name: Synthetic restore rehearsal
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/restore-rehearsal.yml'
+      - 'backend/scripts/restore_rehearsal.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  restore:
+    runs-on: ubuntu-22.04 # MongoDB8 allocator is incompatible with kernels6.19-7.0.13
+    timeout-minutes: 15
+    services:
+      source:
+        image: mongo:8.0@sha256:b9924c330a8bbc5800fe9c69f04a84e221eca7b28fd049a0354147d9908fa142
+        env:
+          MONGO_INITDB_ROOT_USERNAME: fixture_root
+          MONGO_INITDB_ROOT_PASSWORD: fixture-root-only
+        ports: ['27017:27017']
+        options: >-
+          --health-cmd "mongosh -u fixture_root -p fixture-root-only --authenticationDatabase admin --eval 'db.runCommand({ping:1})'"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      target:
+        image: mongo:8.0@sha256:b9924c330a8bbc5800fe9c69f04a84e221eca7b28fd049a0354147d9908fa142
+        env:
+          MONGO_INITDB_ROOT_USERNAME: fixture_root
+          MONGO_INITDB_ROOT_PASSWORD: fixture-root-only
+        ports: ['27018:27017']
+        options: >-
+          --health-cmd "mongosh -u fixture_root -p fixture-root-only --authenticationDatabase admin --eval 'db.runCommand({ping:1})'"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - run: pip install -r backend/requirements-dev.txt
+      - name: Rehearse isolated archive and application recovery
+        run: python backend/scripts/restore_rehearsal.py
+        env:
+          KUKU_RESTORE_REHEARSAL: synthetic-only
+          KUKU_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          FIXTURE_SOURCE_CONTAINER: ${{ job.services.source.id }}
+          FIXTURE_TARGET_CONTAINER: ${{ job.services.target.id }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: kuku-synthetic-restore-evidence
+          path: test-results/restore-rehearsal.json
+          if-no-files-found: warn
+          retention-days: 7

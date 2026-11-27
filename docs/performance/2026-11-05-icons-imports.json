@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "baseline": "62fbfda995e57075fcf193cc1c8c82903dfc4532",
+  "code": "36655ce6089ee07cf4b83cda9b54342a31406b2d",
+  "locked_icon_version": "15.1.1",
+  "module_contract": "Both Icons barrel and Ionicons subpath reexport the same ./build/Ionicons default; full font/glyph map retained.",
+  "imports": [
+    {
+      "path": "frontend/app/(tabs)/_layout.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/app/(tabs)/calls.tsx",
+      "before": "import { Ionicons } from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/app/(tabs)/files.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/app/(tabs)/spaces.tsx",
+      "before": "import { Ionicons } from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/app/(tabs)/you.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/app/account.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/app/appearance.tsx",
+      "before": "import { Ionicons } from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/app/call/[id].tsx",
+      "before": "import { Ionicons } from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/app/chat/[id].tsx",
+      "before": "import { Ionicons } from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/app/credits.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/app/new-message.tsx",
+      "before": "import { Ionicons } from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/app/notifications.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/app/onboarding.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/app/space/[id].tsx",
+      "before": "import { Ionicons } from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/app/space/create.tsx",
+      "before": "import { Ionicons } from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/src/CallContext.tsx",
+      "before": "import { Ionicons } from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/src/Decor.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/src/EmotePicker.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/src/FileSharingStatus.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/src/MessageParts.tsx",
+      "before": "import { Ionicons } from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/src/MessageTools.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/src/NotificationSoundSettings.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/src/OngoingCallBanner.tsx",
+      "before": "import { Ionicons } from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/src/PrivateImageCard.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/src/RadialMenu.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/src/ScreenUI.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/src/SpaceAudio.tsx",
+      "before": "import { Ionicons } from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/src/VoiceComposer.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    },
+    {
+      "path": "frontend/src/WelcomeUI.tsx",
+      "before": "import {Ionicons} from \"@expo/vector-icons\";",
+      "after": "import Ionicons from \"@expo/vector-icons/Ionicons\";"
+    }
+  ],
+  "no_dependency_lockfile_changes": true,
+  "no_jsx_behavior_changes": true
+}

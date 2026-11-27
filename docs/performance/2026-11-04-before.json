@@ -1,0 +1,55 @@
+{
+  "recorded_at": "2026-11-04T14:57:26.739Z",
+  "scope": "Public endpoints only; no accounts or chat content. Direct HTTP observations from this session, not browser Web Vitals or physical-phone measurements.",
+  "frontend_commit": "163f28bb96ee9ea0c988b6f67ccc5da5d5c73914",
+  "samples": [
+    {
+      "name": "api-readiness",
+      "sample": 1,
+      "status": 200,
+      "total_ms": 61428,
+      "bytes": 11,
+      "cache_control": null
+    },
+    {
+      "name": "api-readiness",
+      "sample": 2,
+      "status": 200,
+      "total_ms": 84,
+      "bytes": 11,
+      "cache_control": null
+    },
+    {
+      "name": "api-readiness",
+      "sample": 3,
+      "status": 200,
+      "total_ms": 97,
+      "bytes": 11,
+      "cache_control": null
+    },
+    {
+      "name": "beta-login",
+      "sample": 1,
+      "status": 200,
+      "total_ms": 6676,
+      "bytes": 1740,
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    {
+      "name": "beta-login",
+      "sample": 2,
+      "status": 200,
+      "total_ms": 167,
+      "bytes": 1740,
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    {
+      "name": "beta-login",
+      "sample": 3,
+      "status": 200,
+      "total_ms": 167,
+      "bytes": 1740,
+      "cache_control": "public, max-age=0, must-revalidate"
+    }
+  ]
+}

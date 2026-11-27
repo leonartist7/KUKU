@@ -1,0 +1,50 @@
+{
+  "scope": "SYNTHETIC ONLY; no live database or media recovery claim",
+  "source_sha": "a78c1d399c0b4157507c2d57f521da0a277e2dea",
+  "checked_at": "2026-11-04T18:31:49.585375+00:00",
+  "runner_kernel": "6.8.0-1070-azure",
+  "mongo_source": "8.0.34",
+  "mongo_target": "8.0.34",
+  "dump_tool": "mongodump version: 100.20.0",
+  "restore_tool": "mongorestore version: 100.20.0",
+  "archive_bytes": 3029,
+  "archive_sha256": "c9b8aa83cf8fd30363c6502d3920345b8dced23141b0641e955c9a05152920a6",
+  "dump_ms": 117,
+  "restore_ms": 351,
+  "elapsed_ms": 2874,
+  "collection_counts": {
+    "attachments": 1,
+    "chat_events": 2,
+    "chats": 1,
+    "event_counters": 1,
+    "file_tickets": 0,
+    "fixture_schema": 1,
+    "invites": 0,
+    "messages": 1,
+    "sessions": 4,
+    "spaces": 1,
+    "users": 4,
+    "ws_tickets": 0
+  },
+  "checks": [
+    "restore identity cannot write outside the generated target database",
+    "documents, counts, indexes and collection validators match",
+    "separate fixture media store: valid bytes pass; missing/corrupt bytes fail",
+    "newer closure reconciled and old sessions revoked",
+    "actual restored API: sign-in, session revocation, membership, retry, Space and closed-account denial"
+  ],
+  "intercepted_async_httpx_attempts": 0,
+  "live_restore_verified": false,
+  "limits": [
+    "fixture filesystem is not a real Blob/R2 restore",
+    "no FCV/PIT consistency or RPO/RTO guarantee",
+    "no physical erasure proof",
+    "no actual HTTP server startup/lifespan or device test",
+    "nonempty device/ticket cleanup and active Space/call recovery not exercised",
+    "only async HTTPX outbound sends instrumented; other network clients not instrumented"
+  ],
+  "workflow_run_id": 41887901603,
+  "job_id": 126777197318,
+  "artifact_id": 13352487284,
+  "artifact_zip_sha256": "7d13a3ed5ae4e5e164244f8f9d6ae608f19f9432d55f46ee9ef3741e0647a307"
+}

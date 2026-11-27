@@ -3,6 +3,7 @@ import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../src/AuthContext";
 import { colors } from "../src/theme";
+import { accountDestination } from "../src/onboarding";
 
 export default function Index() {
   const { user } = useAuth();
@@ -10,8 +11,7 @@ export default function Index() {
 
   useEffect(() => {
     if (user === undefined) return;
-    if (user) router.replace("/(tabs)");
-    else router.replace("/login");
+    router.replace(accountDestination(user));
   }, [user, router]);
 
   return (

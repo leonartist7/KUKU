@@ -1,376 +1,221 @@
-import React, { useCallback, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  Pressable,
-  ActivityIndicator,
-  ScrollView,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { api, Message, User } from "../../src/api";
-import { radius, spacing } from "../../src/theme";
-import { useTheme } from "../../src/ThemeContext";
-import { spacesApi, SpaceSession } from "../../src/spaces";
+import React, {useCallback, useMemo, useRef, useState} from "react";
+import {View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator, ScrollView, Alert} from "react-native";
+import {SafeAreaView} from "react-native-safe-area-context";
+import {useFocusEffect, useRouter} from "expo-router";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import {api, Message, User} from "../../src/api";
+import {layout, radius, spacing, typography} from "../../src/theme";
+import {useTheme} from "../../src/ThemeContext";
+import {useAuth} from "../../src/AuthContext";
+import {spacesApi, SpaceSession} from "../../src/spaces";
+import {openPrivateDownload} from "../../src/downloads";
+import FileSharingStatus from "../../src/FileSharingStatus";
+import PrivateImageCard from "../../src/PrivateImageCard";
+import {clearPrivateImagePreviewScope,isImageFilename} from "../../src/imagePreview";
+import {subscribeChatEvents} from "../../src/chatRealtime";
+import {ContentFrame, PageHeader, ScreenState} from "../../src/ScreenUI";
 
-type FileMsg = Message & { sender: User | null };
-
+type FileMsg = Message & {sender: User | null};
+type Category = "image" | "file" | "voice";
+const fileCategory = (file: FileMsg) => file.type === "image" || (file.type === "file" && isImageFilename(file.file_name)) ? "image" : file.type;
 const SECTIONS = ["Recent", "By person", "Categories", "Sessions"] as const;
-type Section = (typeof SECTIONS)[number];
-
-const CATEGORIES: { key: "image" | "file" | "voice"; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { key: "image", label: "Images", icon: "image-outline" },
-  { key: "file", label: "Documents", icon: "document-text-outline" },
-  { key: "voice", label: "Audio", icon: "musical-notes-outline" },
+type Section = typeof SECTIONS[number];
+const CATEGORIES: {key: Category; label: string; icon: keyof typeof Ionicons.glyphMap}[] = [
+  {key: "image", label: "Images", icon: "image-outline"},
+  {key: "file", label: "Documents", icon: "document-text-outline"},
+  {key: "voice", label: "Audio", icon: "musical-notes-outline"},
 ];
-
-function fmtBytes(b?: number | null) {
-  if (!b) return "";
-  if (b > 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
-  if (b > 1024) return `${(b / 1024).toFixed(1)} KB`;
-  return `${b} B`;
+function fmtBytes(bytes?: number | null) {
+  if (!bytes) return "";
+  if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + " MB";
+  if (bytes >= 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return bytes + " B";
 }
-
 function dateLabel(iso?: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return iso && Number.isFinite(Date.parse(iso)) ? new Date(iso).toLocaleDateString(undefined, {month: "short", day: "numeric"}) : "";
 }
 
 export default function FilesScreen() {
-  const { c, f } = useTheme();
-  const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
+  const {c, f} = useTheme(); const {user} = useAuth(); const uid = user?.id; const router = useRouter();
+  const styles = useMemo(() => makeStyles(c, f), [c, f]);
   const [section, setSection] = useState<Section>("Recent");
-  const [files, setFiles] = useState<FileMsg[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeCat, setActiveCat] = useState<null | "image" | "file" | "voice">(null);
-  const [sessions, setSessions] = useState<SpaceSession[]>([]);
-
+  const [files, setFiles] = useState<FileMsg[]>([]); const [sessions, setSessions] = useState<SpaceSession[]>([]);
+  const [loading, setLoading] = useState(true); const [error, setError] = useState("");
+  const [sessionsError, setSessionsError] = useState(false);
+  const [activeCat, setActiveCat] = useState<Category | null>(null); const [personId, setPersonId] = useState<string | null>(null);
+  const request = useRef(0); const visible = useRef(false);
+  const previewScopeCounter=useRef(0),eventTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const [previewScope,setPreviewScope]=useState(()=>`files:${uid||"none"}:0`);
   const load = useCallback(async () => {
-    setError(null);
+    if (!uid) return;
+    const current = ++request.current; setError("");
     try {
-      const [data, sess] = await Promise.all([
-        api.get<FileMsg[]>("/files"),
-        spacesApi.sessions().catch(() => [] as SpaceSession[]),
-      ]);
-      setFiles(data);
-      setSessions(sess);
+      const [items, moments] = await Promise.allSettled([api.getAs<FileMsg[]>(uid, "/files"), spacesApi.sessions(uid)]);
+      if (!visible.current || current !== request.current) return;
+      if (items.status === "rejected") throw items.reason;
+      setFiles(items.value);
+      setSessions(moments.status === "fulfilled" ? moments.value : []);
+      setSessionsError(moments.status === "rejected");
     } catch {
-      setError("Couldn't load your library");
+      if (visible.current && current === request.current) setError("We couldn't load your shared files.");
     } finally {
-      setLoading(false);
+      if (visible.current && current === request.current) setLoading(false);
     }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
-
+  }, [uid]);
+  useFocusEffect(useCallback(() => {
+    const scope=`files:${uid||"none"}:${++previewScopeCounter.current}`;setPreviewScope(scope);
+    visible.current = true; setFiles([]); setSessions([]); setLoading(true); setSessionsError(false);
+    setActiveCat(null); setPersonId(null); void load();
+    const stop=uid?subscribeChatEvents(uid,event=>{
+      if(event.type!=="chat_changed")return;
+      clearPrivateImagePreviewScope(uid,scope);
+      if(eventTimer.current)clearTimeout(eventTimer.current);
+      eventTimer.current=setTimeout(()=>{if(visible.current)void load();},60);
+    }):()=>{};
+    return () => {
+      visible.current=false;request.current++;stop();
+      if(eventTimer.current)clearTimeout(eventTimer.current);eventTimer.current=null;
+      if(uid)clearPrivateImagePreviewScope(uid,scope);
+    };
+  }, [load,uid]));
+  const retry = () => {setLoading(true); void load();};
   const byPerson = useMemo(() => {
-    const map = new Map<string, { user: User; items: FileMsg[] }>();
-    for (const f of files) {
-      if (!f.sender) continue;
-      const k = f.sender.id;
-      if (!map.has(k)) map.set(k, { user: f.sender, items: [] });
-      map.get(k)!.items.push(f);
+    const groups = new Map<string, {user: User; items: FileMsg[]}>();
+    for (const item of files) {
+      if (!item.sender) continue;
+      if (!groups.has(item.sender.id)) groups.set(item.sender.id, {user: item.sender, items: []});
+      groups.get(item.sender.id)!.items.push(item);
     }
-    return Array.from(map.values());
+    return Array.from(groups.values());
   }, [files]);
-
   const filtered = useMemo(() => {
-    if (section === "Categories" && activeCat) return files.filter((f) => f.type === activeCat);
+    if (section === "Categories" && activeCat) return files.filter(item => fileCategory(item) === activeCat);
+    if (section === "By person" && personId) return files.filter(item => item.sender?.id === personId);
     return files;
-  }, [files, section, activeCat]);
+  }, [files, section, activeCat, personId]);
+  const back = section === "Categories" && activeCat ? {label: "All categories", action: () => setActiveCat(null)} :
+    section === "By person" && personId ? {label: "Back to people", action: () => setPersonId(null)} : null;
 
-  return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      <View style={styles.header}>
-        <Text style={styles.kicker}>Library</Text>
-        <Text style={styles.title}>Files</Text>
-      </View>
+  let content: React.ReactNode;
+  if (loading) content = <View style={styles.center} accessibilityLiveRegion="polite"><ActivityIndicator color={c.primaryDark}/><Text style={styles.loadingText}>Gathering your shared things…</Text></View>;
+  else if (error) content = <ScreenState error icon="cloud-offline-outline" title="Let's reconnect" detail={error} action={{label: "Try again", testID: "files-retry", onPress: retry}}/>;
+  else if (section === "Categories" && !activeCat) content = <ScrollView contentContainerStyle={styles.catGrid}>
+    {CATEGORIES.map(category => {
+      const count = files.filter(item => fileCategory(item) === category.key).length;
+      return <Pressable key={category.key} accessibilityRole="button" accessibilityLabel={category.label}
+        onPress={() => setActiveCat(category.key)} testID={"category-" + category.key}
+        style={({pressed}) => [styles.catCard, {opacity: pressed ? 0.8 : 1}]}>
+        <View style={styles.catIcon}><Ionicons name={category.icon} size={26} color={c.primaryDark}/></View>
+        <Text style={styles.catLabel}>{category.label}</Text><Text style={styles.catCount}>{count} {count === 1 ? "item" : "items"}</Text>
+      </Pressable>;
+    })}
+    <Pressable accessibilityRole="button" accessibilityLabel="Shared sessions" onPress={() => setSection("Sessions")} testID="category-sessions"
+      style={({pressed}) => [styles.catCard, {opacity: pressed ? 0.8 : 1}]}>
+      <View style={styles.catIcon}><Ionicons name="planet-outline" size={26} color={c.primaryDark}/></View>
+      <Text style={styles.catLabel}>Sessions</Text><Text style={styles.catCount}>{sessionsError ? "Reconnect to view" : sessions.length + " shared moments"}</Text>
+    </Pressable>
+  </ScrollView>;
+  else if (section === "By person" && !personId) content = <FlatList data={byPerson} keyExtractor={person => person.user.id} contentContainerStyle={styles.list}
+    renderItem={({item}) => <View style={styles.personCard}>
+      <Text style={styles.personName}>{item.user.name}</Text><Text style={styles.personMeta}>{item.items.length} shared items</Text>
+      <View style={styles.personFiles}>{item.items.slice(0, 3).map(file => <FileRow key={file.id} file={file} cacheScope={previewScope}/>)}</View>
+      {item.items.length > 3 ? <Pressable accessibilityRole="button" accessibilityLabel={"View all files from " + item.user.name} onPress={() => setPersonId(item.user.id)} style={styles.backLink}>
+        <Text style={styles.backText}>View all {item.items.length} items</Text><Ionicons name="arrow-forward" size={16} color={c.primaryDark}/>
+      </Pressable> : null}
+    </View>} ListEmptyComponent={<EmptyHint label="No shared files yet."/>}/>;
+  else if (section === "Sessions" && sessionsError) content = <ScreenState error icon="planet-outline" title="Let's find your moments" detail="We couldn't load past sessions. Try reconnecting." action={{label: "Try again", onPress: retry}}/>;
+  else if (section === "Sessions") content = <FlatList data={sessions} keyExtractor={session => session.id} contentContainerStyle={styles.list}
+    renderItem={({item}) => <SessionRow session={item}/>} ListEmptyComponent={<EmptyHint sessions label="Past shared sessions will collect here."/>}/>;
+  else content = <FlatList data={filtered} keyExtractor={item => item.id} contentContainerStyle={styles.list}
+    initialNumToRender={12} maxToRenderPerBatch={12} windowSize={7}
+    renderItem={({item}) => <FileRow file={item} showSender cacheScope={previewScope}/>} ListEmptyComponent={<EmptyHint label="Nothing here yet."/>}
+    ListHeaderComponent={back ? <Pressable accessibilityRole="button" accessibilityLabel={back.label} onPress={back.action} style={styles.backLink}>
+      <Ionicons name="chevron-back" size={16} color={c.primaryDark}/><Text style={styles.backText}>{back.label}</Text>
+    </Pressable> : null}/>;
 
-      <View style={styles.segmentRow}>
-        {SECTIONS.map((s) => (
-          <Pressable
-            key={s}
-            onPress={() => {
-              setSection(s);
-              setActiveCat(null);
-            }}
-            style={[styles.segment, section === s && styles.segmentActive]}
-            testID={`files-segment-${s}`}
-          >
-            <Text style={[styles.segmentText, section === s && styles.segmentTextActive]}>
-              {s}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={c.primary} />
-        </View>
-      ) : error ? (
-        <Pressable onPress={load} style={styles.center} testID="files-retry">
-          <Text style={styles.errorTitle}>{error}</Text>
-          <Text style={styles.errorRetry}>Tap to retry</Text>
+  return <SafeAreaView style={styles.safe} edges={["top"]}><ContentFrame reading>
+    <PageHeader title="Files" subtitle="The little things you've shared."/>
+    <View style={styles.intro}><FileSharingStatus/>
+      <View style={styles.actions}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Upload a file" onPress={() => router.push("/new-message?mode=file")} style={({pressed}) => [styles.shareAction, {opacity: pressed ? 0.8 : 1}]}>
+          <Ionicons name="cloud-upload-outline" size={21} color={c.primaryDark}/><Text style={styles.actionText}>Upload file</Text>
         </Pressable>
-      ) : section === "Categories" && !activeCat ? (
-        <ScrollView contentContainerStyle={styles.catGrid}>
-          {CATEGORIES.map((cat) => {
-            const count = files.filter((f) => f.type === cat.key).length;
-            return (
-              <Pressable
-                key={cat.key}
-                onPress={() => setActiveCat(cat.key)}
-                style={({ pressed }) => [
-                  styles.catCard,
-                  pressed && { transform: [{ scale: 0.98 }] },
-                ]}
-                testID={`category-${cat.key}`}
-              >
-                <View style={styles.catIcon}>
-                  <Ionicons name={cat.icon} size={26} color={c.primaryDark} />
-                </View>
-                <Text style={styles.catLabel}>{cat.label}</Text>
-                <Text style={styles.catCount}>{count} items</Text>
-              </Pressable>
-            );
-          })}
-          <Pressable
-            onPress={() => setSection("Sessions")}
-            style={({ pressed }) => [
-              styles.catCard,
-              pressed && { transform: [{ scale: 0.98 }] },
-            ]}
-            testID="category-sessions"
-          >
-            <View style={styles.catIcon}>
-              <Ionicons name="planet-outline" size={26} color={c.primaryDark} />
-            </View>
-            <Text style={styles.catLabel}>Sessions</Text>
-            <Text style={styles.catCount}>{sessions.length} shared moments</Text>
-          </Pressable>
-        </ScrollView>
-      ) : section === "By person" ? (
-        <FlatList
-          data={byPerson}
-          keyExtractor={(p) => p.user.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <View style={styles.personCard}>
-              <Text style={styles.personName}>{item.user.name}</Text>
-              <Text style={styles.personMeta}>{item.items.length} items</Text>
-              <View style={styles.personFiles}>
-                {item.items.slice(0, 3).map((f) => (
-                  <FileRow key={f.id} f={f} />
-                ))}
-              </View>
-            </View>
-          )}
-          ListEmptyComponent={<EmptyHint label="No shared files yet." />}
-        />
-      ) : section === "Sessions" ? (
-        <FlatList
-          data={sessions}
-          keyExtractor={(s) => s.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => <SessionRow session={item} />}
-          ListEmptyComponent={
-            <EmptyHint label="Past shared sessions will collect here." />
-          }
-        />
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(f) => f.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => <FileRow f={item} showSender />}
-          ListEmptyComponent={<EmptyHint label="Nothing here yet." />}
-          ListHeaderComponent={
-            section === "Categories" && activeCat ? (
-              <Pressable onPress={() => setActiveCat(null)} style={styles.backLink}>
-                <Ionicons name="chevron-back" size={16} color={c.primary} />
-                <Text style={styles.backText}>All categories</Text>
-              </Pressable>
-            ) : null
-          }
-        />
-      )}
-    </SafeAreaView>
-  );
-}
-
-function FileRow({ f: fileItem, showSender = false }: { f: FileMsg; showSender?: boolean }) {
-  const { c, f: font } = useTheme();
-  const styles = React.useMemo(() => makeStyles(c, font), [c, font]);
-  const icon =
-    fileItem.type === "image" ? "image-outline" : fileItem.type === "voice" ? "musical-notes-outline" : "document-text-outline";
-  const title =
-    fileItem.file_name || (fileItem.type === "voice" ? "Voice message" : fileItem.type === "image" ? "Image" : "File");
-  return (
-    <View style={styles.fileRow}>
-      <View style={styles.fileIcon}>
-        <Ionicons name={icon as any} size={20} color={c.primaryDark} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Share a photo" onPress={() => router.push("/new-message?mode=photo")} style={({pressed}) => [styles.shareAction, {opacity: pressed ? 0.8 : 1}]}>
+          <Ionicons name="image-outline" size={21} color={c.primaryDark}/><Text style={styles.actionText}>Share photo</Text>
+        </Pressable>
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.fileTitle} numberOfLines={1}>
-          {title}
-        </Text>
-        <Text style={styles.fileSub} numberOfLines={1}>
-          {showSender && fileItem.sender ? `${fileItem.sender.name} · ` : ""}
-          {fmtBytes(fileItem.file_size) || dateLabel(fileItem.created_at)}
-        </Text>
-      </View>
-      <Text style={styles.fileDate}>{dateLabel(fileItem.created_at)}</Text>
     </View>
-  );
+    <View style={styles.segmentWrap}><ScrollView horizontal style={{flexGrow: 0}} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.segmentRow}>
+      {SECTIONS.map(value => <Pressable key={value} accessibilityRole="tab" accessibilityLabel={value} accessibilityState={{selected: section === value}}
+        onPress={() => {setSection(value); setActiveCat(null); setPersonId(null);}}
+        style={[styles.segment, {backgroundColor: section === value ? c.text : c.surface}]} testID={"files-segment-" + value}>
+        <Text style={[styles.segmentText, {color: section === value ? c.bg : c.textSecondary}]}>{value}</Text>
+      </Pressable>)}
+    </ScrollView></View>
+    {content}
+  </ContentFrame></SafeAreaView>;
 }
 
-function EmptyHint({ label }: { label: string }) {
-  const { c, f } = useTheme();
-  const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
-  return (
-    <View style={styles.empty}>
-      <Text style={styles.emptyText}>{label}</Text>
-    </View>
-  );
+function FileRow({file, showSender = false,cacheScope}: {file: FileMsg; showSender?: boolean;cacheScope:string}) {
+  const {c, f} = useTheme(); const {user} = useAuth(); const styles = useMemo(() => makeStyles(c, f), [c, f]);
+  const title = file.file_name || (file.type === "voice" ? "Voice message" : file.type === "image" ? "Image" : "File");
+  const subtitle = [showSender ? file.sender?.name : null, fmtBytes(file.file_size), dateLabel(file.created_at)].filter(Boolean).join(" · ");
+  if (fileCategory(file) === "image" && file.attachment_id) return <PrivateImageCard compact attachmentId={file.attachment_id} fileName={title}
+    unavailable={file.attachment_deleted} canDelete={file.sender_id === user?.id} subtitle={subtitle} cacheScope={cacheScope}/>;
+  const disabled = !file.attachment_id || !!file.attachment_deleted;
+  return <Pressable disabled={disabled} accessibilityRole="button" accessibilityState={{disabled}}
+    accessibilityLabel={(file.attachment_deleted ? "Unavailable: " : "Download ") + title}
+    onPress={async () => {
+      try {if (!user?.id) return; const result = await api.getAs<{url: string}>(user.id, "/attachments/" + file.attachment_id + "/download"); await openPrivateDownload(result.url);}
+      catch {Alert.alert("Download failed", "Please try again.");}
+    }} style={({pressed}) => [styles.fileRow, {opacity: disabled ? 0.7 : pressed ? 0.8 : 1}]}>
+    <View style={styles.fileIcon}><Ionicons name={file.type === "voice" ? "musical-notes-outline" : "document-text-outline"} size={22} color={c.primaryDark}/></View>
+    <View style={{flex: 1, minWidth: 0}}><Text style={styles.fileTitle} numberOfLines={1}>{title}</Text><Text style={styles.fileSub} numberOfLines={2}>{file.attachment_deleted ? "Removed from the conversation" : subtitle}</Text></View>
+    {!disabled ? <Ionicons name="download-outline" size={18} color={c.textSecondary}/> : null}
+  </Pressable>;
 }
-
-function SessionRow({ session }: { session: SpaceSession }) {
-  const { c, f } = useTheme();
-  const styles = React.useMemo(() => makeStyles(c, f), [c, f]);
+function EmptyHint({label, sessions = false}: {label: string; sessions?: boolean}) {
+  const router = useRouter();
+  return <ScreenState icon={sessions ? "planet-outline" : "folder-open-outline"} title={sessions ? "A moment to remember" : "A little room for shared things"}
+    detail={label + (sessions ? " Join a Space to spend time together." : " Photos, documents and voice memos stay together here.")}
+    action={{label: sessions ? "Open Spaces" : "Share a file", onPress: () => router.push(sessions ? "/(tabs)/spaces" : "/new-message?mode=file")}}/>;
+}
+function SessionRow({session}: {session: SpaceSession}) {
+  const {c, f} = useTheme(); const styles = useMemo(() => makeStyles(c, f), [c, f]);
   const mode = session.summary?.mode || "idle";
-  const title = session.summary?.title || session.space_name;
-  const when = session.summary?.ended_at
-    ? new Date(session.summary.ended_at).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-      })
-    : "";
-  return (
-    <View style={styles.fileRow}>
-      <View style={[styles.fileIcon, { backgroundColor: c.primaryBgSubtle }]}>
-        <Ionicons
-          name={mode === "video" ? "videocam-outline" : mode === "audio" ? "musical-notes-outline" : "planet-outline"}
-          size={20}
-          color={c.primaryDark}
-        />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.fileTitle} numberOfLines={1}>
-          {title}
-        </Text>
-        <Text style={styles.fileSub} numberOfLines={1}>
-          {session.space_name} · {mode === "video" ? "watched together" : mode === "audio" ? "listened together" : "session"}
-        </Text>
-      </View>
-      <Text style={styles.fileDate}>{when}</Text>
-    </View>
-  );
+  return <View style={styles.fileRow}>
+    <View style={styles.fileIcon}><Ionicons name={mode === "video" ? "videocam-outline" : mode === "audio" ? "musical-notes-outline" : "planet-outline"} size={22} color={c.primaryDark}/></View>
+    <View style={{flex: 1, minWidth: 0}}><Text style={styles.fileTitle} numberOfLines={2}>{session.summary?.title || session.space_name}</Text>
+      <Text style={styles.fileSub}>{session.space_name} · {mode === "video" ? "Watched together" : mode === "audio" ? "Listened together" : "Time together"}</Text>
+      <Text style={styles.fileSub}>{dateLabel(session.summary?.ended_at)}</Text></View>
+  </View>;
 }
-
 const makeStyles = (c: any, f: any) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: c.bg },
-  header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm },
-  kicker: {
-    fontFamily: f.bodyMedium,
-    fontSize: 12,
-    color: c.textTertiary,
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-    marginBottom: 4,
-  },
-  title: { fontFamily: f.heading, fontSize: 32, color: c.text, letterSpacing: -0.5 },
-  segmentRow: {
-    flexDirection: "row",
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  segment: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    backgroundColor: c.surface,
-  },
-  segmentActive: { backgroundColor: c.primary },
-  segmentText: { color: c.textSecondary, fontFamily: f.bodyMedium, fontSize: 13 },
-  segmentTextActive: { color: c.textInverse },
-  list: { paddingHorizontal: spacing.md, paddingBottom: spacing.xxl, gap: spacing.sm },
-  fileRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacing.md,
-    backgroundColor: c.surface,
-    borderRadius: radius.lg,
-    gap: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  fileIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.sm,
-    backgroundColor: c.primaryBgSubtle,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  fileTitle: { fontFamily: f.bodyMedium, fontSize: 15, color: c.text },
-  fileSub: { fontFamily: f.body, fontSize: 12, color: c.textSecondary, marginTop: 2 },
-  fileDate: { fontFamily: f.body, fontSize: 12, color: c.textTertiary },
-  catGrid: {
-    paddingHorizontal: spacing.md,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.md,
-    paddingBottom: spacing.xxl,
-  },
-  catCard: {
-    width: "48%",
-    aspectRatio: 1,
-    backgroundColor: c.surface,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    justifyContent: "space-between",
-  },
-  catIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: c.primaryBgSubtle,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  catLabel: { fontFamily: f.heading, fontSize: 22, color: c.text },
-  catCount: { fontFamily: f.body, fontSize: 13, color: c.textSecondary },
-  personCard: {
-    backgroundColor: c.surface,
-    borderRadius: radius.xl,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  personName: { fontFamily: f.bodyBold, fontSize: 16, color: c.text },
-  personMeta: { fontFamily: f.body, fontSize: 12, color: c.textSecondary, marginTop: 2 },
-  personFiles: { marginTop: spacing.sm, gap: spacing.sm },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  errorTitle: { fontFamily: f.bodyMedium, fontSize: 15, color: c.textSecondary, textAlign: "center" },
-  errorRetry: { fontFamily: f.body, fontSize: 13, color: c.primary, marginTop: 8 },
-  empty: { padding: spacing.xl, alignItems: "center" },
-  emptyText: { fontFamily: f.body, color: c.textSecondary },
-  backLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  backText: { color: c.primary, fontFamily: f.bodyMedium, fontSize: 14, marginLeft: 4 },
+  safe: {flex: 1, backgroundColor: c.bg},
+  intro: {paddingHorizontal: spacing.lg},
+  actions: {flexDirection: "row", gap: 10, marginBottom: 8},
+  shareAction: {flex: 1, minWidth: 0, minHeight: layout.touchTarget, borderRadius: radius.md, padding: 12, backgroundColor: c.surface, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center"},
+  actionText: {...typography.caption, color: c.text, fontFamily: f.bodyMedium, flexShrink: 1},
+  segmentWrap: {flexShrink: 0, marginBottom: spacing.sm},
+  segmentRow: {paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.sm},
+  segment: {minHeight: layout.touchTarget, justifyContent: "center", paddingHorizontal: 16, paddingVertical: 12, borderRadius: radius.full},
+  segmentText: {...typography.caption, fontFamily: f.bodyMedium},
+  list: {paddingHorizontal: spacing.md, paddingBottom: spacing.xl, gap: spacing.sm, flexGrow: 1},
+  fileRow: {minHeight: 80, flexDirection: "row", alignItems: "center", padding: spacing.md, backgroundColor: c.surface, borderRadius: radius.lg, gap: 12, marginBottom: spacing.sm},
+  fileIcon: {width: 40, height: 40, borderRadius: radius.sm, backgroundColor: c.primaryBgSubtle, alignItems: "center", justifyContent: "center"},
+  fileTitle: {...typography.body, fontFamily: f.bodyMedium, color: c.text},
+  fileSub: {...typography.caption, fontFamily: f.body, color: c.textSecondary, marginTop: 3},
+  catGrid: {paddingHorizontal: spacing.md, flexDirection: "row", flexWrap: "wrap", gap: spacing.md, paddingBottom: spacing.xl},
+  catCard: {flexBasis: "45%", flexGrow: 1, minWidth: 120, minHeight: 184, backgroundColor: c.surface, borderRadius: radius.xl, padding: 20, gap: 12},
+  catIcon: {width: 48, height: 48, borderRadius: 16, backgroundColor: c.primaryBgSubtle, alignItems: "center", justifyContent: "center"},
+  catLabel: {fontFamily: f.heading, fontSize: 20, lineHeight: 26, color: c.text},
+  catCount: {...typography.caption, fontFamily: f.body, color: c.textSecondary},
+  personCard: {backgroundColor: c.surface, borderRadius: radius.xl, padding: spacing.md, marginBottom: spacing.md},
+  personName: {...typography.body, fontFamily: f.bodyBold, color: c.text},
+  personMeta: {...typography.caption, fontFamily: f.body, color: c.textSecondary, marginTop: 2},
+  personFiles: {marginTop: spacing.md, gap: spacing.sm},
+  center: {flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.lg, gap: 12},
+  loadingText: {...typography.caption, fontFamily: f.body, color: c.textSecondary, textAlign: "center"},
+  backLink: {minHeight: layout.touchTarget, flexDirection: "row", gap: 6, alignItems: "center", paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, marginBottom: spacing.sm},
+  backText: {...typography.caption, color: c.primaryDark, fontFamily: f.bodyMedium},
 });
