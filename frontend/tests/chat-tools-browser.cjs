@@ -148,10 +148,13 @@ const server=http.createServer((req,res)=>{
   try{
     await page.goto(origin+"/");await openMain();
     assert.equal(await main().getByRole("button",{name:"Message actions",exact:true}).count(),0,"Permanent message dots must be gone");
-    await main().getByText("Meet me by the garden gate.",{exact:true}).click();
+    await main().getByTestId("message-row-own-original").getByText("Meet me by the garden gate.",{exact:true}).click();
     await page.getByRole("button",{name:"Copy text",exact:true}).click();
     await page.getByTestId("message-copy-notice").filter({hasText:"Message copied."}).waitFor();
     assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),"Meet me by the garden gate.");
+    await closePanel();
+    await main().getByTestId("message-actions-own-original").press("Enter");
+    await page.getByRole("heading",{name:"Message",exact:true}).waitFor();
     await closePanel();
     const link=main().getByRole("link",{name:"https://example.test/sketch?view=wide",exact:true});
     assert.equal(await link.getAttribute("href"),"https://example.test/sketch?view=wide");
