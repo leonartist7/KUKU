@@ -86,10 +86,13 @@ function ChatConversation({id}: {id: string}) {
   const inputRef = useRef<TextInput>(null);
   const [compactWindow,setCompactWindow]=useState(false);
   const tailAnchoring=useRef(true);
+  const readerIntent=useRef(0);
+  const webListId="chat-messages-"+id+"-"+(user?.id||"");
+  const webMessageList=()=>Platform.OS==="web"?document.getElementById(webListId):null;
   const latestVisible=useRef<string|null>(null);
   const scrollPosition=useRef({offset:0,content:0,viewport:0});
   const rowLayouts=useRef(new Map<string,{y:number;height:number}>());
-  const preservePrepend=useRef<{scope:string;anchorId:string;index:number;viewOffset:number;target?:number;attempts:number;stable?:number;ignoreNext?:boolean}|null>(null);
+  const preservePrepend=useRef<{scope:string;anchorId:string;index:number;viewOffset:number;target?:number;attempts:number;stable?:number;stableSince?:number;compacted?:boolean}|null>(null);
   const prependRetryTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const tailRetryTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const tailRetryCount=useRef(0);
@@ -128,16 +131,23 @@ function ChatConversation({id}: {id: string}) {
     const pending=preservePrepend.current;
     if(!pending||activeChat.current!==pending.scope){cancelPrependAnchor();return;}
     if(pending.attempts>=24){cancelPrependAnchor();return;}
-    pending.attempts+=1;pending.ignoreNext=true;pending.target=undefined;
+    pending.attempts+=1;pending.target=undefined;
     const layout=rowLayouts.current.get(pending.anchorId);
     if(Platform.OS==="web"){
-      const list=document.querySelector('[data-testid="chat-message-list"]') as HTMLElement|null;
+      const list=webMessageList();
       const row=list?Array.from(list.querySelectorAll<HTMLElement>('[data-testid^="message-row-"]')).find(node=>node.dataset.testid==="message-row-"+pending.anchorId):null;
       if(list){
         pending.target=row?Math.max(0,list.scrollTop+(row.getBoundingClientRect().top-list.getBoundingClientRect().top)-pending.viewOffset):Math.max(0,(list.scrollHeight-list.clientHeight)*(pending.index/Math.max(1,messagesRef.current.length-1)));
-        pending.stable=row&&Math.abs(list.scrollTop-pending.target)<=2?(pending.stable||0)+1:0;
+        const stable=!!row&&Math.abs(list.scrollTop-pending.target)<=2;
+        const checkedAt=performance.now();
+        pending.stableSince=stable?(pending.stableSince??checkedAt):undefined;
         list.scrollTop=pending.target;list.dispatchEvent(new Event("scroll"));
-        if(pending.stable>=3){cancelPrependAnchor();return;}
+        // Layout/content callbacks can run several times in one frame. Keep the
+        // anchor through real settling time and through window compaction.
+        if(pending.stableSince!==undefined&&checkedAt-pending.stableSince>=160){
+          if(pending.compacted){cancelPrependAnchor();return;}
+          pending.compacted=true;pending.stableSince=undefined;setCompactWindow(true);
+        }
       }
     }else if(layout){
       pending.target=Math.max(0,layout.y-pending.viewOffset);
@@ -151,9 +161,20 @@ function ChatConversation({id}: {id: string}) {
     prependRetryTimer.current=setTimeout(requestPrependAnchor,80);
   }
   function cancelListAnchors(){
+    readerIntent.current++;
     cancelPrependAnchor();tailAnchoring.current=false;latestVisible.current=null;
     if(tailRetryTimer.current)clearTimeout(tailRetryTimer.current);tailRetryTimer.current=null;setCompactWindow(true);
   }
+  useEffect(()=>{
+    if(Platform.OS!=="web"||loading)return;
+    const list=webMessageList();if(!list)return;
+    const reading=()=>cancelListAnchors();
+    const keyboard=(event:KeyboardEvent)=>{if(["ArrowUp","ArrowDown","PageUp","PageDown","Home","End"," "].includes(event.key))reading();};
+    list.addEventListener("wheel",reading,{passive:true});
+    list.addEventListener("pointerdown",reading,{passive:true});
+    list.addEventListener("keydown",keyboard);
+    return()=>{list.removeEventListener("wheel",reading);list.removeEventListener("pointerdown",reading);list.removeEventListener("keydown",keyboard);};
+  },[loading,webListId]);
   const tools=useChatTools({chatId:id,userId:user?.id,scopeRef:activeChat,messages,messagesRef,setMessages,setError});
   const {updated,reconcile,mutate,openActions,openOriginal}=tools;
   const reactTo=useCallback((messageId:string,emoji:string|null)=>{void mutate(messageId,"reaction",{emoji});},[mutate]);
@@ -243,7 +264,15 @@ function ChatConversation({id}: {id: string}) {
   function jumpToLatest(){cancelPrependAnchor();tailAnchoring.current=true;tailRetryCount.current=0;nearBottom.current=true;setNewMessages(false);setCompactWindow(false);requestTailAnchor(true);}
   useEffect(()=>{
     const latest=messages[messages.length-1];if(!latest)return;
-    if(nearBottom.current||latest.sender_id===user?.id){const timer=setTimeout(jumpToLatest,60);return()=>clearTimeout(timer);}
+    if(nearBottom.current||latest.sender_id===user?.id){
+      const intent=readerIntent.current,scope=activeChat.current;
+      const timer=setTimeout(()=>{
+        if(activeChat.current!==scope)return;
+        if(readerIntent.current===intent&&nearBottom.current&&!preservePrepend.current)jumpToLatest();
+        else if(!nearBottom.current)setNewMessages(true);
+      },60);
+      return()=>clearTimeout(timer);
+    }
     setNewMessages(true);
   },[messages[messages.length-1]?.id]);
   useEffect(()=>{
@@ -321,7 +350,7 @@ function ChatConversation({id}: {id: string}) {
         const index=merged.findIndex(message=>message.id===anchor.message.id);
         let viewOffset=anchor.layout!.y-position.offset;
         if(Platform.OS==="web"){
-          const list=document.querySelector('[data-testid="chat-message-list"]') as HTMLElement|null;
+          const list=webMessageList();
           const row=list?Array.from(list.querySelectorAll<HTMLElement>('[data-testid^="message-row-"]')).find(node=>node.dataset.testid==="message-row-"+anchor.message.id):null;
           if(list&&row)viewOffset=row.getBoundingClientRect().top-list.getBoundingClientRect().top;
         }
@@ -420,14 +449,14 @@ function ChatConversation({id}: {id: string}) {
           <View style={{flex: 1}}><Decor/><FlatList
             ref={listRef}
             testID="chat-message-list"
+            nativeID={webListId}
             scrollEventThrottle={32}
             onScroll={event=>{
               const {contentOffset,contentSize,layoutMeasurement}=event.nativeEvent;
               scrollPosition.current={offset:contentOffset.y,content:contentSize.height,viewport:layoutMeasurement.height};
-              const prepend=preservePrepend.current;
-              if(prepend?.target!==undefined&&Math.abs(contentOffset.y-prepend.target)>8){
-                if(prepend.ignoreNext)prepend.ignoreNext=false;else cancelPrependAnchor();
-              }else if(prepend)prepend.ignoreNext=false;
+              // Virtualization and our own anchor corrections also emit scroll.
+              // Only explicit input cancels a prepend; transient geometry does not.
+              if(preservePrepend.current){nearBottom.current=false;return;}
               if(tailAnchoring.current){settleTailAnchor();return;}
               nearBottom.current=contentSize.height-layoutMeasurement.height-contentOffset.y<80;
               if(nearBottom.current)setNewMessages(false);
@@ -438,7 +467,6 @@ function ChatConversation({id}: {id: string}) {
             onScrollToIndexFailed={({index,averageItemLength})=>{
               const pending=preservePrepend.current;
               if(pending&&pending.index===index){
-                pending.ignoreNext=true;
                 listRef.current?.scrollToOffset({offset:Math.max(0,averageItemLength*index-pending.viewOffset),animated:false});
               }
             }}

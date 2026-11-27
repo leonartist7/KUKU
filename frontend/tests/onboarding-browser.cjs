@@ -357,6 +357,7 @@ const server=http.createServer((req,res)=>{
     setHistory(history);await page.goto(origin+"/chat/synthetic-chat");
     await page.getByText("History 79",{exact:true}).waitFor();
     const scroller=page.getByTestId("chat-message-list");
+    await scroller.hover();await page.mouse.wheel(0,-1000);
     await scroller.evaluate(node=>{node.scrollTop=0;node.dispatchEvent(new Event("scroll"));});
     await page.waitForTimeout(250);
     setHistory([...history,{id:"incoming-80",chat_id:"synthetic-chat",type:"text",text:"Arrived while reading",sender_id:"qa-user",created_at:"2026-10-30T12:00:00Z"}]);

@@ -21,6 +21,12 @@ Clipboard and does not read the clipboard; failure never reports successful copy
 The timestamp remains a keyboard/screen-reader accessible action with an expanded
 hit area, without a visible dots icon.
 
+Reading older messages also cancels delayed tail jumps on real wheel, pointer and
+scroll-key intent. Prepend recovery ignores virtualizer-generated scroll events, uses
+monotonic settling time and preserves the anchor through window compaction. The
+chat DOM target is scoped to the current account/conversation. Browser fixtures
+issue real wheel input before their exact reading positions; pixel checks remain strict.
+
 Normal cached-profile restore has no reconnecting banner. Authentication still
 requires server proof before private requests/background operations. Genuine restore
 failure retains a visible retry, including a failed sign-out during pending restore.

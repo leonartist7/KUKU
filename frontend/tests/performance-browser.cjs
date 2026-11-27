@@ -108,7 +108,7 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   assert.ok(report.chat.rendered_message_rows>0&&report.chat.rendered_message_rows<100,"Settled chat window must mount fewer than the 100 loaded rows");
   const latestInitial=await rowPosition(p.page,"perf-99");assert.ok(latestInitial.bottom>0&&latestInitial.top<latestInitial.viewport&&latestInitial.bottomGap<=80,"Initial latest message must intersect the list at its tail");
 
-  const scrollStarted=await beginAction(p);const scroll=p.page.getByTestId("chat-message-list");await scroll.evaluate(e=>{e.scrollTop=(e.scrollHeight-e.clientHeight)*0.45;e.dispatchEvent(new Event("scroll"));});await p.page.waitForTimeout(200);
+  const scrollStarted=await beginAction(p);const scroll=p.page.getByTestId("chat-message-list");await scroll.hover();await p.page.mouse.wheel(0,-1000);await scroll.evaluate(e=>{e.scrollTop=(e.scrollHeight-e.clientHeight)*0.45;e.dispatchEvent(new Event("scroll"));});await p.page.waitForTimeout(200);
   const anchorBefore=await firstVisiblePerfRow(p.page);assert.ok(anchorBefore,"A middle reading anchor must be mounted");
   history.push({id:"perf-incoming-100",chat_id:"perf-chat",sender_id:other.id,sender_name:other.name,type:"text",text:"New performance note while reading",created_at:"2026-11-04T10:02:00.000Z",revision:0});
   await p.page.evaluate(()=>document.dispatchEvent(new Event("visibilitychange")));
@@ -122,7 +122,7 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   await p.page.getByRole("button",{name:"Jump to new messages",exact:true}).waitFor({state:"hidden"});
   const latestAfterJump=await rowPosition(p.page,"perf-incoming-100");assert.ok(latestAfterJump.bottomGap<=80);
 
-  await scroll.evaluate(e=>{e.scrollTop=0;e.dispatchEvent(new Event("scroll"));});await p.page.waitForTimeout(200);
+  await scroll.hover();await p.page.mouse.wheel(0,-1000);await scroll.evaluate(e=>{e.scrollTop=0;e.dispatchEvent(new Event("scroll"));});await p.page.waitForTimeout(200);
   const prependAnchorBefore=await rowPosition(p.page,"perf-0");
   const olderResponse=p.page.waitForResponse(response=>new URL(response.url()).searchParams.get("before")==="perf-0"&&response.status()===200);
   await p.page.getByRole("button",{name:"Load older messages",exact:true}).click();await olderResponse;
@@ -132,7 +132,7 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   const prependAnchorAfter=await rowPosition(p.page,"perf-0");
   report.chat.anchor={remote_before:anchorBefore,remote_after:anchorAfter,prepend_before:prependAnchorBefore,prepend_after:prependAnchorAfter};
   assert.ok(Math.abs(prependAnchorAfter.top-prependAnchorBefore.top)<=4,"Loading older messages must preserve the visible row position");
-  await scroll.evaluate(e=>{e.scrollTop=0;e.dispatchEvent(new Event("scroll"));});await p.page.getByTestId("message-row-perf-old-0").waitFor();
+  await scroll.hover();await p.page.mouse.wheel(0,-1000);await scroll.evaluate(e=>{e.scrollTop=0;e.dispatchEvent(new Event("scroll"));});await p.page.getByTestId("message-row-perf-old-0").waitFor();
   report.chat.after_scroll=await metrics(p,"remote-append-jump-and-prepend-preserved",scrollStarted);
   report.checks.push("Latest row intersects the viewport; settled chat mounts fewer than 100 rows; remote append and concurrent-append 50-row prepend preserve reading position");
   fullPhoto=await p.page.evaluate(encoded=>new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>{const c=document.createElement("canvas");c.width=32;c.height=32;c.getContext("2d").drawImage(img,0,0,32,32);resolve(c.toDataURL("image/jpeg").split(",")[1]);};img.onerror=reject;img.src="data:image/jpeg;base64,"+encoded;}),PHOTO);
