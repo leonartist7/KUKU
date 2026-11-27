@@ -14,14 +14,14 @@ export default function SpaceAudio({ content, state, offsetMs, uid, onDuration }
   const player = useRef<Player | null>(null), latest = useRef({ state, offsetMs, onDuration });
   latest.current = { state, offsetMs, onDuration };
   const [status, setStatus] = useState<Status>("loading"), [error, setError] = useState(""), [muted, setMuted] = useState(false), [revision, setRevision] = useState(0);
-  const gestureRequired = useRef(false), busy = useRef(false), live = useRef(false);
+  const gestureRequired = useRef(false), live = useRef(false), generation = useRef(0);
   const mutedRef = useRef(muted); mutedRef.current = muted;
   const key = content.source === "upload" || content.upload_id ? "upload:" + content.upload_id : content.audio_id + ":" + content.url;
 
   useEffect(() => {
-    let active = true, nativeListener: { remove: () => void } | undefined;
+    let active = true, busy = false, nativeListener: { remove: () => void } | undefined;
     let interval: ReturnType<typeof setInterval> | undefined, timeout: ReturnType<typeof setTimeout> | undefined;
-    live.current = true; gestureRequired.current = false; busy.current = false;
+    generation.current++; live.current = true; gestureRequired.current = false;
     setStatus("loading"); setError("");
     const alive = () => active;
     const ready = () => {
@@ -33,13 +33,13 @@ export default function SpaceAudio({ content, state, offsetMs, uid, onDuration }
     };
     async function synchronize(force = false) {
       const current = player.current;
-      if (!alive() || !current || busy.current) return;
+      if (!alive() || !current || busy) return;
       const loaded = Platform.OS === "web" ? (current as HTMLAudioElement).readyState >= 1 : (current as AudioPlayer).isLoaded;
       if (!loaded) return;
       if (Number.isFinite(current.duration) && current.duration > 0) latest.current.onDuration?.(current.duration);
       const target = playbackPosition(latest.current.state, timelineNow(), latest.current.offsetMs, current.duration);
       if (current.duration > 0 && target >= current.duration - 0.05) { current.pause(); setStatus("ended"); return; }
-      busy.current = true;
+      busy = true;
       try {
         if (playbackCorrection(current.currentTime, target, force) === "seek") {
           if (Platform.OS === "web") current.currentTime = target;
@@ -51,7 +51,10 @@ export default function SpaceAudio({ content, state, offsetMs, uid, onDuration }
           if (Platform.OS === "web") {
             const media = current as HTMLAudioElement;
             if (media.paused && !media.ended) await media.play();
-            if (alive()) setStatus(media.paused ? "ready" : "playing");
+            if (alive()) {
+              if (!latest.current.state.is_playing) { media.pause(); setStatus("ready"); }
+              else setStatus(media.paused ? "ready" : "playing");
+            }
           } else {
             const media = current as AudioPlayer;
             if (!media.playing) media.play();
@@ -62,7 +65,7 @@ export default function SpaceAudio({ content, state, offsetMs, uid, onDuration }
         if (!alive()) return;
         if (cause instanceof Error && cause.name === "NotAllowedError") { gestureRequired.current = true; setStatus("blocked"); }
         else { gestureRequired.current = true; setError("Playback paused. Reopen this audio to try again."); setStatus("error"); }
-      } finally { busy.current = false; }
+      } finally { busy = false; }
     }
     void (async () => {
       try {
@@ -98,37 +101,42 @@ export default function SpaceAudio({ content, state, offsetMs, uid, onDuration }
         timeout = setTimeout(() => { const media = player.current; const loaded = media && (Platform.OS === "web" ? (media as HTMLAudioElement).readyState >= 1 : (media as AudioPlayer).isLoaded); if (alive() && !loaded) { setStatus("error"); setError("Audio is taking too long to load. Try reopening it."); } }, 15000);
         interval = setInterval(() => void synchronize(), 1000);
       } catch (cause) {
-        if (alive()) { setError(cause instanceof Error ? cause.message : "This audio could not be opened."); setStatus("error"); }
+        if (alive()) { setError("This audio could not be opened. Reopen it to try again."); setStatus("error"); }
       }
     })();
     return () => {
-      active = false; live.current = false;
+      active = false; live.current = false; generation.current++;
       if (interval) clearInterval(interval);
       if (timeout) clearTimeout(timeout);
-      nativeListener?.remove();
+      try { nativeListener?.remove(); } catch { /* Continue releasing the player. */ }
       const media = player.current; player.current = null;
       if (!media) return;
-      media.pause();
+      try { media.pause(); } catch { /* Release the source even if pause fails. */ }
       if (Platform.OS === "web") {
         const element = media as HTMLAudioElement;
         element.onloadedmetadata = element.oncanplay = element.onwaiting = element.onplaying = element.onerror = element.onended = null;
-        element.removeAttribute("src"); element.load();
-      } else (media as AudioPlayer).remove();
+        try { element.removeAttribute("src"); } catch { /* The element may already be detached. */ }
+        try { element.load(); } catch { /* The source has already been cleared. */ }
+      } else { try { (media as AudioPlayer).remove(); } catch { /* The player may already be removed. */ } }
     };
   }, [key, uid, revision]);
 
   useEffect(() => { if (player.current) player.current.muted = muted; }, [muted, revision]);
 
   async function joinPlayback() {
-    const media = player.current;
-    if (!media) return;
+    const media = player.current, attempt = generation.current;
+    const current = () => live.current && attempt === generation.current && player.current === media;
+    if (!media || !current() || !latest.current.state.is_playing) return;
     // Call play before awaiting anything so browser gesture ownership is retained.
     try {
       const started = media.play(); gestureRequired.current = false;
       await started;
-      if (live.current) setStatus("playing");
+      if (current()) {
+        if (!latest.current.state.is_playing) { media.pause(); setStatus("ready"); }
+        else setStatus("playing");
+      }
     } catch (cause) {
-      if (live.current) { gestureRequired.current = true; setStatus("blocked"); }
+      if (current()) { gestureRequired.current = true; setStatus("blocked"); }
     }
   }
   const label = status === "loading" ? "Opening audio…" : status === "blocked" ? "Tap to join playback" : status === "buffering" ? "Buffering…" : status === "ended" ? "Track finished" : state.is_playing && status === "playing" ? "Listening together" : state.is_playing ? "Ready to listen" : "Playback paused";

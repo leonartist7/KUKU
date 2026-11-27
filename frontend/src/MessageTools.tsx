@@ -8,7 +8,7 @@ import {messageLinkTargets} from "./messageLinks";
 import MessageText from "./MessageText";
 import {useTheme} from "./ThemeContext";
 import {useReducedMotion} from "./useReducedMotion";
-import {canEditMessage,canRemoveMessage,CHAT_REACTIONS,messagePreview,messageRemoved,messageRevision,ownReaction} from "./chatTools";
+import {canEditMessage,canRemoveMessage,CHAT_REACTIONS,messagePreview,messageRemoved,messageRevision,ownReaction,searchMessagePage} from "./chatTools";
 import PrivateImageCard from "./PrivateImageCard";
 import {VoiceMessageBubble,FilePreviewCard} from "./MessageParts";
 import {isImageFilename} from "./imagePreview";
@@ -75,11 +75,11 @@ export function MessageActionSheet({message,userId,busy,error,onClose,onReply,on
       {message&&!removed&&editing?<View style={{gap:12}}>
         <TextInput accessibilityLabel="Edit message text" testID="edit-message-input" multiline autoFocus maxLength={10000} editable={!busy} value={editText} onChangeText={setEditText} style={[s.editInput,{backgroundColor:c.surface,color:c.text,fontFamily:f.body}]}/>
         {error?.conflict?action("Keep draft and review latest","refresh-outline",()=>{setRevision(messageRevision(message));setReviewed(true);onClearError();}):null}
-        <View style={s.buttons}>{action("Cancel","close-outline",()=>{setEditing(false);onClearError();})}<Pressable accessibilityRole="button" accessibilityLabel="Save edited message" disabled={busy||!editText.trim()} onPress={()=>onEdit(editText.trim(),revision)} style={[s.primaryButton,{backgroundColor:c.primary,opacity:busy||!editText.trim()?0.5:1}]}><Text style={{fontFamily:f.bodyBold,color:c.textInverse,fontSize:15}}>Save changes</Text></Pressable></View>
+        <View style={s.buttons}>{action("Cancel","close-outline",()=>{setEditing(false);onClearError();})}<Pressable accessibilityRole="button" accessibilityLabel="Save edited message" disabled={busy||!!error?.conflict||!editText.trim()} onPress={()=>{if(!busy&&!error?.conflict&&editText.trim())onEdit(editText.trim(),revision);}} style={[s.primaryButton,{backgroundColor:c.primary,opacity:busy||!!error?.conflict||!editText.trim()?0.5:1}]}><Text style={{fontFamily:f.bodyBold,color:c.textInverse,fontSize:15}}>Save changes</Text></Pressable></View>
       </View>:message&&!removed&&removing?<View style={{gap:12}}>
         <Text style={{fontFamily:f.body,fontSize:15,lineHeight:23,color:c.text}}>This removes the message for everyone. Replies will show that it was removed.</Text>
         {error?.conflict?action("Review latest before removing","refresh-outline",()=>{setRevision(messageRevision(message));setReviewed(true);onClearError();}):null}
-        <View style={s.buttons}>{action("Keep message","close-outline",()=>{setRemoving(false);onClearError();})}<Pressable accessibilityRole="button" accessibilityLabel="Confirm remove message for everyone" disabled={busy} onPress={()=>onRemove(revision)} style={[s.primaryButton,{backgroundColor:c.error}]}><Text style={{fontFamily:f.bodyBold,color:c.textInverse,fontSize:15}}>Remove</Text></Pressable></View>
+        <View style={s.buttons}>{action("Keep message","close-outline",()=>{setRemoving(false);onClearError();})}<Pressable accessibilityRole="button" accessibilityLabel="Confirm remove message for everyone" disabled={busy||!!error?.conflict} onPress={()=>{if(!busy&&!error?.conflict)onRemove(revision);}} style={[s.primaryButton,{backgroundColor:c.error,opacity:busy||!!error?.conflict?0.5:1}]}><Text style={{fontFamily:f.bodyBold,color:c.textInverse,fontSize:15}}>Remove</Text></Pressable></View>
       </View>:message&&!removed?<View>
         <View style={s.reactionPicker}>{CHAT_REACTIONS.map(emoji=><Pressable key={emoji} accessibilityRole="button" accessibilityLabel={"React with "+emoji} accessibilityState={{selected:selectedReaction===emoji,disabled:busy}} disabled={busy} onPress={()=>onReact(selectedReaction===emoji?null:emoji)} style={[s.touch,{borderRadius:22,backgroundColor:selectedReaction===emoji?c.primaryBgSubtle:"transparent"}]}><Text style={{fontSize:26}}>{emoji}</Text></Pressable>)}</View>
         {action("Reply","return-up-back-outline",onReply)}
@@ -114,7 +114,7 @@ export function ChatFindSheet({mode,chatId,userId,refreshVersion,onClose,onOpen}
     const timer=setTimeout(()=>{void(async()=>{try{
       const path=mode==="pins"?"/chats/"+chatId+"/pins":"/chats/"+chatId+"/search?q="+encodeURIComponent(search)+"&limit=20";
       const data=await api.getAs<Message[]>(userId,path);if(requestVersion.current!==version)return;
-      setResults(data.filter(message=>message.chat_id===chatId&&!messageRemoved(message)));setMore(mode==="search"&&data.length===20);
+      const page=searchMessagePage(chatId,[],data);setResults(page.results);setMore(mode==="search"&&page.more);
     }catch(failure){if(requestVersion.current===version)setError(failure instanceof Error?failure.message:"Couldn't load messages. Please try again.");}
     finally{if(requestVersion.current===version)setLoading(false);}})();},mode==="search"?300:0);
     return()=>{clearTimeout(timer);requestVersion.current++;};
@@ -124,8 +124,7 @@ export function ChatFindSheet({mode,chatId,userId,refreshVersion,onClose,onOpen}
     try{
       const data=await api.getAs<Message[]>(userId,"/chats/"+chatId+"/search?q="+encodeURIComponent(search)+"&before="+encodeURIComponent(results[results.length-1].id)+"&limit=20");
       if(requestVersion.current!==version)return;
-      setResults(previous=>Array.from(new Map([...previous,...data.filter(message=>message.chat_id===chatId&&!messageRemoved(message))].map(message=>[message.id,message])).values()).slice(0,100));
-      setMore(data.length===20&&results.length+data.length<100);
+      const page=searchMessagePage(chatId,results,data);setResults(page.results);setMore(page.more);
     }catch(failure){if(requestVersion.current===version)setError(failure instanceof Error?failure.message:"Couldn't load more messages.");}
     finally{if(requestVersion.current===version)setLoading(false);}
   }

@@ -7,7 +7,8 @@ let flushing=false;
 function key(uid:string){return "kuku_outbox_"+uid;}
 async function read(uid:string):Promise<PendingMessage[]>{const s=await AsyncStorage.getItem(key(uid));return s?JSON.parse(s):[];}
 function serial<T>(fn:()=>Promise<T>):Promise<T>{const next=chain.then(fn,fn);chain=next.catch(()=>{});return next;}
-async function write(uid:string,items:PendingMessage[]){await AsyncStorage.setItem(key(uid),JSON.stringify(items));listeners.forEach(fn=>fn());}
+function notify(){listeners.forEach(fn=>{try{fn();}catch{/* A view failure cannot turn a durable write into a failed send. */}});}
+async function write(uid:string,items:PendingMessage[]){await AsyncStorage.setItem(key(uid),JSON.stringify(items));notify();}
 export function subscribeOutbox(fn:()=>void){listeners.add(fn);return()=>{listeners.delete(fn);};}
 export function getOutbox(uid:string){return serial(()=>read(uid));}
 export function queueMessage(uid:string,payload:Record<string,unknown>){
@@ -20,15 +21,19 @@ export function queueMessage(uid:string,payload:Record<string,unknown>){
 }
 export function retryMessage(uid:string,id:string){return serial(async()=>write(uid,(await read(uid)).map(item=>item.id===id?{...item,state:"queued",error:undefined}:item)));}
 export function removePending(uid:string,id:string){return serial(async()=>write(uid,(await read(uid)).filter(item=>item.id!==id)));}
-export function clearOutbox(uid:string){return serial(async()=>{await AsyncStorage.removeItem(key(uid));listeners.forEach(fn=>fn());});}
+export function clearOutbox(uid:string){return serial(async()=>{await AsyncStorage.removeItem(key(uid));notify();});}
 export async function flushOutbox(uid:string,isCurrent:()=>boolean){
   if(flushing)return;flushing=true;
   try{
-    for(const item of await getOutbox(uid)){
+    for(const snapshot of await getOutbox(uid)){
       if(!isCurrent())break;
-      if(item.state!=="queued")continue;
+      // A previous send can be slow. Re-read through the same queue as Remove,
+      // Retry and logout so a cancelled later item cannot escape the snapshot.
+      const item=await serial(async()=>(await read(uid)).find(m=>m.id===snapshot.id));
+      if(!isCurrent())break;
+      if(!item || item.state!=="queued")continue;
       try{
-        await api.postAs<Message>(uid,"/chats/"+item.chat_id+"/messages",item.payload);
+        await api.postAs<Message>(uid,"/chats/"+encodeURIComponent(item.chat_id)+"/messages",item.payload);
         await removePending(uid,item.id);
       }catch(e){
         if(e instanceof ApiError && [400,403,404,409,413,422].includes(e.status)){
