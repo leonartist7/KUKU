@@ -16,8 +16,9 @@ const server=http.createServer((req,res)=>{
   await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
   const origin="http://127.0.0.1:"+server.address().port;
   const browser=await chromium.launch({headless:true});
-  const context=await browser.newContext({viewport:{width:390,height:900},reducedMotion:"reduce",timezoneId:"UTC"});
+  const context=await browser.newContext({viewport:{width:390,height:900},reducedMotion:"reduce",timezoneId:"UTC",permissions:["clipboard-read","clipboard-write"]});
   const page=await context.newPage();page.setDefaultTimeout(20000);
+  await context.route("https://example.test/**",route=>route.fulfill({status:200,contentType:"text/html",body:"<title>Fixture link</title>Fixture destination"}));
   const errors=[];page.on("pageerror",error=>errors.push(String(error)));
   const alice={id:"qa-alex",name:"Alex",email:"alex@example.test",email_verified:true,onboarding_complete:true};
   const morgan={id:"qa-morgan",name:"Morgan",email:"morgan@example.test",email_verified:true,onboarding_complete:true};
@@ -31,6 +32,7 @@ const server=http.createServer((req,res)=>{
     make("reply-target","Bring the little blue cup.",sam,4),
     {...make("existing-reply","Keeping the original close.",sam,3),reply_to_id:"own-original"},
     make("vanishing-original","A temporary source for a draft.",sam,2.5),
+    make("link-note","Sketches: https://example.test/sketch?view=wide. Try www.example.test/notes!",sam,2.2),
     make("latest-note","Newest conversation marker.",alice,2),
     make("side-note","A separate conversation with Jordan.",jordan,1,"chat-side"),
     make("foreign-garden","Garden note from the side conversation.",jordan,1,"chat-side"),
@@ -145,6 +147,29 @@ const server=http.createServer((req,res)=>{
   async function openMain(){await page.getByTestId("chat-row-chat-main").click();await main().getByText("Newest conversation marker.",{exact:true}).waitFor();}
   try{
     await page.goto(origin+"/");await openMain();
+    assert.equal(await main().getByRole("button",{name:"Message actions",exact:true}).count(),0,"Permanent message dots must be gone");
+    await main().getByText("Meet me by the garden gate.",{exact:true}).click();
+    await page.getByRole("button",{name:"Copy text",exact:true}).click();
+    await page.getByTestId("message-copy-notice").filter({hasText:"Message copied."}).waitFor();
+    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),"Meet me by the garden gate.");
+    await closePanel();
+    const link=main().getByRole("link",{name:"https://example.test/sketch?view=wide",exact:true});
+    assert.equal(await link.getAttribute("href"),"https://example.test/sketch?view=wide");
+    const popupPromise=page.waitForEvent("popup");await link.click();const popup=await popupPromise;
+    await popup.waitForLoadState("domcontentloaded");assert.equal(popup.url(),"https://example.test/sketch?view=wide");
+    assert.equal(await page.getByRole("heading",{name:"Message",exact:true}).count(),0,"Opening a link must not open message options");
+    await popup.close();
+    await link.click({button:"right"});await page.getByRole("heading",{name:"Message",exact:true}).waitFor();
+    await page.getByRole("button",{name:"Copy link 1",exact:true}).click();
+    await page.getByTestId("message-copy-notice").filter({hasText:"Link copied."}).waitFor();
+    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),"https://example.test/sketch?view=wide");
+    await closePanel();
+    for(const width of [320,390,768]){
+      await page.setViewportSize({width,height:900});
+      assert.equal(await page.locator("html").evaluate(node=>node.scrollWidth),width,"Linked messages must fit width "+width);
+      await page.screenshot({path:path.join(shots,"links-"+width+".png"),fullPage:true});
+    }
+    await page.setViewportSize({width:390,height:900});
     // Reply drafts remain deliberate, and sending stores an ID rather than a copied quotation.
     await actions("reply-target");await page.getByRole("button",{name:"Reply",exact:true}).click();
     await main().getByTestId("reply-draft").getByText("Bring the little blue cup.",{exact:true}).waitFor();

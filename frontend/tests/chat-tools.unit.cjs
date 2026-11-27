@@ -1,7 +1,7 @@
 const test=require("node:test"),assert=require("node:assert/strict"),fs=require("node:fs"),vm=require("node:vm"),ts=require("typescript");
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const compile=file=>ts.transpileModule(fs.readFileSync(file,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-function pure(file){const exports={};vm.runInNewContext(compile(file),{exports,Number,Date,Map,Set,Array});return exports;}
+function pure(file){const exports={};vm.runInNewContext(compile(file),{exports,Number,Date,Map,Set,Array,URL});return exports;}
 const tools=pure("src/chatTools.ts");
 function message(overrides={}){return {id:"m",chat_id:"chat",sender_id:"alice",sender_name:"Alice",type:"text",text:"Original private text",created_at:"2026-11-04T12:00:00Z",revision:0,...overrides};}
 
@@ -161,7 +161,7 @@ function actionSheetHarness(){
     useEffect:(effect,next)=>{const key=index++,old=dependencies[key];if(!old||next.some((value,i)=>value!==old[i])){dependencies[key]=next;effects.push(effect);}}};
   const native=Object.fromEntries(["ActivityIndicator","KeyboardAvoidingView","Modal","Pressable","ScrollView","Text","TextInput","View"].map(name=>[name,name]));
   native.StyleSheet={create:value=>value};native.Platform={OS:"web"};
-  const modules={react:{default:react,...react},"react-native":native,"./chatTools":tools,"./api":{},
+  const modules={react:{default:react,...react},"react-native":native,"./chatTools":tools,"./api":{},"./messageLinks":pure("src/messageLinks.ts"),
     "./ThemeContext":{useTheme:()=>({c:{},f:{}})},"./useReducedMotion":{useReducedMotion:()=>true},
     "react-native-safe-area-context":{SafeAreaView:"SafeAreaView"},"@expo/vector-icons/Ionicons":{default:"Ionicons"}};
   const source=ts.transpileModule(fs.readFileSync("src/MessageTools.tsx","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React}}).outputText;

@@ -1,3 +1,4 @@
+import MessageText from "../../src/MessageText";
 import VoiceComposer from "../../src/VoiceComposer";
 import EmotePicker from "../../src/EmotePicker";
 import EmoteImage from "../../src/EmoteImage";
@@ -365,7 +366,7 @@ function ChatConversation({id}: {id: string}) {
             <Text style={styles.headerName} numberOfLines={1}>
               {chatInfo?.other?.name || "Chat"}
             </Text>
-            <Text numberOfLines={1} style={styles.headerSub}>{connection === "offline" ? "Offline · messages stay queued" : connection === "reconnecting" ? "Reconnecting…" : "Private conversation"}</Text>
+            <Text numberOfLines={1} style={styles.headerSub}>{connection === "offline" ? "Offline · messages stay queued" : "Private conversation"}</Text>
           </View>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Contact privacy and reporting" onPress={()=>chatInfo?.other && router.push(("/privacy?contact="+chatInfo.other.id) as never)} style={styles.iconBtn}><Ionicons name="ellipsis-horizontal" size={22} color={c.text}/></Pressable>
@@ -560,13 +561,12 @@ const MessageRow = React.memo(function MessageRow({msg,mine,userId,previewScope,
   ];
   return (
     <View testID={"message-row-"+msg.id} style={[styles.msgRow, mine ? styles.msgRight : styles.msgLeft]}>
-      {mine&&!msg.deleted_at?<Pressable accessibilityRole="button" accessibilityLabel="Message actions" testID={"message-actions-"+msg.id} disabled={busy} onPress={()=>onActions(msg)} style={styles.messageAction}><Ionicons name="ellipsis-horizontal" size={17} color={c.textTertiary}/></Pressable>:null}
       <View style={bubbleStyle} testID={photo?"photo-message-"+msg.id:undefined}>
         {msg.reply_to_id&&!msg.deleted_at?<ReplyPreview message={replyMessage} onOpen={()=>onOriginal(msg.reply_to_id!)}/>:null}
         {msg.deleted_at?<Text style={[styles.msgText,{color:c.textSecondary,fontStyle:"italic"}]}>Message removed</Text>:<>
-        {msg.type === "emote" ? emote?<EmoteImage emote={emote} autoPlay/>:<Text style={styles.msgText}>Emote unavailable</Text>:null}
+        {msg.type === "emote" ? <Pressable disabled={busy} accessibilityRole="button" accessibilityLabel="Message options" onPress={()=>onActions(msg)} onLongPress={()=>onActions(msg)}>{emote?<EmoteImage emote={emote} autoPlay/>:<Text style={styles.msgText}>Emote unavailable</Text>}</Pressable>:null}
         {msg.type === "text" && (
-          <Text onLongPress={()=>onActions(msg)} style={styles.msgText}>{msg.text}</Text>
+          <MessageText text={msg.text||""} style={styles.msgText} disabled={busy} onActions={()=>onActions(msg)}/>
         )}
         {msg.type === "voice" && (
           <VoiceMessageBubble durationMs={msg.duration_ms || 0} outgoing={mine} media={msg.media} attachmentId={msg.attachment_id} unavailable={msg.attachment_deleted} />
@@ -621,12 +621,11 @@ const MessageRow = React.memo(function MessageRow({msg,mine,userId,previewScope,
           </Pressable>
         )}
         </>}
-        <Text style={styles.msgTime}>
+        <Pressable disabled={busy||!!msg.deleted_at} accessibilityRole="button" accessibilityLabel="Message options" testID={"message-actions-"+msg.id} hitSlop={6} onPress={()=>onActions(msg)} onLongPress={()=>onActions(msg)} style={{minHeight:32,justifyContent:"center",alignSelf:mine?"flex-end":"flex-start"}}><Text style={styles.msgTime}>
           {msg.pinned?"Pinned · ":""}{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{msg.edited_at&&!msg.deleted_at?" · edited":""}
-        </Text>
+        </Text></Pressable>
         <ReactionChips message={msg} userId={userId} disabled={busy} onReact={emoji=>onReact(msg.id,emoji)}/>
       </View>
-      {!mine&&!msg.deleted_at?<Pressable accessibilityRole="button" accessibilityLabel="Message actions" testID={"message-actions-"+msg.id} disabled={busy} onPress={()=>onActions(msg)} style={styles.messageAction}><Ionicons name="ellipsis-horizontal" size={17} color={c.textTertiary}/></Pressable>:null}
     </View>
   );
 });
@@ -659,7 +658,6 @@ const makeStyles = (c: any, f: any) => StyleSheet.create({
     backgroundColor: c.surface,
   },
   toolsBar:{width:"100%",maxWidth:960,alignSelf:"center",flexDirection:"row",alignItems:"center",gap:8,paddingHorizontal:spacing.md,paddingVertical:8},
-  messageAction:{width:44,height:44,alignItems:"center",justifyContent:"center",alignSelf:"flex-end"},
   replyDraft:{width:"100%",maxWidth:960,alignSelf:"center",paddingHorizontal:spacing.md,paddingTop:8},
   spacesPill: {
     flex:1,minWidth:0,minHeight:44,

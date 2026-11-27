@@ -72,7 +72,7 @@ export default function NotificationsScreen() {
       <View style={{padding: 20, gap: 16, borderRadius: 24, backgroundColor: c.surface}} testID="notification-device-status">
         <Text style={[typography.section, {fontFamily: f.heading, color: c.text}]}>{enabled ? "A little hello, even from afar" : "Let your messages find you"}</Text>
         <Text style={body}>Alerts say “You have a new message.” Your conversation and filenames stay private.</Text>
-        {restoring ? <Text style={body}>Reconnecting securely. Notification setup will be checked when your account is ready.</Text> : null}
+        {restoring ? <Text style={body}>Opening your notification settings…</Text> : null}
         {checking && !status ? <View accessibilityLiveRegion="polite" style={{flexDirection: "row", gap: 10, alignItems: "center"}}><ActivityIndicator color={c.primaryDark}/><Text style={body}>Checking this device…</Text></View> : null}
         {rows.map(row => <View key={row.label} style={{flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 16}}>
           <Text style={{fontFamily: f.body, fontSize: 14, lineHeight: 21, color: c.textSecondary, flex: 1}}>{row.label}</Text>

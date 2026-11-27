@@ -92,11 +92,13 @@ const report={schema_version:1,checked_out_commit:execFileSync("git",["rev-parse
   report.checks.push("All five brand fonts and the used Ionicons font load under their existing names");
   report.checks.push("Fresh and repeat sign-in make zero API requests");
   const p=await context(true);apiRequests=[];let release;gate={promise:new Promise(r=>release=r)};
-  const shellStarted=await beginAction(p);await p.page.goto(origin+"/");await p.page.getByTestId("session-restore-notice").waitFor();await p.page.getByTestId("profile-button").waitFor();
+  const shellStarted=await beginAction(p);await p.page.goto(origin+"/");await p.page.getByTestId("profile-button").waitFor();
+  assert.equal(await p.page.getByTestId("session-restore-notice").count(),0,"Routine cached-profile restoration is quiet");
   report.cached_shell=await metrics(p,"saved-profile-before-server-proof",shellStarted);
   assert.equal(apiRequests.filter(r=>!["/api/auth/refresh","/api/auth/me"].includes(r.path)).length,0,"Unproven cached shell must not dispatch private requests");
-  gate=null;release();await p.page.getByTestId("session-restore-notice").waitFor({state:"hidden"});await p.page.getByTestId("chat-row-perf-chat").waitFor();
-  report.checks.push("Saved profile shell paints before held refresh, without private operations");
+  gate=null;release();await p.page.getByTestId("chat-row-perf-chat").waitFor();
+  assert.equal(await p.page.getByTestId("session-restore-notice").count(),0,"Successful account proof needs no connection banner");
+  report.checks.push("Saved profile shell paints quietly before held refresh, without private operations");
   const chatStarted=await beginAction(p);await p.page.getByTestId("chat-row-perf-chat").click();await p.page.getByTestId("chat-message-list").getByText(/Performance note 99/).waitFor();
   await p.page.waitForFunction(()=>{const list=document.querySelector('[data-testid="chat-message-list"]'),row=document.querySelector('[data-testid="message-row-perf-99"]');if(!list||!row)return false;const box=list.getBoundingClientRect(),rect=row.getBoundingClientRect();return rect.bottom>box.top&&rect.top<box.bottom&&list.scrollHeight-list.clientHeight-list.scrollTop<=80;});
   report.chat_initial=await metrics(p,"100-variable-height-message-history-ready",chatStarted);

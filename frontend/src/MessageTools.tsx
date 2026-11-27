@@ -2,7 +2,10 @@ import React,{useEffect,useRef,useState} from "react";
 import {ActivityIndicator,KeyboardAvoidingView,Modal,Platform,Pressable,ScrollView,StyleSheet,Text,TextInput,View} from "react-native";
 import {SafeAreaView} from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import {api,Message} from "./api";
+import {api,Message,getSessionUserId} from "./api";
+import * as Clipboard from "expo-clipboard";
+import {messageLinkTargets} from "./messageLinks";
+import MessageText from "./MessageText";
 import {useTheme} from "./ThemeContext";
 import {useReducedMotion} from "./useReducedMotion";
 import {canEditMessage,canRemoveMessage,CHAT_REACTIONS,messagePreview,messageRemoved,messageRevision,ownReaction} from "./chatTools";
@@ -49,13 +52,25 @@ export function MessageActionSheet({message,userId,busy,error,onClose,onReply,on
 }){
   const {c,f}=useTheme();
   const [editing,setEditing]=useState(false),[removing,setRemoving]=useState(false),[editText,setEditText]=useState(""),[revision,setRevision]=useState(0),[reviewed,setReviewed]=useState(false);
+  const [copyNotice,setCopyNotice]=useState("");const copyVersion=useRef(0);
+  useEffect(()=>{copyVersion.current++;setCopyNotice("");return()=>{copyVersion.current++;};},[message?.id,userId]);
   useEffect(()=>{setEditing(false);setRemoving(false);setReviewed(false);setEditText(message?.text||"");setRevision(message?messageRevision(message):0);},[message?.id]);
   const removed=!!message&&messageRemoved(message),selectedReaction=message?ownReaction(message,userId):null;
+  const links=message&&!removed?messageLinkTargets(message.text||""):[];
+  async function copy(value:string,label:string){
+    if(busy||removed||!message||getSessionUserId()!==userId)return;
+    const version=++copyVersion.current;
+    try{
+      if(!await Clipboard.setStringAsync(value))throw new Error("Clipboard unavailable");
+      if(version===copyVersion.current&&getSessionUserId()===userId)setCopyNotice(label+" copied.");
+    }catch{if(version===copyVersion.current&&getSessionUserId()===userId)setCopyNotice("Could not copy. Please try again.");}
+  }
   const action=(label:string,icon:React.ComponentProps<typeof Ionicons>["name"],onPress:()=>void,destructive=false)=><Pressable accessibilityRole="button" accessibilityLabel={label} disabled={busy} onPress={onPress} style={s.action}><Ionicons name={icon} size={21} color={destructive?c.error:c.textSecondary}/><Text style={{fontFamily:f.bodyMedium,fontSize:16,color:destructive?c.error:c.text}}>{label}</Text></Pressable>;
   return <Sheet visible={!!message} title={editing?"Edit your message":removing?"Remove this message?":"Message"} onClose={onClose}>
     <ScrollView keyboardShouldPersistTaps="handled" style={{maxHeight:520}}>
       <Text numberOfLines={(editing||removing)&&reviewed?undefined:3} style={{fontFamily:f.body,fontSize:14,lineHeight:21,color:c.textSecondary,marginBottom:14}}>{message?((editing||removing)&&reviewed?message.text||messagePreview(message):messagePreview(message,180)):""}</Text>
       {error?<Text accessibilityRole="alert" style={{fontFamily:f.bodyMedium,fontSize:14,lineHeight:21,color:c.error,marginBottom:12}}>{error.message}</Text>:null}
+      {copyNotice?<Text testID="message-copy-notice" accessibilityLiveRegion="polite" style={{fontFamily:f.bodyMedium,fontSize:14,lineHeight:21,color:c.text,marginBottom:12}}>{copyNotice}</Text>:null}
       {busy?<ActivityIndicator color={c.primary} style={{marginBottom:12}}/>:null}
       {message&&!removed&&editing?<View style={{gap:12}}>
         <TextInput accessibilityLabel="Edit message text" testID="edit-message-input" multiline autoFocus maxLength={10000} editable={!busy} value={editText} onChangeText={setEditText} style={[s.editInput,{backgroundColor:c.surface,color:c.text,fontFamily:f.body}]}/>
@@ -68,6 +83,8 @@ export function MessageActionSheet({message,userId,busy,error,onClose,onReply,on
       </View>:message&&!removed?<View>
         <View style={s.reactionPicker}>{CHAT_REACTIONS.map(emoji=><Pressable key={emoji} accessibilityRole="button" accessibilityLabel={"React with "+emoji} accessibilityState={{selected:selectedReaction===emoji,disabled:busy}} disabled={busy} onPress={()=>onReact(selectedReaction===emoji?null:emoji)} style={[s.touch,{borderRadius:22,backgroundColor:selectedReaction===emoji?c.primaryBgSubtle:"transparent"}]}><Text style={{fontSize:26}}>{emoji}</Text></Pressable>)}</View>
         {action("Reply","return-up-back-outline",onReply)}
+        {message.type==="text"&&message.text?action("Copy text","copy-outline",()=>void copy(message.text!,"Message")):null}
+        {links.map((url,index)=><React.Fragment key={url}>{action(links.length===1?"Copy link":"Copy link "+(index+1),"link-outline",()=>void copy(url,"Link"))}</React.Fragment>)}
         {action(message.pinned?"Unpin message":"Pin message","pin-outline",()=>onPin(!message.pinned))}
         {canEditMessage(message,userId)?action("Edit message","create-outline",()=>{setEditText(message.text||"");setRevision(messageRevision(message));setEditing(true);onClearError();}):null}
         {canRemoveMessage(message,userId)?action("Remove for everyone","trash-outline",()=>{setRevision(messageRevision(message));setRemoving(true);onClearError();},true):null}
@@ -81,7 +98,7 @@ export function MessageFocusSheet({message,loading,onClose,onReply,onActions}:{m
     {loading?<ActivityIndicator color={c.primary} style={{padding:32}}/>:message?<ScrollView style={{maxHeight:420}} keyboardShouldPersistTaps="handled">
       <Text style={{fontFamily:f.bodyBold,color:c.text,fontSize:15,marginBottom:4}}>{message.sender_name}</Text>
       <Text style={{fontFamily:f.body,color:c.textSecondary,fontSize:12,marginBottom:18}}>{new Date(message.created_at).toLocaleString()}</Text>
-      {messageRemoved(message)?<Text style={{fontFamily:f.body,color:c.textSecondary,fontSize:16}}>Message removed</Text>:message.type==="voice"?<VoiceMessageBubble durationMs={message.duration_ms||0} outgoing={false} attachmentId={message.attachment_id} unavailable={message.attachment_deleted}/>:message.type==="image"||(message.type==="file"&&isImageFilename(message.file_name))?<PrivateImageCard attachmentId={message.attachment_id} unavailable={message.attachment_deleted} canDelete={false} fileName={message.file_name}/>:message.type==="file"?<FilePreviewCard attachmentId={message.attachment_id} unavailable={message.attachment_deleted} canDelete={false} fileName={message.file_name} fileSize={message.file_size} type="file"/>:message.type==="emote"&&emote?<EmoteImage emote={emote}/>:<Text selectable style={{fontFamily:f.body,color:c.text,fontSize:16,lineHeight:25}}>{message.type==="text"?message.text:messagePreview(message,10000)}</Text>}
+      {messageRemoved(message)?<Text style={{fontFamily:f.body,color:c.textSecondary,fontSize:16}}>Message removed</Text>:message.type==="voice"?<VoiceMessageBubble durationMs={message.duration_ms||0} outgoing={false} attachmentId={message.attachment_id} unavailable={message.attachment_deleted}/>:message.type==="image"||(message.type==="file"&&isImageFilename(message.file_name))?<PrivateImageCard attachmentId={message.attachment_id} unavailable={message.attachment_deleted} canDelete={false} fileName={message.file_name}/>:message.type==="file"?<FilePreviewCard attachmentId={message.attachment_id} unavailable={message.attachment_deleted} canDelete={false} fileName={message.file_name} fileSize={message.file_size} type="file"/>:message.type==="emote"&&emote?<EmoteImage emote={emote}/>:<MessageText text={message.type==="text"?message.text||"":messagePreview(message,10000)} style={{fontFamily:f.body,color:c.text,fontSize:16,lineHeight:25}}/>}
       {!messageRemoved(message)?<View style={[s.buttons,{marginTop:20}]}><Pressable accessibilityRole="button" accessibilityLabel="Reply to original message" onPress={onReply} style={[s.primaryButton,{backgroundColor:c.primary}]}><Text style={{fontFamily:f.bodyBold,color:c.textInverse}}>Reply</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="Original message actions" onPress={onActions} style={[s.primaryButton,{backgroundColor:c.surface}]}><Text style={{fontFamily:f.bodyMedium,color:c.text}}>More</Text></Pressable></View>:null}
     </ScrollView>:null}
   </Sheet>;

@@ -24,7 +24,6 @@ type AuthState = {
 };
 const AuthContext = createContext<AuthState>({} as AuthState);
 const PROFILE_KEY = "kuku_profile";
-const RESTORE_NOTICE = "Reconnecting securely. Your saved profile is shown while we check your account.";
 
 export function AuthProvider({children}: {children: React.ReactNode}) {
   const [user, setUser] = useState<User | null | undefined>();
@@ -77,7 +76,7 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
         // The API still has no authenticated user until server validation.
         if (!setExpectedRestoredUser(expectedUser, sessionEpoch)) return;
         if (canShowCachedShell(saved)) {
-          currentUser.current = saved; setUser(saved); setError(RESTORE_NOTICE);
+          currentUser.current = saved; setUser(saved);
         }
       }
       await AsyncStorage.removeItem("connect_token");
@@ -110,7 +109,7 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
         setError("KUKU couldn't refresh your account. Your current session has been kept.");
       } else {
         markRestoring(true, refreshIntent);
-        setError(currentUser.current ? "Your saved profile is here. Reconnect to verify your account and load new messages." :
+        setError(currentUser.current ? "We couldn’t load your messages. Check your connection and try again." :
           "KUKU couldn't connect. Your saved session has been kept. Please try again.");
       }
     } finally {
@@ -182,14 +181,19 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
       if (intent.current !== logoutIntent) return;
       await clearLocalSession(id);
     } catch (failure) {
-      if (intent.current === logoutIntent) setChecking(false);
+      if (intent.current === logoutIntent) {
+        setChecking(false);
+        // Signing out cancels an unproven restore. If it fails, keep an
+        // actionable retry instead of leaving the quiet shell stranded.
+        if (restoringRef.current) setError("We couldn’t connect. Your saved session has been kept. Please try again.");
+      }
       throw failure;
     }
   }, [clearLocalSession]);
   const updateProfile = useCallback(async (name: string, bio: string) => {
     const id = currentUser.current?.id;
     if (!id) throw new Error("Please sign in again.");
-    if (restoringRef.current || validatedUser.current !== id) throw new Error("We're reconnecting. Please wait for your account to be verified.");
+    if (restoringRef.current || validatedUser.current !== id) throw new Error("Your account is still opening. Please try again in a moment.");
     const next = await api.postAs<User>(id, "/auth/profile", {name, bio});
     if (currentUser.current?.id !== id) throw new Error("Your account changed. Please try again.");
     await remember(next);
@@ -197,7 +201,7 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
   const updatePhoto = useCallback(async (image_base64: string | null) => {
     const id = currentUser.current?.id;
     if (!id) throw new Error("Please sign in again.");
-    if (restoringRef.current || validatedUser.current !== id) throw new Error("We're reconnecting. Please wait for your account to be verified.");
+    if (restoringRef.current || validatedUser.current !== id) throw new Error("Your account is still opening. Please try again in a moment.");
     const next = await api.postAs<User>(id, "/auth/photo", {image_base64});
     if (currentUser.current?.id !== id) throw new Error("Your account changed. Please try again.");
     await remember(next);
@@ -207,11 +211,12 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
     <Text accessibilityRole="alert">{error}</Text>
     <Pressable accessibilityRole="button" onPress={() => {void refresh();}} style={{paddingVertical: 20}}><Text>Try again</Text></Pressable>
   </View>;
-  const connectionNotice = error || (restoring && user ? RESTORE_NOTICE : null);
+  // Routine session restoration is quiet; only a real failure needs a notice.
+  const connectionNotice = error;
   return <AuthContext.Provider value={{user, restoring, signIn, signUp, signOut, refresh, updateProfile, updatePhoto,
     connectionNotice, finishClosedAccount: clearLocalSession}}>
     <View style={{flex: 1}}>
-      {restoring && user ? <RestoreNotice message={connectionNotice || RESTORE_NOTICE} busy={checking} onRetry={() => {void refresh();}}/> : null}
+      {restoring && user && connectionNotice ? <RestoreNotice message={connectionNotice} busy={checking} onRetry={() => {void refresh();}}/> : null}
       <View style={{flex: 1}}>{children}</View>
     </View>
   </AuthContext.Provider>;
