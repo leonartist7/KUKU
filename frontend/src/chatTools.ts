@@ -44,3 +44,17 @@ export function currentMessage(id: string, loaded: Message[], resolved: Record<s
 export function replyFields(replyToId: string | null): {reply_to_id?: string} {
   return replyToId ? {reply_to_id: replyToId} : {};
 }
+
+// Search can overlap while the conversation changes. Preserve canonical revisions
+// and stop a repeated/fully filtered page instead of offering a dead Load more.
+export function searchMessagePage(chatId:string, previous:Message[], incoming:Message[]):{results:Message[];more:boolean} {
+  const valid=incoming.filter(message=>message.chat_id===chatId&&!messageRemoved(message));
+  const items=new Map(previous.filter(message=>message.chat_id===chatId&&!messageRemoved(message)).map(message=>[message.id,message]));
+  const advanced=valid.some(message=>!items.has(message.id));
+  for(const message of valid){
+    const old=items.get(message.id);
+    if(!old||messageRevision(message)>=messageRevision(old))items.set(message.id,message);
+  }
+  const results=Array.from(items.values()).slice(0,100);
+  return {results,more:incoming.length===20&&advanced&&results.length<100};
+}

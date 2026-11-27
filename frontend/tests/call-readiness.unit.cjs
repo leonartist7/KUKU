@@ -22,3 +22,11 @@ test('microphone preflight releases later tracks even when one stop fails',async
  ]}),()=>true);
  assert.equal(allowed,true);assert.equal(stopped,1);
 });
+test('client and server flags cannot advertise test calling while secure setup is incomplete',()=>{
+ const m=moduleUnderTest(),ready={calls_enabled:true,provider_configured:true,secure_transport:true,configuration_ready:true};
+ assert.equal(m.callReadinessRows(ready,true)[0].value,'Enabled for testing');
+ for(const missing of ['provider_configured','secure_transport','configuration_ready']){
+  assert.equal(m.callReadinessRows({...ready,[missing]:false},true)[0].value,'Setup still needed',missing);
+ }
+ assert.equal(m.callReadinessRows({...ready,calls_enabled:false},true)[0].value,'Not enabled yet');
+});

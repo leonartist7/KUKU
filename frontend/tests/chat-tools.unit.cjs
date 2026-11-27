@@ -181,3 +181,48 @@ test("removal conflicts allow explicit review of the new revision without automa
   tree=h.render(props());h.find(tree,"Confirm remove message for everyone").props.onPress();assert.deepEqual(removed,[0,1]);
   assert.equal(cleared.length,2);
 });
+
+test("conflicted edit confirmation waits for deliberate review and keeps the draft",()=>{
+  const h=actionSheetHarness(),edits=[];let item=message({created_at:new Date().toISOString()}),error=null;
+  const props=()=>({message:item,userId:"alice",busy:false,error,onClose(){},onReply(){},onReact(){},onPin(){},onRemove(){},onEdit:(text,revision)=>edits.push({text,revision}),onClearError:()=>error=null});
+  let tree=h.render(props());tree=h.render(props());h.find(tree,"Edit message").props.onPress();tree=h.render(props());
+  h.find(tree,"Edit message text").props.onChangeText("My deliberate draft");
+  item={...item,text:"Changed elsewhere",revision:1};error={message:"Changed",conflict:true};tree=h.render(props());
+  assert.equal(h.find(tree,"Save edited message").props.disabled,true);
+  h.find(tree,"Save edited message").props.onPress();assert.equal(edits.length,0,"Even a queued press must not bypass review");
+  h.find(tree,"Keep draft and review latest").props.onPress();tree=h.render(props());
+  assert.equal(h.find(tree,"Edit message text").props.value,"My deliberate draft");assert.equal(h.find(tree,"Save edited message").props.disabled,false);
+  h.find(tree,"Save edited message").props.onPress();assert.deepEqual(edits,[{text:"My deliberate draft",revision:1}]);
+});
+test("conflicted removal confirmation cannot resubmit before latest-version review",()=>{
+  const h=actionSheetHarness(),removed=[];let item=message(),error=null;
+  const props=()=>({message:item,userId:"alice",busy:false,error,onClose(){},onReply(){},onReact(){},onEdit(){},onPin(){},onRemove:revision=>removed.push(revision),onClearError:()=>error=null});
+  let tree=h.render(props());tree=h.render(props());h.find(tree,"Remove for everyone").props.onPress();
+  item=message({revision:2,text:"Changed elsewhere"});error={message:"Changed",conflict:true};tree=h.render(props());
+  assert.equal(h.find(tree,"Confirm remove message for everyone").props.disabled,true);
+  h.find(tree,"Confirm remove message for everyone").props.onPress();assert.deepEqual(removed,[]);
+  h.find(tree,"Review latest before removing").props.onPress();tree=h.render(props());
+  h.find(tree,"Confirm remove message for everyone").props.onPress();assert.deepEqual(removed,[2]);
+});
+test("search stops repeated full pages rather than offering an endless no-op Load more",()=>{
+  const rows=Array.from({length:20},(_,i)=>message({id:"page-"+i}));
+  const first=tools.searchMessagePage("chat",[],rows);assert.equal(first.more,true);
+  const repeated=tools.searchMessagePage("chat",first.results,rows);assert.equal(repeated.more,false);assert.equal(repeated.results.length,20);
+});
+test("a search page containing only foreign or removed rows never strands its Load more control",()=>{
+  const invalid=Array.from({length:20},(_,i)=>message({id:"bad-"+i,...(i%2?{chat_id:"other"}:{deleted_at:"now",text:null})}));
+  const page=tools.searchMessagePage("chat",[],invalid);assert.equal(page.more,false);assert.equal(page.results.length,0);
+});
+test("overlapping search pages keep newer revisions and use unique results for the 100-message budget",()=>{
+  const initial=Array.from({length:85},(_,i)=>message({id:"result-"+i,revision:2,text:"Current wording"}));
+  const next=Array.from({length:20},(_,i)=>message({id:"result-"+(75+i),revision:1,text:"Older wording"}));
+  const page=tools.searchMessagePage("chat",initial,next);
+  assert.equal(page.results.length,95);assert.equal(page.more,true,"Overlap does not consume the remaining search budget");
+  assert.equal(page.results.find(item=>item.id==="result-75").text,"Current wording");
+});
+test("search keeps server ordering while bounding a final overlapping page to 100 unique messages",()=>{
+  const initial=Array.from({length:95},(_,i)=>message({id:"ordered-"+i})),next=Array.from({length:20},(_,i)=>message({id:"ordered-"+(90+i)}));
+  const page=tools.searchMessagePage("chat",initial,next);
+  assert.equal(page.results.length,100);assert.equal(page.more,false);
+  assert.deepEqual(Array.from(page.results,item=>item.id),Array.from({length:100},(_,i)=>"ordered-"+i));
+});

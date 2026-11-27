@@ -108,6 +108,7 @@ const server=http.createServer((req,res)=>{
     if(tail==="search"){
       const q=url.searchParams.get("q");searchRequests.push({chatId,q,uid:activeUser.id});
       let results=rows.filter(row=>!row.deleted_at&&row.text?.toLocaleLowerCase().includes(q.toLocaleLowerCase()));
+      if(q==="pagination fixture")results=Array.from({length:20},(_,i)=>make("search-page-"+i,"Pagination fixture "+i,sam,20+i,chatId));
       // Fault injection tests client-side scope filtering in addition to backend integration tests.
       if(q==="garden"&&chatId==="chat-main")results=[...results,message("foreign-garden")];
       if(delayedSearch?.query===q){
@@ -202,6 +203,7 @@ const server=http.createServer((req,res)=>{
     await page.getByRole("button",{name:"Save edited message",exact:true}).click();
     await panel("Edit your message").getByRole("alert").filter({hasText:"Review the latest version"}).waitFor();
     assert.equal(await page.getByTestId("edit-message-input").inputValue(),editedText);
+    assert.equal(await page.getByRole("button",{name:"Save edited message",exact:true}).isDisabled(),true,"A conflicted edit requires deliberate review before saving again");
     await page.screenshot({path:path.join(shots,"edit-conflict-390.png"),fullPage:true});
     await page.getByRole("button",{name:"Keep draft and review latest",exact:true}).click();
     await panel("Edit your message").getByText("Garden plan changed on another device.",{exact:true}).waitFor();
@@ -220,6 +222,14 @@ const server=http.createServer((req,res)=>{
     await page.screenshot({path:path.join(shots,"scoped-search-390.png"),fullPage:true});await closePanel();
     await actions("own-original");await page.getByRole("button",{name:"Unpin message",exact:true}).click();
     await main().getByTestId("chat-pins-button").click();await panel("Pinned messages").getByText("Pin a message from its action menu.",{exact:true}).waitFor();await closePanel();
+    // A repeated full server page must stop pagination rather than offer an endless no-op.
+    await main().getByTestId("chat-search-button").click();await page.getByTestId("chat-search-input").fill("pagination fixture");
+    await panel("Find a message").getByText("Pagination fixture 19",{exact:true}).waitFor();
+    const repeatPage=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/chats/chat-main/search"&&new URL(response.url()).searchParams.has("before"));
+    await page.getByRole("button",{name:"Load more results",exact:true}).click();await repeatPage;
+    await page.getByRole("button",{name:"Load more results",exact:true}).waitFor({state:"hidden"});
+    assert.equal(await panel("Find a message").getByRole("button",{name:"Open message from Sam",exact:true}).count(),20,"Repeated pages remain deduplicated");
+    await closePanel();
     // Updates to older loaded rows must fetch that row, not only poll after the newest ID.
     const beforeReads=singleReads.filter(read=>read.id==="older-note").length;
     const older=message("older-note");older.text="Older note refreshed through its own message lookup.";older.revision++;emit(older.id);
