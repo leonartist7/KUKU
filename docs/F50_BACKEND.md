@@ -1,5 +1,7 @@
 # F50 backend usefulness and safety scenarios
 
+Integration acceptance: [final F50 checkpoint](FIFTY_SIMULATIONS_2026-11-28.md) records the successful cloud/backend/browser/Android checks and deployed beta. The domain notes below retain the local/pre-integration evidence and its limits.
+
 Scope: isolated synthetic accounts and database fixtures. No live users, reports,
 messages, invitations, storage providers or call media were contacted. Each row is
 one scenario, not a claim of ten distinct production bugs. Cloud execution and the

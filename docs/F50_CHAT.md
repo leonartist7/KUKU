@@ -1,5 +1,7 @@
 # F50 chat usefulness simulations — 28 November 2026
 
+Integration acceptance: [final F50 checkpoint](FIFTY_SIMULATIONS_2026-11-28.md) records the successful cloud/backend/browser/Android checks and deployed beta. The domain notes below retain the local/pre-integration evidence and its limits.
+
 Ten synthetic scenarios, C01–C10. These are controlled state/component checks using fixture messages, not ten physical-device sessions. The root checkpoint records exact-source cloud/browser evidence separately.
 
 | ID | Everyday scenario | Result | Executed evidence |

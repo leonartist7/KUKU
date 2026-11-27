@@ -1,5 +1,7 @@
 # F50 media usefulness simulations — 28 November 2026
 
+Integration acceptance: [final F50 checkpoint](FIFTY_SIMULATIONS_2026-11-28.md) records the successful cloud/backend/browser/Android checks and deployed beta. The domain notes below retain the local/pre-integration evidence and its limits.
+
 Ten scenarios use synthetic identities, metadata and deferred promises. No personal files,
 messages, clipboard content, notifications or provider calls were used. Native confirmations
 are mocked; this is not physical Android acceptance. Root records final cloud/deployment evidence.

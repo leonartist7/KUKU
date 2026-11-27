@@ -1,5 +1,7 @@
 # F50: Space audio and call-readiness simulations
 
+Integration acceptance: [final F50 checkpoint](FIFTY_SIMULATIONS_2026-11-28.md) records the successful cloud/backend/browser/Android checks and deployed beta. The domain notes below retain the local/pre-integration evidence and its limits.
+
 Source baseline: `f6f9ab864b9ef2fb7af2e8ada5269b892b5ab317` (the application tree from the prior L01 release). All media, providers, users, events and failures below are synthetic. No real call, family message or personal content was used.
 
 Nine SpaceAudio component scenarios execute the actual transpiled component with a minimal React/player lifecycle harness. The tenth exercises the actual call-readiness presenter. This is deterministic lifecycle and interface evidence, not an audible or physical-device check.

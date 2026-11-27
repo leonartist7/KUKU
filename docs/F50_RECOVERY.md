@@ -1,5 +1,7 @@
 # F50 queued-message usefulness scenarios
 
+Integration acceptance: [final F50 checkpoint](FIFTY_SIMULATIONS_2026-11-28.md) records the successful cloud/backend/browser/Android checks and deployed beta. The domain notes below retain the local/pre-integration evidence and its limits.
+
 These ten controlled simulations use in-memory synthetic accounts and durable
 storage mocks. Each row maps to an executable case in
 `frontend/tests/outbox-usefulness.unit.cjs`. They are not physical device tests or
@@ -30,3 +32,7 @@ installed. The existing account restoration, API response, realtime and export
 suites also passed (40 cases), including quiet startup, server-proof gates,
 cross-account responses, explicit restore retry, malformed responses and cancelled
 exports. These supporting checks are separate from the 50 numbered scenarios.
+
+Differential baseline check in an isolated temporary copy: R01, R02, R04 and R10
+fail on the original outbox, while the other six pass. All ten pass after repair.
+The working application source was not swapped for this check.
