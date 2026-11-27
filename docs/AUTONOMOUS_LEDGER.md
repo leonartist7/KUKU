@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-27T20:05:23Z
+Updated: 2026-11-27T23:09:05.651Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: none. Root completed L01 message links, contextual copy/options, quiet startup and reader-intent repair on 27 November 2026.
+Current controller: root F50 usefulness/debugging checkpoint. Lease ACTIVE from 2026-11-27T23:09:05.651Z until 2026-11-28T01:09:05.651Z. Single controller integrates commits and release evidence. Owners: chat-links (10 synthetic scenarios), files-notifications (10), spaces-calls (10), backend (10), root account/recovery (10). No physical-device acceptance is implied.
 Work was performed through connected GitHub/provider APIs and cloud CI; never assume a prior local worktree exists.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
