@@ -1,5 +1,5 @@
 # KUKU autonomous implementation ledger
-Updated: 2026-11-27T19:22:40.408Z
+Updated: 2026-11-27T20:05:23Z
 
 ## Authority and source
 The user authorized implementation of the master plan in phases, coordinated subagents
@@ -29,7 +29,7 @@ and recurring continuation work. This ledger is the shared checkpoint, not a com
     and remaining items require credentials, billing decisions or physical acceptance.
 
 ## Coordination
-Current controller: root, L01 clickable messages and quiet startup. Lease expires 2026-11-27T21:22:40.408Z.
+Current controller: none. Root completed L01 message links, contextual copy/options, quiet startup and reader-intent repair on 27 November 2026.
 Work was performed through connected GitHub/provider APIs and cloud CI; never assume a prior local worktree exists.
 Future scheduled passes must fetch the remote implementation branch and use their actual writable environment.
 
@@ -54,6 +54,19 @@ Initial package owners (all returned; no agent has an outstanding write):
 
 ## Current authoritative checkpoint
 This section supersedes historical pending statements below.
+- L01 implements the user's clickable-link, hidden-message-dots/contextual-copy and quiet-startup request. See docs/MESSAGE_LINKS_2026-11-27.md for behavior, exact evidence and limits. Normal cached restore is quiet; genuine failed restore retains Retry and every server-proof/account-isolation gate remains intact. No hosting latency improvement is claimed.
+- Tested source `76719e273dc5eb08f9b6e9cad7f564a6cd85aeb0` was merged through [PR #16](https://github.com/leonartist7/KUKU/pull/16) as frontend runtime `448dc4dcf54e6ed721851f45789835fdbbb1265d`. Both point to tree `ca5ae6ddf82f5f775dc26d4840d27e3189c6c696`. Performance checkout `42a546d471f7c4876d874df5143efcfdfe767d5d` records that same tree and PR head. Final documentation changes do not change the running application code.
+- Exact-source [run 46059065953](https://github.com/leonartist7/KUKU/actions/runs/46059065953) is SUCCESS: backend job 140708611224 passes 163 cases; frontend job 140708610929 passes 180 cases, TypeScript/export and all onboarding/WAV/call-setup, Spaces, chat-tools and controlled-performance journeys. Thirteen new unit regressions cover links/copy and quiet failed-restore recovery. Browser evidence additionally exercises real popup/clipboard/context-menu/keyboard/responsive and reader-position behavior. An ambiguous quote fixture was scoped; a subsequent run exposed scroll timing races that were repaired without weakening pixel checks.
+- Android job 140710210722 SUCCESS. [Test artifact 15228089353](https://github.com/leonartist7/KUKU/actions/runs/46059065953/artifacts/15228089353) is 39,138,135 bytes; ZIP SHA256 `7b042249cd20bd3198bf553b1a1f5f0c8c789b9146ee34c8a5c6eaed8340c99b`. Arm64/SDK36/Hermes/public test-signing provenance passes. This is compilation/mock evidence, not physical Android link/clipboard, notification, microphone or call acceptance.
+- HTTP(S)/www links are actionable without automatic previews/fetches. Script/data/file/custom schemes, credentials, malformed URLs and bidi controls stay inert. Link taps open separately from message options; message text/time or link context-menu reveals Copy/Reply/etc. Persistent message dots are removed. Copy uses SDK54-compatible expo-clipboard 8.0.8, is user initiated, never reads clipboard content, checks account ownership and fences late UI feedback. Only that new package was added; existing locked dependency entries were preserved.
+- Reader wheel/pointer/scroll-key input cancels delayed tail jobs; delayed callbacks recheck intent/scope. Prepend repair ignores virtualizer-generated scroll, waits for monotonic stability through compaction and scopes DOM lookup to the chat/account. Fixtures issue actual wheel input before their original exact positions; original strict position assertions pass.
+- Frontend `dpl_2efvy9D7C3SqE5mHV8emkyFdwg8r` is READY on runtime 448dc4d at https://kuku-9y2ikkugz-lionovart.vercel.app . The [existing beta alias](https://kuku-git-codex-kuku-release-20261027-lionovart.vercel.app/login) points to it; alias UID/access exception are preserved. Login/notifications returned 200 KUKU HTML with new script entry 222792d6c6bb5aec3af47b54b32d29a7; private auth/me and calls/status proxy routes returned 401/no-store. PR #1 remains draft; main is unchanged.
+- API runtime remains `acb29b8bf999ee8950cd41fb31943ff2f893d49b`, Render deploy `dep-dc3cgku7bikc73cq6nkg` LIVE. Complete source comparison confirms no backend path changed, so frontend448dc4d is compatible with that exact existing API. No API deploy/restart, migration, billing/hosting, DNS/access-protection, main/production, live retention or schedule change occurred. Single-worker/call/native-push gates are preserved.
+- Browser artifact 15227409578 contains 54 screenshots/reports, 2,507,623 bytes; ZIP SHA256 `667c27c4bb6923f027ab0570c71fadbe5c4336b2a9046b7a9916cbc5a6a86b34`. Narrow links and contextual-copy views were visually inspected. Durable report docs/performance/2026-11-27-links-controlled.json records 39 rendered chat rows, five initial thumbnails and at most one thumbnail request per same scope, plus quiet cached-shell proof and reading-anchor checks. These are controlled fixture observations, not real-user latency/memory/CWV claims.
+- Existing dependency inventory still reports 22 advisories (17 moderate/five high); compatible remediation remains the next independent maintenance task. No forced SDK upgrade/downgrade was performed. Physical Android interactions and all prior call/FCM/signing/backup/erasure/always-on gates remain open. No real messages, invitations, personal-content/clipboard fixtures or external destination requests were used. All L01 path owners and reviews returned; controller lease closed.
+
+## D10 historical checkpoint (superseded by L01)
+Historical D10 evidence below describes the prior frontend deployment.
 - D10 completes the user's ten-round debugging request. See docs/DEBUGGING_ROUNDS_2026-11-25.md for the round-by-round repairs, evidence and limits. No main/production, DNS/protection, billing, live retention or schedule change occurred.
 - Tested source `70ed5ec457c5b23937dce7c163ccb4ecb7259b64` was merged through [PR #15](https://github.com/leonartist7/KUKU/pull/15) as review runtime `acb29b8bf999ee8950cd41fb31943ff2f893d49b`. Both point to tree `dbfcd28c8d7f29e0173168870abba84a97c3e45a`. The performance artifact records checkout `0dbd64313f59dd78ca65a5aa99de665d0b11c90f` with that same tree and PR head. Final documentation checkpoints do not change the running application code.
 - Exact-source [run 45605352739](https://github.com/leonartist7/KUKU/actions/runs/45605352739) is SUCCESS. Backend job 139174691127 passes 163 isolated Mongo-backed cases; frontend job 139174690746 passes 167 unit/release cases, TypeScript, web export and complete onboarding/WAV/call-setup, Spaces, chat-tools and controlled-performance journeys. This adds 45 regression cases over the previous 150/135 baseline.
@@ -135,10 +148,9 @@ Do not mark a full phase complete when a release gate is still outstanding.
 An enabled continuation task was created on 4 November 2026: every four hours for 42 passes (seven days), Europe/Paris, starting around 19:23 local time. It was disabled after P06 reached external gates; the November 24 work was explicitly requested and did not re-enable or create a schedule. It resumes this branch and ledger, performs one bounded implementation/verification checkpoint and does not create further schedules. Availability of a future execution environment is checked at run time; an enabled task is not evidence that a later pass has run.
 
 ## Active controller lease
-Controller: root/L01.
-Lease acquired: 2026-11-27T19:22:40.408Z
-Lease expires: 2026-11-27T21:22:40.408Z
-State: ACTIVE; message links/actions and calm startup. One controller integrates and deploys.
+Controller: none.
+Lease closed at: 2026-11-27T20:05:23Z
+State: COMPLETE; L01 cloud unit/TypeScript/export/browser/performance/Android acceptance and compatible frontend-only beta rollout verified. No pending agent write remains. Physical-device and existing external gates are unchanged.
 
 
 ## Verified implementation checkpoint
@@ -190,7 +202,7 @@ State: ACTIVE; message links/actions and calm startup. One controller integrates
 - Latest Android preview for the accepted runtime is still compiling in run 41864811206; the earlier 20d4cd79 test-signed build passed. Do not claim physical Android or native notification acceptance.
 
 ## Next controller handoff
-1. Fetch actual branch heads and current provider/CI state; honor any fresh unexpired controller lease. D10's accepted runtime and all exact evidence are in the current checkpoint above.
+1. Fetch actual branch heads and current provider/CI state; honor any fresh unexpired controller lease. The current accepted runtime and exact evidence are in the checkpoint above.
 2. Next independent maintenance: evaluate the recorded dependency advisories, choose SDK-compatible patched versions/overrides from official sources, and verify web/Android compatibility before publishing. No blind force upgrade, new paid service or framework rewrite.
 3. Calls remain disabled with missing LiveKit server configuration. After setup, prepare controlled real two-phone audio acceptance; builds/mocks and setup booleans do not establish audible media. Native/video, FCM/signing, physical notification/Space checks, live backup/media recovery and erasure policy retain their gates.
 4. Follow RELEASE_RUNBOOK for any compatible API-first beta update. Keep one worker. Do not redeploy the API for documentation alone, merge main, alter DNS/protection/billing, run live erasure or create more schedules.
